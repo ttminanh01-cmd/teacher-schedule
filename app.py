@@ -398,6 +398,10 @@ with tab1:
     with col2:
         selected_time = st.selectbox("Chọn khung giờ", time_options)
 
+    selected_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn, sẽ tự suy ra Thứ)",
+                                   value=None, key="find_free_date")
+    effective_day = WEEKDAY_TO_THU[selected_date.weekday()] if selected_date else selected_day
+
     selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
 
     if st.button("Tìm kiếm", key="btn_find_free"):
@@ -405,12 +409,12 @@ with tab1:
 
         if df_gv.empty:
             st.error("Không tải được dữ liệu. Kiểm tra lại kết nối sheet.")
-        elif selected_day not in df_gv.columns:
-            st.error(f"Không tìm thấy cột '{selected_day}' trong sheet.")
+        elif effective_day not in df_gv.columns:
+            st.error(f"Không tìm thấy cột '{effective_day}' trong sheet.")
         else:
             with st.spinner("Đang tải dữ liệu..."):
                 ended_classes = get_ended_classes(load_lophoc())
-            mask_avail = build_avail_mask(df_gv[selected_day], ended_classes)
+            mask_avail = build_avail_mask(df_gv[effective_day], ended_classes)
 
             if selected_time != "Tất cả khung giờ":
                 mask_time = (
@@ -427,7 +431,8 @@ with tab1:
                 )
                 result = result[mask_level]
 
-            st.markdown(f"**{len(result)} khung giờ trống** — {selected_day}"
+            st.markdown(f"**{len(result)} khung giờ trống** — {effective_day}"
+                        + (f" ({selected_date.strftime('%d/%m/%Y')})" if selected_date else "")
                         + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else "")
                         + (f" | {selected_program}" if selected_program != "Tất cả" else ""))
 
