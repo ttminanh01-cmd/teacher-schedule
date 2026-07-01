@@ -519,13 +519,26 @@ with tab4:
             if result.empty:
                 st.info("Không tìm thấy học viên nào.")
             else:
-                st.markdown(f"**{len(result)} học viên**")
+                groups = list(result.groupby(["Sản phẩm", "Mã lớp"], sort=False))
+                st.markdown(f"**{len(groups)} lớp** — **{len(result)} học viên**")
 
-                display = result.drop(columns=["Lịch học", "Giáo viên"]).copy()
-                display["Lịch học & Giáo viên"] = result.apply(
-                    lambda row: format_hocvien_schedule(row["Lịch học"], row["Giáo viên"]), axis=1
-                )
-                render_html_table(display)
+                student_cols = ["Sản phẩm", "ID", "ID BOS", "Tên", "Email",
+                                 "Số điện thoại", "Trạng thái hv", "Tổng buổi", "Buổi còn lại"]
+
+                for (sp, ma_lop), g in groups:
+                    first = g.iloc[0]
+                    with st.expander(f"🏫 {ma_lop} — {sp}", expanded=True):
+                        st.markdown(f"**Mã lớp:** {ma_lop}")
+                        st.markdown(f"**Ngày khai giảng:** {first['Ngày khai giảng']}")
+                        st.markdown(f"**Ngày kết thúc dự kiến:** {first['Ngày kết thúc dự kiến']}")
+                        st.markdown(f"**Trạng thái lớp:** {first['Trạng thái lớp']}")
+                        st.markdown("**Lịch học & Giáo viên:**")
+                        schedule = format_hocvien_schedule(first["Lịch học"], first["Giáo viên"])
+                        st.markdown(schedule.replace("\n", "  \n"))
+
+                        st.markdown("**Học viên:**")
+                        st.dataframe(g[student_cols].reset_index(drop=True),
+                                     use_container_width=True, hide_index=True)
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
