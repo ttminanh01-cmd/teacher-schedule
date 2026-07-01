@@ -210,6 +210,7 @@ def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame,
             "Mã lớp": ma_lop,
             "Trình độ": first["Trình độ"],
             "Ngày dự kiến KG": first["Ngày dự kiến KG"],
+            "Trạng thái lớp": first["Trạng thái lớp"],
             "Lịch học": lich,
         })
     return pd.DataFrame(out)
