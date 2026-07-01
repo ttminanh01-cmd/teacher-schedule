@@ -286,6 +286,41 @@ def gv_loai(quoc_tich: str) -> str:
     return "GVVN" if quoc_tich.strip().lower() == "vietnamese" else "GVNN"
 
 
+def find_cover_candidates(sess: pd.Series, df_gv_all: pd.DataFrame, df_lop: pd.DataFrame,
+                           as_of: date, loai_gv_filter: str = "Tất cả") -> pd.DataFrame:
+    """GV cùng chương trình, rảnh đúng Thứ + khung giờ của buổi `sess` cần cover."""
+    ctr = sess["Chương trình"]
+    thu = sess["Thứ"]
+    gio_hoc = sess["Giờ học"]
+
+    df_gv_ct = df_gv_all[df_gv_all["Chương trình"] == ctr]
+    if df_gv_ct.empty or thu not in df_gv_ct.columns:
+        return pd.DataFrame()
+
+    free_classes = get_ended_classes(df_lop) | get_not_started_classes(df_lop, as_of)
+    mask_avail = build_avail_mask(df_gv_ct[thu], free_classes)
+    mask_time = (
+        df_gv_ct["Khung giờ 1"].apply(lambda v: times_match(v, gio_hoc)) |
+        df_gv_ct["Khung giờ 2"].apply(lambda v: times_match(v, gio_hoc))
+    )
+    candidates = df_gv_ct[mask_avail & mask_time]
+    # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
+    candidates = candidates.drop_duplicates(["Chương trình", "Mã GV"])
+
+    if loai_gv_filter != "Tất cả":
+        candidates = candidates[candidates["Quốc tịch"].apply(lambda q: gv_loai(q) == loai_gv_filter)]
+    return candidates
+
+
+def render_cover_candidates(candidates: pd.DataFrame):
+    if candidates.empty:
+        st.warning("Không tìm thấy GV nào rảnh đúng khung giờ này.")
+    else:
+        st.caption("Đối chiếu cột 'Trình độ giảng dạy' bên dưới với Trình độ lớp/buổi ở trên để chọn GV phù hợp.")
+        show = ["Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy"]
+        st.dataframe(candidates[show].reset_index(drop=True), use_container_width=True)
+
+
 def _day_sort_key(thu: str) -> int:
     return DAYS.index(thu) if thu in DAYS else 99
 
@@ -408,78 +443,206 @@ def render_teacher_schedule(sessions: pd.DataFrame):
 
 st.title("📚 Tra cứu thông tin")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Tìm GV rảnh theo ca", "👤 Tra cứu theo tên GV",
-                                        "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên",
-                                        "🔄 Tìm GV Cover"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
+                                  "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên"])
 
-# ── Tab 1: Tìm GV rảnh ──────────────────────────────────────────────────────
+# ── Tab 1: Tìm GV rảnh / Tìm GV Cover ────────────────────────────────────────
 with tab1:
-    st.subheader("Tìm giáo viên rảnh theo Thứ và Khung giờ")
+    st.subheader("Tìm GV rảnh / Tìm GV Cover")
 
-    with st.spinner("Đang tải dữ liệu..."):
-        df_gv_all = load_gv()
+    find_mode = st.radio("Chế độ tìm", ["Duyệt tự do", "Theo mã lớp", "Theo GV nghỉ"],
+                          horizontal=True, key="find_mode")
 
-    col0, col1, col2 = st.columns(3)
-    with col0:
-        selected_program = st.selectbox("Chương trình", ["Tất cả"] + list(PROGRAMS.keys()))
+    # ── Chế độ 1: duyệt tự do theo Thứ + khung giờ ──
+    if find_mode == "Duyệt tự do":
+        with st.spinner("Đang tải dữ liệu..."):
+            df_gv_all = load_gv()
 
-    df_gv_scoped = df_gv_all if selected_program == "Tất cả" else df_gv_all[df_gv_all["Chương trình"] == selected_program]
-    time_options = ["Tất cả khung giờ"] + get_time_slots(df_gv_scoped) if not df_gv_scoped.empty else ["Tất cả khung giờ"]
-    level_options = get_level_options(df_gv_scoped) if not df_gv_scoped.empty else []
+        col0, col1, col2 = st.columns(3)
+        with col0:
+            selected_program = st.selectbox("Chương trình", ["Tất cả"] + list(PROGRAMS.keys()))
 
-    with col1:
-        selected_day = st.selectbox("Chọn Thứ", DAYS)
-    with col2:
-        selected_time = st.selectbox("Chọn khung giờ", time_options)
+        df_gv_scoped = df_gv_all if selected_program == "Tất cả" else df_gv_all[df_gv_all["Chương trình"] == selected_program]
+        time_options = ["Tất cả khung giờ"] + get_time_slots(df_gv_scoped) if not df_gv_scoped.empty else ["Tất cả khung giờ"]
+        level_options = get_level_options(df_gv_scoped) if not df_gv_scoped.empty else []
 
-    selected_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn, sẽ tự suy ra Thứ)",
-                                   value=None, key="find_free_date")
-    effective_day = WEEKDAY_TO_THU[selected_date.weekday()] if selected_date else selected_day
+        with col1:
+            selected_day = st.selectbox("Chọn Thứ", DAYS)
+        with col2:
+            selected_time = st.selectbox("Chọn khung giờ", time_options)
 
-    selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
+        selected_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn, sẽ tự suy ra Thứ)",
+                                       value=None, key="find_free_date")
+        effective_day = WEEKDAY_TO_THU[selected_date.weekday()] if selected_date else selected_day
 
-    if st.button("Tìm kiếm", key="btn_find_free"):
-        df_gv = df_gv_scoped
+        selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
 
-        if df_gv.empty:
-            st.error("Không tải được dữ liệu. Kiểm tra lại kết nối sheet.")
-        elif effective_day not in df_gv.columns:
-            st.error(f"Không tìm thấy cột '{effective_day}' trong sheet.")
-        else:
+        if st.button("Tìm kiếm", key="btn_find_free"):
+            df_gv = df_gv_scoped
+
+            if df_gv.empty:
+                st.error("Không tải được dữ liệu. Kiểm tra lại kết nối sheet.")
+            elif effective_day not in df_gv.columns:
+                st.error(f"Không tìm thấy cột '{effective_day}' trong sheet.")
+            else:
+                with st.spinner("Đang tải dữ liệu..."):
+                    df_lop_for_avail = load_lophoc()
+                as_of = selected_date if selected_date else date.today()
+                free_classes = get_ended_classes(df_lop_for_avail) | get_not_started_classes(df_lop_for_avail, as_of)
+                mask_avail = build_avail_mask(df_gv[effective_day], free_classes)
+
+                if selected_time != "Tất cả khung giờ":
+                    mask_time = (
+                        (df_gv["Khung giờ 1"].str.strip() == selected_time) |
+                        (df_gv["Khung giờ 2"].str.strip() == selected_time)
+                    )
+                    result = df_gv[mask_avail & mask_time]
+                    # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
+                    result = result.drop_duplicates(["Chương trình", "Mã GV"])
+                else:
+                    result = df_gv[mask_avail]
+
+                if selected_levels:
+                    mask_level = result["Trình độ giảng dạy"].apply(
+                        lambda cell: any(lv in cell for lv in selected_levels)
+                    )
+                    result = result[mask_level]
+
+                st.markdown(f"**{len(result)} khung giờ trống** — {effective_day}"
+                            + (f" ({selected_date.strftime('%d/%m/%Y')})" if selected_date else "")
+                            + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else "")
+                            + (f" | {selected_program}" if selected_program != "Tất cả" else ""))
+
+                if result.empty:
+                    st.info("Không có giáo viên nào rảnh trong khung giờ này.")
+                else:
+                    show = ["Chương trình", "Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy",
+                            "Khung giờ 1", "Khung giờ 2"]
+                    st.dataframe(result[show].reset_index(drop=True), use_container_width=True)
+
+    # ── Chế độ 2: theo mã lớp cần cover ──
+    elif find_mode == "Theo mã lớp":
+        col_x, col_y, col_z = st.columns(3)
+        with col_x:
+            cover_class = st.text_input("Mã lớp cần cover", placeholder="EPP-0715", key="cover_class")
+        with col_y:
+            cover_date = st.date_input("Ngày cần cover", value=None, key="cover_date")
+        with col_z:
+            cover_loai_gv = st.selectbox("Loại GV", ["Tất cả", "GVVN", "GVNN"], key="cover_loai_gv")
+
+        if st.button("Tìm GV Cover", key="btn_find_cover"):
+            if not cover_class.strip():
+                st.warning("Nhập mã lớp cần cover.")
+            elif not cover_date:
+                st.warning("Chọn ngày cần cover.")
+            else:
+                with st.spinner("Đang tải dữ liệu..."):
+                    df_lop = load_lophoc()
+                    df_gv_all = load_gv()
+
+                if df_lop.empty:
+                    st.error("Không tải được dữ liệu.")
+                else:
+                    kw = cover_class.strip().lower()
+                    class_sessions = df_lop[df_lop["Mã lớp"].str.lower() == kw]
+                    if class_sessions.empty:
+                        class_sessions = df_lop[df_lop["Mã lớp"].str.lower().str.contains(kw, na=False)]
+
+                    if class_sessions.empty:
+                        st.info(f"Không tìm thấy lớp '{cover_class}'.")
+                    else:
+                        thu_needed = WEEKDAY_TO_THU[cover_date.weekday()]
+                        day_sessions = class_sessions[class_sessions["Thứ"].str.strip() == thu_needed]
+
+                        if day_sessions.empty:
+                            st.info(f"Lớp '{cover_class}' không có buổi học vào {thu_needed} "
+                                    f"({cover_date.strftime('%d/%m/%Y')}).")
+                        else:
+                            for _, sess in day_sessions.iterrows():
+                                st.markdown(
+                                    f"**Lớp {sess['Mã lớp']}** ({sess['Chương trình']}) — "
+                                    f"Trình độ lớp: **{sess['Trình độ']}** — "
+                                    f"{thu_needed} {sess['Giờ học']} — "
+                                    f"GV hiện tại: {sess['Giáo viên'] or '(chưa có)'}"
+                                )
+                                candidates = find_cover_candidates(sess, df_gv_all, df_lop,
+                                                                    cover_date, cover_loai_gv)
+                                render_cover_candidates(candidates)
+                                st.divider()
+
+    # ── Chế độ 3: theo GV nghỉ ──
+    else:
+        with st.spinner("Đang tải dữ liệu..."):
+            df_gv_all = load_gv()
+
+        col_p, col_q = st.columns(2)
+        with col_p:
+            absent_query = st.text_input("Nhập tên hoặc mã GV nghỉ",
+                                          placeholder="Nguyễn Thị Hồng Hạnh / GV0001", key="absent_gv_query")
+        with col_q:
+            absent_date = st.date_input("Ngày nghỉ", value=None, key="absent_date")
+
+        teacher_key = None
+        if absent_query.strip() and not df_gv_all.empty:
+            kw = absent_query.strip().lower()
+            matched = df_gv_all[
+                df_gv_all["Giáo viên"].str.lower().str.contains(kw, na=False) |
+                df_gv_all["Mã GV"].str.lower().str.contains(kw, na=False)
+            ].drop_duplicates(["Chương trình", "Mã GV"])
+
+            if matched.empty:
+                st.info("Không tìm thấy GV.")
+            else:
+                options = {
+                    f"{r['Giáo viên']} ({r['Mã GV']} — {r['Chương trình']})": (r["Chương trình"], r["Mã GV"])
+                    for _, r in matched.iterrows()
+                }
+                picked_label = st.selectbox("Chọn đúng GV nghỉ", list(options.keys()), key="absent_gv_pick")
+                teacher_key = options[picked_label]
+
+        day_sessions_teacher = pd.DataFrame()
+        if teacher_key and absent_date:
+            ctr_t, ma_gv_t = teacher_key
             with st.spinner("Đang tải dữ liệu..."):
-                df_lop_for_avail = load_lophoc()
-            as_of = selected_date if selected_date else date.today()
-            free_classes = get_ended_classes(df_lop_for_avail) | get_not_started_classes(df_lop_for_avail, as_of)
-            mask_avail = build_avail_mask(df_gv[effective_day], free_classes)
+                df_lop_t = load_lophoc()
+            thu_absent = WEEKDAY_TO_THU[absent_date.weekday()]
+            day_sessions_teacher = df_lop_t[
+                (df_lop_t["Chương trình"] == ctr_t) &
+                (df_lop_t["Mã GV"].str.strip() == ma_gv_t) &
+                (df_lop_t["Thứ"].str.strip() == thu_absent)
+            ]
 
-            if selected_time != "Tất cả khung giờ":
-                mask_time = (
-                    (df_gv["Khung giờ 1"].str.strip() == selected_time) |
-                    (df_gv["Khung giờ 2"].str.strip() == selected_time)
-                )
-                result = df_gv[mask_avail & mask_time]
-                # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
-                result = result.drop_duplicates(["Chương trình", "Mã GV"])
+        ca_labels = [f"{row['Giờ học']} — {row['Mã lớp']}" for _, row in day_sessions_teacher.iterrows()]
+        selected_ca = st.selectbox("Ca dạy nghỉ", ["Tất cả"] + ca_labels, key="absent_ca")
+        loai_gv_absent = st.selectbox("Loại GV", ["Tất cả", "GVVN", "GVNN"], key="absent_loai_gv")
+
+        if st.button("Tìm GV Cover", key="btn_find_cover_absent"):
+            if not teacher_key:
+                st.warning("Nhập và chọn đúng GV nghỉ.")
+            elif not absent_date:
+                st.warning("Chọn ngày nghỉ.")
+            elif day_sessions_teacher.empty:
+                thu_absent = WEEKDAY_TO_THU[absent_date.weekday()]
+                st.info(f"GV này không có ca dạy vào {thu_absent} ({absent_date.strftime('%d/%m/%Y')}).")
             else:
-                result = df_gv[mask_avail]
+                with st.spinner("Đang tải dữ liệu..."):
+                    df_lop_full = load_lophoc()
 
-            if selected_levels:
-                mask_level = result["Trình độ giảng dạy"].apply(
-                    lambda cell: any(lv in cell for lv in selected_levels)
-                )
-                result = result[mask_level]
+                sessions_to_cover = day_sessions_teacher if selected_ca == "Tất cả" else day_sessions_teacher[
+                    day_sessions_teacher.apply(
+                        lambda r: f"{r['Giờ học']} — {r['Mã lớp']}" == selected_ca, axis=1)
+                ]
 
-            st.markdown(f"**{len(result)} khung giờ trống** — {effective_day}"
-                        + (f" ({selected_date.strftime('%d/%m/%Y')})" if selected_date else "")
-                        + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else "")
-                        + (f" | {selected_program}" if selected_program != "Tất cả" else ""))
-
-            if result.empty:
-                st.info("Không có giáo viên nào rảnh trong khung giờ này.")
-            else:
-                show = ["Chương trình", "Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy",
-                        "Khung giờ 1", "Khung giờ 2"]
-                st.dataframe(result[show].reset_index(drop=True), use_container_width=True)
+                for _, sess in sessions_to_cover.iterrows():
+                    st.markdown(
+                        f"**Lớp {sess['Mã lớp']}** ({sess['Chương trình']}) — "
+                        f"Trình độ lớp: **{sess['Trình độ']}** — "
+                        f"{sess['Thứ']} {sess['Giờ học']}"
+                    )
+                    candidates = find_cover_candidates(sess, df_gv_all, df_lop_full,
+                                                        absent_date, loai_gv_absent)
+                    render_cover_candidates(candidates)
+                    st.divider()
 
 # ── Tab 2: Tra cứu theo GV ──────────────────────────────────────────────────
 with tab2:
@@ -626,87 +789,6 @@ with tab4:
                         st.markdown("**Học viên:**")
                         st.dataframe(g[student_cols].reset_index(drop=True),
                                      use_container_width=True, hide_index=True)
-
-# ── Tab 5: Tìm GV Cover ──────────────────────────────────────────────────────
-with tab5:
-    st.subheader("Tìm GV Cover cho 1 lớp")
-
-    col_x, col_y, col_z = st.columns(3)
-    with col_x:
-        cover_class = st.text_input("Mã lớp cần cover", placeholder="EPP-0715", key="cover_class")
-    with col_y:
-        cover_date = st.date_input("Ngày cần cover", value=None, key="cover_date")
-    with col_z:
-        cover_loai_gv = st.selectbox("Loại GV", ["Tất cả", "GVVN", "GVNN"], key="cover_loai_gv")
-
-    if st.button("Tìm GV Cover", key="btn_find_cover"):
-        if not cover_class.strip():
-            st.warning("Nhập mã lớp cần cover.")
-        elif not cover_date:
-            st.warning("Chọn ngày cần cover.")
-        else:
-            with st.spinner("Đang tải dữ liệu..."):
-                df_lop = load_lophoc()
-                df_gv_all = load_gv()
-
-            if df_lop.empty:
-                st.error("Không tải được dữ liệu.")
-            else:
-                kw = cover_class.strip().lower()
-                class_sessions = df_lop[df_lop["Mã lớp"].str.lower() == kw]
-                if class_sessions.empty:
-                    class_sessions = df_lop[df_lop["Mã lớp"].str.lower().str.contains(kw, na=False)]
-
-                if class_sessions.empty:
-                    st.info(f"Không tìm thấy lớp '{cover_class}'.")
-                else:
-                    thu_needed = WEEKDAY_TO_THU[cover_date.weekday()]
-                    day_sessions = class_sessions[class_sessions["Thứ"].str.strip() == thu_needed]
-
-                    if day_sessions.empty:
-                        st.info(f"Lớp '{cover_class}' không có buổi học vào {thu_needed} "
-                                f"({cover_date.strftime('%d/%m/%Y')}).")
-                    else:
-                        free_classes = get_ended_classes(df_lop) | get_not_started_classes(df_lop, cover_date)
-
-                        for _, sess in day_sessions.iterrows():
-                            ctr = sess["Chương trình"]
-                            trinh_do = sess["Trình độ"]
-                            gio_hoc = sess["Giờ học"]
-                            gv_hien_tai = sess["Giáo viên"]
-
-                            st.markdown(
-                                f"**Lớp {sess['Mã lớp']}** ({ctr}) — Trình độ lớp: **{trinh_do}** — "
-                                f"{thu_needed} {gio_hoc} — GV hiện tại: {gv_hien_tai or '(chưa có)'}"
-                            )
-
-                            df_gv_ct = df_gv_all[df_gv_all["Chương trình"] == ctr]
-                            if df_gv_ct.empty or thu_needed not in df_gv_ct.columns:
-                                st.info("Không có dữ liệu lịch GV cho chương trình này.")
-                                st.divider()
-                                continue
-
-                            mask_avail = build_avail_mask(df_gv_ct[thu_needed], free_classes)
-                            mask_time = (
-                                df_gv_ct["Khung giờ 1"].apply(lambda v: times_match(v, gio_hoc)) |
-                                df_gv_ct["Khung giờ 2"].apply(lambda v: times_match(v, gio_hoc))
-                            )
-                            candidates = df_gv_ct[mask_avail & mask_time]
-                            # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
-                            candidates = candidates.drop_duplicates(["Chương trình", "Mã GV"])
-
-                            if cover_loai_gv != "Tất cả":
-                                mask_loai = candidates["Quốc tịch"].apply(lambda q: gv_loai(q) == cover_loai_gv)
-                                candidates = candidates[mask_loai]
-
-                            if candidates.empty:
-                                st.warning("Không tìm thấy GV nào rảnh đúng khung giờ này.")
-                            else:
-                                st.caption("Đối chiếu cột 'Trình độ giảng dạy' bên dưới với Trình độ lớp ở trên để chọn GV phù hợp.")
-                                show = ["Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy"]
-                                st.dataframe(candidates[show].reset_index(drop=True), use_container_width=True)
-
-                            st.divider()
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
