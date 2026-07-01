@@ -1,6 +1,6 @@
 import html
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import streamlit as st
 import gspread
@@ -477,36 +477,61 @@ with tab1:
         with col2:
             selected_time = st.selectbox("Chọn khung giờ", time_options)
         with col3:
-            selected_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn, sẽ tự suy ra Thứ)",
-                                           value=None, key="find_free_date")
+            date_input_val = st.date_input("Chọn ngày (1 ngày hoặc khoảng ngày)", value=(), key="find_free_date")
         with col4:
             selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
-        effective_day = WEEKDAY_TO_THU[selected_date.weekday()] if selected_date else selected_day
+
+        date_range = None
+        if isinstance(date_input_val, (list, tuple)):
+            if len(date_input_val) == 1:
+                date_range = (date_input_val[0], date_input_val[0])
+            elif len(date_input_val) == 2:
+                date_range = tuple(date_input_val)
+        elif date_input_val:
+            date_range = (date_input_val, date_input_val)
+
+        if date_range:
+            thu_list = []
+            cur = date_range[0]
+            while cur <= date_range[1] and len(thu_list) < 7:
+                thu = WEEKDAY_TO_THU[cur.weekday()]
+                if thu not in thu_list:
+                    thu_list.append(thu)
+                cur += timedelta(days=1)
+        else:
+            thu_list = [selected_day]
 
         if st.button("Tìm kiếm", key="btn_find_free"):
             df_gv = df_gv_scoped
 
             if df_gv.empty:
                 st.error("Không tải được dữ liệu. Kiểm tra lại kết nối sheet.")
-            elif effective_day not in df_gv.columns:
-                st.error(f"Không tìm thấy cột '{effective_day}' trong sheet.")
             else:
                 with st.spinner("Đang tải dữ liệu..."):
                     df_lop_for_avail = load_lophoc()
-                as_of = selected_date if selected_date else date.today()
+                as_of = date_range[0] if date_range else date.today()
                 free_classes = get_ended_classes(df_lop_for_avail) | get_not_started_classes(df_lop_for_avail, as_of)
-                mask_avail = build_avail_mask(df_gv[effective_day], free_classes)
 
-                if selected_time != "Tất cả khung giờ":
-                    mask_time = (
-                        (df_gv["Khung giờ 1"].str.strip() == selected_time) |
-                        (df_gv["Khung giờ 2"].str.strip() == selected_time)
-                    )
-                    result = df_gv[mask_avail & mask_time]
-                    # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
-                    result = result.drop_duplicates(["Chương trình", "Mã GV"])
-                else:
-                    result = df_gv[mask_avail]
+                frames = []
+                for thu in thu_list:
+                    if thu not in df_gv.columns:
+                        continue
+                    mask_avail = build_avail_mask(df_gv[thu], free_classes)
+                    if selected_time != "Tất cả khung giờ":
+                        mask_time = (
+                            (df_gv["Khung giờ 1"].str.strip() == selected_time) |
+                            (df_gv["Khung giờ 2"].str.strip() == selected_time)
+                        )
+                        sub = df_gv[mask_avail & mask_time]
+                        # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
+                        sub = sub.drop_duplicates(["Chương trình", "Mã GV"])
+                    else:
+                        sub = df_gv[mask_avail]
+                    sub = sub.copy()
+                    sub["Thứ"] = thu
+                    frames.append(sub)
+
+                result = pd.concat(frames, ignore_index=True) if frames else df_gv.iloc[0:0].copy()
 
                 if selected_levels:
                     mask_level = result["Trình độ giảng dạy"].apply(
@@ -514,8 +539,24 @@ with tab1:
                     )
                     result = result[mask_level]
 
-                st.markdown(f"**{len(result)} khung giờ trống** — {effective_day}"
-                            + (f" ({selected_date.strftime('%d/%m/%Y')})" if selected_date else "")
+                if not result.empty and selected_time != "Tất cả khung giờ":
+                    # gộp lại 1 dòng / GV, liệt kê các Thứ rảnh trong khoảng đã chọn
+                    result = result.groupby(["Chương trình", "Mã GV"], sort=False).agg({
+                        "Giáo viên": "first",
+                        "Quốc tịch": "first",
+                        "Trình độ giảng dạy": "first",
+                        "Khung giờ 1": "first",
+                        "Khung giờ 2": "first",
+                        "Thứ": lambda s: ", ".join(dict.fromkeys(s)),
+                    }).reset_index()
+
+                date_label = ""
+                if date_range and date_range[0] == date_range[1]:
+                    date_label = f" ({date_range[0].strftime('%d/%m/%Y')})"
+                elif date_range:
+                    date_label = f" ({date_range[0].strftime('%d/%m/%Y')} → {date_range[1].strftime('%d/%m/%Y')})"
+
+                st.markdown(f"**{len(result)} kết quả** — {', '.join(thu_list)}{date_label}"
                             + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else "")
                             + (f" | {selected_program}" if selected_program != "Tất cả" else ""))
 
@@ -523,7 +564,7 @@ with tab1:
                     st.info("Không có giáo viên nào rảnh trong khung giờ này.")
                 else:
                     show = ["Chương trình", "Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy",
-                            "Khung giờ 1", "Khung giờ 2"]
+                            "Thứ", "Khung giờ 1", "Khung giờ 2"]
                     st.dataframe(result[show].reset_index(drop=True), use_container_width=True)
 
     # ── Chế độ 2: theo mã lớp cần cover ──
@@ -667,7 +708,7 @@ with tab2:
     with col_a:
         filter_thu = st.selectbox("Lọc lớp theo Thứ (tuỳ chọn)", ["Tất cả"] + DAYS, key="gv_filter_thu")
     with col_b:
-        filter_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn)", value=None, key="gv_filter_date")
+        filter_date = st.date_input("Chọn ngày cụ thể", value=None, key="gv_filter_date")
     with col_c:
         filter_status = st.selectbox("Lọc theo tình trạng lớp (tuỳ chọn)", status_options, key="gv_filter_status")
 
