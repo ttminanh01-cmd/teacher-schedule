@@ -175,6 +175,30 @@ def get_time_slots(df_gv: pd.DataFrame) -> list:
     return sorted(slots, key=_time_sort_key)
 
 
+_CLASS_CODE_RE = re.compile(r"^([A-Za-z0-9]+-[A-Za-z0-9]+)")
+
+
+def get_ended_classes(df_lop: pd.DataFrame) -> set:
+    if df_lop.empty:
+        return set()
+    ended = df_lop[df_lop["Trạng thái lớp"].str.contains("Ngừng|Ngưng", na=False)]
+    return set(ended["Mã lớp"])
+
+
+def build_avail_mask(day_col: pd.Series, ended_classes: set) -> pd.Series:
+    """Rảnh nếu ô ghi 'Available', hoặc ô đang ghi mã lớp nhưng lớp đó đã kết thúc."""
+    def _is_free(cell: str) -> bool:
+        c = cell.strip()
+        if not c:
+            return False
+        if c.lower() == "available":
+            return True
+        m = _CLASS_CODE_RE.match(c)
+        return bool(m and m.group(1) in ended_classes)
+
+    return day_col.apply(_is_free)
+
+
 def _day_sort_key(thu: str) -> int:
     return DAYS.index(thu) if thu in DAYS else 99
 
@@ -244,7 +268,9 @@ with tab1:
         elif selected_day not in df_gv.columns:
             st.error(f"Không tìm thấy cột '{selected_day}' trong sheet.")
         else:
-            mask_avail = df_gv[selected_day].str.strip().str.lower() == "available"
+            with st.spinner("Đang tải dữ liệu..."):
+                ended_classes = get_ended_classes(load_lophoc())
+            mask_avail = build_avail_mask(df_gv[selected_day], ended_classes)
 
             if selected_time != "Tất cả khung giờ":
                 mask_time = (
