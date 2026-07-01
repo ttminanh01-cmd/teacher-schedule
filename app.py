@@ -477,11 +477,13 @@ with tab1:
         with col2:
             selected_time = st.selectbox("Chọn khung giờ", time_options)
 
-        selected_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn, sẽ tự suy ra Thứ)",
-                                       value=None, key="find_free_date")
+        col3, col4, _sp1 = st.columns([1, 1, 4])
+        with col3:
+            selected_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn, sẽ tự suy ra Thứ)",
+                                           value=None, key="find_free_date")
+        with col4:
+            selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
         effective_day = WEEKDAY_TO_THU[selected_date.weekday()] if selected_date else selected_day
-
-        selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
 
         if st.button("Tìm kiếm", key="btn_find_free"):
             df_gv = df_gv_scoped
@@ -581,7 +583,7 @@ with tab1:
         with st.spinner("Đang tải dữ liệu..."):
             df_gv_all = load_gv()
 
-        col_p, col_q, _ = st.columns([1, 1, 3])
+        col_p, col_q, col_ca, col_loai = st.columns(4)
         with col_p:
             absent_query = st.text_input("Nhập tên hoặc mã GV nghỉ",
                                           placeholder="Nguyễn Thị Hồng Hạnh / GV0001", key="absent_gv_query")
@@ -619,8 +621,10 @@ with tab1:
             ]
 
         ca_labels = [f"{row['Giờ học']} — {row['Mã lớp']}" for _, row in day_sessions_teacher.iterrows()]
-        selected_ca = st.selectbox("Ca dạy nghỉ", ["Tất cả"] + ca_labels, key="absent_ca")
-        loai_gv_absent = st.selectbox("Loại GV", ["Tất cả", "GVVN", "GVNN"], key="absent_loai_gv")
+        with col_ca:
+            selected_ca = st.selectbox("Ca dạy nghỉ", ["Tất cả"] + ca_labels, key="absent_ca")
+        with col_loai:
+            loai_gv_absent = st.selectbox("Loại GV", ["Tất cả", "GVVN", "GVNN"], key="absent_loai_gv")
 
         if st.button("Tìm GV Cover", key="btn_find_cover_absent"):
             if not teacher_key:
@@ -654,14 +658,14 @@ with tab1:
 with tab2:
     st.subheader("Tra cứu theo tên hoặc mã Giáo Viên")
 
-    search_name = st.text_input("Nhập tên hoặc mã GV", placeholder="Nguyễn Thị Hồng Hạnh / GV0001")
-
     with st.spinner("Đang tải dữ liệu..."):
         df_lop_all = load_lophoc()
     status_options = ["Tất cả"] + sorted({s.strip() for s in df_lop_all["Trạng thái lớp"] if s.strip()}) \
         if not df_lop_all.empty else ["Tất cả"]
 
-    col_a, col_b, col_c, _ = st.columns([1, 1, 1, 3])
+    col_n, col_a, col_b, col_c = st.columns(4)
+    with col_n:
+        search_name = st.text_input("Nhập tên hoặc mã GV", placeholder="Nguyễn Thị Hồng Hạnh / GV0001")
     with col_a:
         filter_thu = st.selectbox("Lọc lớp theo Thứ (tuỳ chọn)", ["Tất cả"] + DAYS, key="gv_filter_thu")
     with col_b:
