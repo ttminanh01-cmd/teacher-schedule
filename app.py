@@ -167,36 +167,14 @@ def get_time_slots(df_gv: pd.DataFrame) -> list:
     return sorted(slots, key=_time_sort_key)
 
 
-def summarize_classes(df_sessions: pd.DataFrame) -> pd.DataFrame:
-    """Gộp các buổi học (long format) thành 1 dòng / lớp, liệt kê đủ Lịch học
-    và Giáo viên (1 lớp mix có thể có nhiều GV dạy các buổi khác nhau)."""
-    if df_sessions.empty:
-        return pd.DataFrame(columns=["Chương trình", "Mã lớp", "Trình độ",
-                                      "Ngày dự kiến KG", "Lịch học", "Giáo viên"])
+def _day_sort_key(thu: str) -> int:
+    return DAYS.index(thu) if thu in DAYS else 99
 
-    out = []
-    for (ctr, ma_lop), g in df_sessions.groupby(["Chương trình", "Mã lớp"], sort=False):
-        first = g.iloc[0]
-        lich = "; ".join(f"{row['Thứ']} {row['Giờ học']}".strip() for _, row in g.iterrows())
 
-        gv_labels, seen = [], set()
-        for _, row in g.iterrows():
-            if not row["Giáo viên"]:
-                continue
-            label = f"{row['Giáo viên']} ({row['Thứ']})"
-            if label not in seen:
-                seen.add(label)
-                gv_labels.append(label)
-
-        out.append({
-            "Chương trình": ctr,
-            "Mã lớp": ma_lop,
-            "Trình độ": first["Trình độ"],
-            "Ngày dự kiến KG": first["Ngày dự kiến KG"],
-            "Lịch học": lich,
-            "Giáo viên": ", ".join(gv_labels),
-        })
-    return pd.DataFrame(out)
+def class_sessions_table(g: pd.DataFrame) -> pd.DataFrame:
+    """Bảng các buổi học (Thứ/Giờ học/Giáo viên) của 1 lớp, sắp theo thứ tự Thứ."""
+    gg = g.sort_values(by="Thứ", key=lambda col: col.map(_day_sort_key))
+    return gg[["Thứ", "Giờ học", "Giáo viên"]].reset_index(drop=True)
 
 
 def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame,
@@ -354,13 +332,19 @@ with tab3:
             else:
                 filtered = df_lop
 
-            result = summarize_classes(filtered)
-
-            if result.empty:
+            if filtered.empty:
                 st.info("Không tìm thấy lớp học nào.")
             else:
-                st.markdown(f"**{len(result)} lớp học**")
-                st.dataframe(result, use_container_width=True)
+                groups = list(filtered.groupby(["Chương trình", "Mã lớp"], sort=False))
+                st.markdown(f"**{len(groups)} lớp học**")
+
+                for (ctr, ma_lop), g in groups:
+                    first = g.iloc[0]
+                    with st.expander(f"🏫 {ma_lop} — {ctr}", expanded=True):
+                        st.markdown(f"**Trình độ:** {first['Trình độ']}")
+                        st.markdown(f"**Ngày dự kiến KG:** {first['Ngày dự kiến KG']}")
+                        st.markdown("**Lịch học:**")
+                        st.dataframe(class_sessions_table(g), use_container_width=True)
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
