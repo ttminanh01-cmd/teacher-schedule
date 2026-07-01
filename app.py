@@ -22,6 +22,11 @@ PROGRAMS = {
 GV_COLS = ["Quốc tịch", "Mã GV", "Giáo viên", "Trình độ giảng dạy",
            "Khung giờ 1", "Khung giờ 2"] + DAYS
 
+SHEET_HOCVIEN = "Tra cứu thông tin HV"
+HOCVIEN_COLS = ["Sản phẩm", "ID", "ID BOS", "Tên", "Email", "Số điện thoại",
+                "Trạng thái hv", "Mã lớp", "Ngày khai giảng", "Ngày kết thúc dự kiến",
+                "Trạng thái lớp", "Lịch học", "Giáo viên", "Tổng buổi", "Buổi còn lại"]
+
 # ===== GOOGLE SHEETS =====
 
 def get_gc():
@@ -161,6 +166,19 @@ def load_lophoc() -> pd.DataFrame:
     frames = [_load_lophoc_program(p) for p in PROGRAMS]
     return pd.concat(frames, ignore_index=True)
 
+
+@st.cache_data(ttl=300)
+def load_hocvien() -> pd.DataFrame:
+    ws = get_gc().open_by_key(SPREADSHEET_ID).worksheet(SHEET_HOCVIEN)
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return pd.DataFrame(columns=HOCVIEN_COLS)
+
+    data = _pad_rows(rows[1:], len(HOCVIEN_COLS))
+    df = pd.DataFrame(data, columns=HOCVIEN_COLS)
+    df = df[df["ID"].str.strip() != ""]
+    return df.reset_index(drop=True)
+
 # ===== HELPERS =====
 
 def _time_sort_key(slot: str):
@@ -266,7 +284,8 @@ def render_teacher_schedule(sessions: pd.DataFrame):
 
 st.title("📚 Tra cứu Giáo Viên")
 
-tab1, tab2, tab3 = st.tabs(["🔍 Tìm GV rảnh theo ca", "👤 Tra cứu theo tên GV", "🏫 Tra cứu Lớp học"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Tìm GV rảnh theo ca", "👤 Tra cứu theo tên GV",
+                                  "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên"])
 
 # ── Tab 1: Tìm GV rảnh ──────────────────────────────────────────────────────
 with tab1:
@@ -427,6 +446,39 @@ with tab3:
                         st.markdown(f"**Trạng thái lớp:** {first['Trạng thái lớp']}")
                         st.markdown("**Lịch học:**")
                         st.dataframe(class_sessions_table(g), use_container_width=True)
+
+# ── Tab 4: Tra cứu Học viên ──────────────────────────────────────────────────
+with tab4:
+    st.subheader("Tra cứu theo Học viên")
+
+    search_hv = st.text_input("Nhập tên, ID, ID BOS, SĐT hoặc mã lớp",
+                               placeholder="Nguyễn Văn A / HV-0065 / ID-0006", key="hv_search")
+
+    if st.button("Tra cứu", key="btn_search_hv"):
+        with st.spinner("Đang tải dữ liệu..."):
+            df_hv = load_hocvien()
+
+        if df_hv.empty:
+            st.error("Không tải được dữ liệu.")
+        else:
+            kw = search_hv.strip().lower()
+            if kw:
+                mask = (
+                    df_hv["Tên"].str.lower().str.contains(kw, na=False) |
+                    df_hv["ID"].str.lower().str.contains(kw, na=False) |
+                    df_hv["ID BOS"].str.lower().str.contains(kw, na=False) |
+                    df_hv["Số điện thoại"].str.contains(kw, na=False) |
+                    df_hv["Mã lớp"].str.lower().str.contains(kw, na=False)
+                )
+                result = df_hv[mask]
+            else:
+                result = df_hv
+
+            if result.empty:
+                st.info("Không tìm thấy học viên nào.")
+            else:
+                st.markdown(f"**{len(result)} học viên**")
+                st.dataframe(result, use_container_width=True, hide_index=True)
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
