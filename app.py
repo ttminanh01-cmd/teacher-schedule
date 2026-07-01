@@ -9,6 +9,8 @@ st.set_page_config(page_title="Tra cứu Giáo Viên", page_icon="📚", layout=
 
 SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "")
 DAYS = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
+WEEKDAY_TO_THU = {0: "Thứ 2", 1: "Thứ 3", 2: "Thứ 4", 3: "Thứ 5",
+                  4: "Thứ 6", 5: "Thứ 7", 6: "Chủ nhật"}
 
 # Mỗi chương trình có 1 sheet lịch GV + 1 sheet lớp học riêng.
 PROGRAMS = {
@@ -74,8 +76,11 @@ def _detect_lophoc_layout(cat_row, col_row):
             base_idx["Mã lớp"] = i
         elif name == "Trình độ":
             base_idx["Trình độ"] = i
-        elif name.startswith("Ngày dự kiến"):
-            base_idx["Ngày dự kiến KG"] = i
+
+    # Cột "Ngày dự kiến KG" luôn nằm ngay sau cột "Trình độ" ở cả 2 sheet,
+    # nhãn cột thực tế có thể khác chữ nên xác định theo vị trí cho chắc.
+    if "Trình độ" in base_idx and base_idx["Trình độ"] + 1 < first_group_start:
+        base_idx["Ngày dự kiến KG"] = base_idx["Trình độ"] + 1
 
     bounds = marker_idxs + [n]
     groups = []
@@ -194,8 +199,10 @@ def summarize_classes(df_sessions: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
-def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame) -> pd.DataFrame:
-    """Các lớp 1 GV đang dạy, kèm lịch học + ngày KG (tra từ data lớp học)."""
+def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame,
+                            thu_filter: str = None) -> pd.DataFrame:
+    """Các lớp 1 GV đang dạy, kèm lịch học + ngày KG (tra từ data lớp học).
+    Nếu có thu_filter, chỉ giữ các buổi rơi vào đúng Thứ đó."""
     if df_sessions.empty or not ma_gv:
         return pd.DataFrame()
 
@@ -204,6 +211,8 @@ def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame) 
         (df_sessions["Chương trình"] == program) &
         (df_sessions["Mã GV"].str.strip() == ma_gv)
     ]
+    if thu_filter:
+        g = g[g["Thứ"].str.strip() == thu_filter]
     if g.empty:
         return pd.DataFrame()
 
@@ -275,6 +284,18 @@ with tab2:
 
     search_name = st.text_input("Nhập tên hoặc mã GV", placeholder="Nguyễn Thị Hồng Hạnh / GV0001")
 
+    col_a, col_b = st.columns(2)
+    with col_a:
+        filter_thu = st.selectbox("Lọc lớp theo Thứ (tuỳ chọn)", ["Tất cả"] + DAYS, key="gv_filter_thu")
+    with col_b:
+        filter_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn)", value=None, key="gv_filter_date")
+
+    effective_thu = None
+    if filter_date:
+        effective_thu = WEEKDAY_TO_THU[filter_date.weekday()]
+    elif filter_thu != "Tất cả":
+        effective_thu = filter_thu
+
     if st.button("Tra cứu", key="btn_search_gv"):
         with st.spinner("Đang tải dữ liệu..."):
             df_gv = load_gv()
@@ -302,8 +323,12 @@ with tab2:
                         st.markdown(f"**Quốc tịch:** {t['Quốc tịch']}")
                         st.markdown(f"**Trình độ giảng dạy:** {t['Trình độ giảng dạy']}")
 
-                        st.markdown("**🏫 Các lớp giảng dạy:**")
-                        classes = get_classes_of_teacher(t["Chương trình"], t["Mã GV"], df_lop)
+                        label = "🏫 Các lớp giảng dạy"
+                        if effective_thu:
+                            label += f" — {effective_thu}" + (f" ({filter_date.strftime('%d/%m/%Y')})" if filter_date else "")
+                        st.markdown(f"**{label}:**")
+
+                        classes = get_classes_of_teacher(t["Chương trình"], t["Mã GV"], df_lop, effective_thu)
                         if classes.empty:
                             st.info("Không có lớp nào trong hệ thống.")
                         else:
