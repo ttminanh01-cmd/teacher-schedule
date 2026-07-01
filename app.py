@@ -210,9 +210,10 @@ def class_sessions_table(g: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame,
-                            thu_filter: str = None) -> pd.DataFrame:
+                            thu_filter: str = None, trang_thai_filter: str = None) -> pd.DataFrame:
     """Các lớp 1 GV đang dạy, kèm lịch học + ngày KG (tra từ data lớp học).
-    Nếu có thu_filter, chỉ giữ các buổi rơi vào đúng Thứ đó."""
+    Nếu có thu_filter, chỉ giữ các buổi rơi vào đúng Thứ đó.
+    Nếu có trang_thai_filter, chỉ giữ các lớp đúng Trạng thái lớp đó."""
     if df_sessions.empty or not ma_gv:
         return pd.DataFrame()
 
@@ -223,6 +224,8 @@ def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame,
     ]
     if thu_filter:
         g = g[g["Thứ"].str.strip() == thu_filter]
+    if trang_thai_filter:
+        g = g[g["Trạng thái lớp"].str.strip() == trang_thai_filter]
     if g.empty:
         return pd.DataFrame()
 
@@ -297,11 +300,18 @@ with tab2:
 
     search_name = st.text_input("Nhập tên hoặc mã GV", placeholder="Nguyễn Thị Hồng Hạnh / GV0001")
 
-    col_a, col_b = st.columns(2)
+    with st.spinner("Đang tải dữ liệu..."):
+        df_lop_all = load_lophoc()
+    status_options = ["Tất cả"] + sorted({s.strip() for s in df_lop_all["Trạng thái lớp"] if s.strip()}) \
+        if not df_lop_all.empty else ["Tất cả"]
+
+    col_a, col_b, col_c = st.columns(3)
     with col_a:
         filter_thu = st.selectbox("Lọc lớp theo Thứ (tuỳ chọn)", ["Tất cả"] + DAYS, key="gv_filter_thu")
     with col_b:
         filter_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn)", value=None, key="gv_filter_date")
+    with col_c:
+        filter_status = st.selectbox("Lọc theo tình trạng lớp (tuỳ chọn)", status_options, key="gv_filter_status")
 
     effective_thu = None
     if filter_date:
@@ -309,10 +319,12 @@ with tab2:
     elif filter_thu != "Tất cả":
         effective_thu = filter_thu
 
+    effective_status = filter_status if filter_status != "Tất cả" else None
+
     if st.button("Tra cứu", key="btn_search_gv"):
         with st.spinner("Đang tải dữ liệu..."):
             df_gv = load_gv()
-            df_lop = load_lophoc()
+            df_lop = df_lop_all
 
         if df_gv.empty:
             st.error("Không tải được dữ liệu.")
@@ -339,9 +351,12 @@ with tab2:
                         label = "🏫 Các lớp giảng dạy"
                         if effective_thu:
                             label += f" — {effective_thu}" + (f" ({filter_date.strftime('%d/%m/%Y')})" if filter_date else "")
+                        if effective_status:
+                            label += f" — {effective_status}"
                         st.markdown(f"**{label}:**")
 
-                        classes = get_classes_of_teacher(t["Chương trình"], t["Mã GV"], df_lop, effective_thu)
+                        classes = get_classes_of_teacher(t["Chương trình"], t["Mã GV"], df_lop,
+                                                          effective_thu, effective_status)
                         if classes.empty:
                             st.info("Không có lớp nào trong hệ thống.")
                         else:
