@@ -462,7 +462,8 @@ def get_teacher_sessions(program: str, ma_gv: str, df_sessions: pd.DataFrame,
         (df_sessions["Mã GV"].str.strip() == ma_gv)
     ]
     if thu_filter:
-        g = g[g["Thứ"].str.strip() == thu_filter]
+        thu_set = [thu_filter] if isinstance(thu_filter, str) else list(thu_filter)
+        g = g[g["Thứ"].str.strip().isin(thu_set)]
     if trang_thai_filter:
         g = g[g["Trạng thái lớp"].str.strip() == trang_thai_filter]
     return g
@@ -850,15 +851,19 @@ with tab2:
     with col_a:
         filter_thu = st.selectbox("Lọc lớp theo Thứ (tuỳ chọn)", ["Tất cả"] + DAYS, key="gv_filter_thu")
     with col_b:
-        filter_date = st.date_input("Chọn ngày cụ thể", value=None, key="gv_filter_date")
+        filter_date_val = st.date_input("Chọn ngày (1 ngày hoặc khoảng ngày)", value=(), key="gv_filter_date")
     with col_c:
         filter_status = st.selectbox("Lọc theo tình trạng lớp (tuỳ chọn)", status_options, key="gv_filter_status")
 
-    effective_thu = None
-    if filter_date:
-        effective_thu = WEEKDAY_TO_THU[filter_date.weekday()]
+    filter_date_range = resolve_date_range(filter_date_val)
+    filter_thu_map = thu_date_map_from_range(filter_date_range)
+
+    if filter_thu_map:
+        effective_thu = list(filter_thu_map.keys())
     elif filter_thu != "Tất cả":
         effective_thu = filter_thu
+    else:
+        effective_thu = None
 
     effective_status = filter_status if filter_status != "Tất cả" else None
 
@@ -891,7 +896,14 @@ with tab2:
                     with st.expander(title, expanded=True):
                         label = "🏫 Các lớp giảng dạy"
                         if effective_thu:
-                            label += f" — {effective_thu}" + (f" ({filter_date.strftime('%d/%m/%Y')})" if filter_date else "")
+                            thu_text = effective_thu if isinstance(effective_thu, str) else ", ".join(effective_thu)
+                            date_text = ""
+                            if filter_date_range and filter_date_range[0] == filter_date_range[1]:
+                                date_text = f" ({filter_date_range[0].strftime('%d/%m/%Y')})"
+                            elif filter_date_range:
+                                date_text = (f" ({filter_date_range[0].strftime('%d/%m/%Y')} → "
+                                             f"{filter_date_range[1].strftime('%d/%m/%Y')})")
+                            label += f" — {thu_text}{date_text}"
                         if effective_status:
                             label += f" — {effective_status}"
 
