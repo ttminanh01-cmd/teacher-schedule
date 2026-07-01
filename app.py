@@ -518,49 +518,11 @@ def render_html_table(df: pd.DataFrame):
     st.markdown("".join(lines), unsafe_allow_html=True)
 
 
-def render_class_info(ma_lop: str, ngay_kg: str, ngay_kt: str, trang_thai: str, schedule: str):
-    """Bảng thông tin lớp nằm ngang (Mã lớp/Ngày KG/Ngày KT/Trạng thái),
-    hàng dưới cùng gộp cả 4 cột hiển thị Lịch học & Giáo viên."""
-    labels = ["Mã lớp", "Ngày khai giảng", "Ngày kết thúc dự kiến", "Trạng thái lớp"]
-    values = [ma_lop, ngay_kg, ngay_kt, trang_thai]
-    header_cells = "".join(
-        f"<th style='text-align:left;padding:6px;border:1px solid #444;'>{html.escape(l)}</th>" for l in labels
-    )
-    value_cells = "".join(
-        f"<td style='padding:6px;border:1px solid #333;'>{html.escape(str(v))}</td>" for v in values
-    )
-    schedule_html = "<br>".join(html.escape(line) for line in schedule.split("\n") if line)
-    table_html = (
-        "<table style='width:100%; border-collapse:collapse; margin-bottom:8px;'>"
-        f"<tr>{header_cells}</tr>"
-        f"<tr>{value_cells}</tr>"
-        f"<tr><td colspan='4' style='padding:6px;border:1px solid #333;'>"
-        f"<strong>Lịch học & Giáo viên:</strong><br>{schedule_html}</td></tr>"
-        "</table>"
-    )
-    st.markdown(table_html, unsafe_allow_html=True)
-
-
 _SESSION_RE = re.compile(r"(Thứ\s*\d+|Chủ\s*nhật)\s*:\s*(.*?)(?=Thứ\s*\d+\s*:|Chủ\s*nhật\s*:|$)", re.S)
 
 
 def _parse_sessions(text: str) -> list:
     return [(thu.strip(), val.strip()) for thu, val in _SESSION_RE.findall(text or "")]
-
-
-def format_hocvien_schedule(lich_hoc: str, giao_vien: str) -> str:
-    """Ghép 'Lịch học' + 'Giáo viên' (mỗi ô đang dồn nhiều buổi liền nhau,
-    không dấu ngăn cách) thành các dòng riêng: 'Thứ X: giờ - GV'."""
-    lich_parts = _parse_sessions(lich_hoc)
-    if not lich_parts:
-        return lich_hoc or ""
-    gv_map = dict(_parse_sessions(giao_vien))
-
-    lines = []
-    for thu, gio in lich_parts:
-        gv = gv_map.get(thu, "")
-        lines.append(f"{thu}: {gio} - {gv}" if gv else f"{thu}: {gio}")
-    return "\n".join(lines)
 
 
 def render_teacher_schedule(sessions: pd.DataFrame):
@@ -973,6 +935,7 @@ with tab4:
     if st.button("Tra cứu", key="btn_search_hv"):
         with st.spinner("Đang tải dữ liệu..."):
             df_hv = load_hocvien()
+            df_xuly = load_xuly()
 
         if df_hv.empty:
             st.error("Không tải được dữ liệu.")
@@ -993,22 +956,34 @@ with tab4:
             if result.empty:
                 st.info("Không tìm thấy học viên nào.")
             else:
-                groups = list(result.groupby(["Sản phẩm", "Mã lớp"], sort=False))
-                st.markdown(f"**{len(groups)} lớp** — **{len(result)} học viên**")
+                st.markdown(f"**{len(result)} học viên**")
 
-                student_cols = ["Sản phẩm", "ID", "ID BOS", "Tên", "Email",
-                                 "Số điện thoại", "Trạng thái hv", "Tổng buổi", "Buổi còn lại"]
+                display = result.copy()
+                display["Lịch học"] = display["Lịch học"].apply(
+                    lambda v: "\n".join(f"{thu}: {gio}" for thu, gio in _parse_sessions(v)) or v
+                )
+                display["Giáo viên"] = display["Giáo viên"].apply(
+                    lambda v: "\n".join(f"{thu}: {ten}" for thu, ten in _parse_sessions(v)) or v
+                )
+                show_cols = ["Sản phẩm", "ID", "ID BOS", "Tên", "Email", "Số điện thoại",
+                             "Trạng thái hv", "Mã lớp", "Ngày khai giảng", "Ngày kết thúc dự kiến",
+                             "Trạng thái lớp", "Lịch học", "Giáo viên", "Tổng buổi", "Buổi còn lại"]
 
-                for (sp, ma_lop), g in groups:
-                    first = g.iloc[0]
-                    with st.expander(f"🏫 {ma_lop} — {sp}", expanded=True):
-                        schedule = format_hocvien_schedule(first["Lịch học"], first["Giáo viên"])
-                        render_class_info(ma_lop, first["Ngày khai giảng"], first["Ngày kết thúc dự kiến"],
-                                           first["Trạng thái lớp"], schedule)
+                incident_frames = []
+                for sp, ma_lop in result[["Sản phẩm", "Mã lớp"]].drop_duplicates().itertuples(index=False):
+                    inc = get_all_class_incidents(ma_lop, sp, df_xuly)
+                    if not inc.empty:
+                        incident_frames.append(inc)
+                all_incidents = pd.concat(incident_frames, ignore_index=True) if incident_frames else pd.DataFrame()
 
-                        st.markdown("**Học viên:**")
-                        st.dataframe(g[student_cols].reset_index(drop=True),
-                                     use_container_width=True, hide_index=True)
+                sub_tab1, sub_tab2 = st.tabs(["Danh sách học viên", f"Data phát sinh ({len(all_incidents)})"])
+                with sub_tab1:
+                    render_html_table(display[show_cols])
+                with sub_tab2:
+                    if all_incidents.empty:
+                        st.info("Chưa có sự vụ phát sinh nào.")
+                    else:
+                        st.dataframe(all_incidents, use_container_width=True, hide_index=True)
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
