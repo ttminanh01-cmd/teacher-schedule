@@ -263,6 +263,11 @@ def times_match(a: str, b: str) -> bool:
     return bool(ta) and ta == tb
 
 
+def gv_loai(quoc_tich: str) -> str:
+    """GVVN nếu Quốc tịch là Vietnamese, còn lại tính là GVNN (nước ngoài)."""
+    return "GVVN" if quoc_tich.strip().lower() == "vietnamese" else "GVNN"
+
+
 def _day_sort_key(thu: str) -> int:
     return DAYS.index(thu) if thu in DAYS else 99
 
@@ -604,11 +609,13 @@ with tab4:
 with tab5:
     st.subheader("Tìm GV Cover cho 1 lớp")
 
-    col_x, col_y = st.columns(2)
+    col_x, col_y, col_z = st.columns(3)
     with col_x:
         cover_class = st.text_input("Mã lớp cần cover", placeholder="EPP-0715", key="cover_class")
     with col_y:
         cover_date = st.date_input("Ngày cần cover", value=None, key="cover_date")
+    with col_z:
+        cover_loai_gv = st.selectbox("Loại GV", ["Tất cả", "GVVN", "GVNN"], key="cover_loai_gv")
 
     if st.button("Tìm GV Cover", key="btn_find_cover"):
         if not cover_class.strip():
@@ -663,6 +670,10 @@ with tab5:
                                 df_gv_ct["Khung giờ 2"].apply(lambda v: times_match(v, gio_hoc))
                             )
                             candidates = df_gv_ct[mask_avail & mask_time]
+
+                            if cover_loai_gv != "Tất cả":
+                                mask_loai = candidates["Quốc tịch"].apply(lambda q: gv_loai(q) == cover_loai_gv)
+                                candidates = candidates[mask_loai]
 
                             if candidates.empty:
                                 st.warning("Không tìm thấy GV nào rảnh đúng khung giờ này.")
