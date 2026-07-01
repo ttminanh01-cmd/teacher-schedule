@@ -262,19 +262,24 @@ def get_not_started_classes(df_lop: pd.DataFrame, as_of: date) -> set:
     return set(df_lop[mask]["Mã lớp"])
 
 
-def build_avail_mask(day_col: pd.Series, free_classes: set) -> pd.Series:
-    """Rảnh nếu ô ghi 'Available', hoặc ô đang ghi mã lớp nằm trong free_classes
-    (lớp đã kết thúc, hoặc chưa tới ngày khai giảng)."""
-    def _is_free(cell: str) -> bool:
+def classify_slot(day_col: pd.Series, free_classes: set) -> pd.Series:
+    """Phân loại từng ô lịch GV:
+    - 'available': ghi đúng chữ 'Available', hoặc ghi mã lớp nhưng lớp đó
+      nằm trong free_classes (đã kết thúc / chưa tới ngày khai giảng).
+    - 'no_shift': ô để trống (không xếp ca làm ở khung này) — chưa chắc rảnh.
+    - 'busy': đang bận 1 lớp khác đang hoạt động."""
+    def _classify(cell: str) -> str:
         c = cell.strip()
         if not c:
-            return False
+            return "no_shift"
         if c.lower() == "available":
-            return True
+            return "available"
         m = _CLASS_CODE_RE.match(c)
-        return bool(m and m.group(1) in free_classes)
+        if m and m.group(1) in free_classes:
+            return "available"
+        return "busy"
 
-    return day_col.apply(_is_free)
+    return day_col.apply(_classify)
 
 
 def _extract_times(s: str) -> tuple:
@@ -331,12 +336,14 @@ def find_cover_candidates(sess: pd.Series, df_gv_all: pd.DataFrame, df_lop: pd.D
         return pd.DataFrame()
 
     free_classes = get_ended_classes(df_lop) | get_not_started_classes(df_lop, as_of)
-    mask_avail = build_avail_mask(df_gv_ct[thu], free_classes)
+    status = classify_slot(df_gv_ct[thu], free_classes)
     mask_time = (
         df_gv_ct["Khung giờ 1"].apply(lambda v: times_match(v, gio_hoc)) |
         df_gv_ct["Khung giờ 2"].apply(lambda v: times_match(v, gio_hoc))
     )
-    candidates = df_gv_ct[mask_avail & mask_time]
+    candidates = df_gv_ct[mask_time].copy()
+    candidates["_status"] = status[mask_time]
+    candidates = candidates[candidates["_status"] != "busy"]
     # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
     candidates = candidates.drop_duplicates(["Chương trình", "Mã GV"])
 
@@ -346,12 +353,25 @@ def find_cover_candidates(sess: pd.Series, df_gv_all: pd.DataFrame, df_lop: pd.D
 
 
 def render_cover_candidates(candidates: pd.DataFrame):
-    if candidates.empty:
-        st.warning("Không tìm thấy GV nào rảnh đúng khung giờ này.")
-    else:
-        st.caption("Đối chiếu cột 'Trình độ giảng dạy' bên dưới với Trình độ lớp/buổi ở trên để chọn GV phù hợp.")
-        show = ["Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy"]
-        st.dataframe(candidates[show].reset_index(drop=True), use_container_width=True)
+    """Tách 2 tab: GV có ghi 'Available' rõ ràng, và GV chỉ đơn giản là không
+    có ca làm ở khung này (chưa chắc chắn rảnh, cần xác nhận thêm)."""
+    show = ["Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy"]
+    available = candidates[candidates["_status"] == "available"] if not candidates.empty else candidates
+    no_shift = candidates[candidates["_status"] == "no_shift"] if not candidates.empty else candidates
+
+    tab_a, tab_b = st.tabs([f"✅ GV available ({len(available)})", f"❔ GV không có ca ({len(no_shift)})"])
+    with tab_a:
+        if available.empty:
+            st.info("Không có GV nào.")
+        else:
+            st.caption("Đối chiếu cột 'Trình độ giảng dạy' bên dưới với Trình độ lớp/buổi ở trên để chọn GV phù hợp.")
+            st.dataframe(available[show].reset_index(drop=True), use_container_width=True)
+    with tab_b:
+        if no_shift.empty:
+            st.info("Không có GV nào.")
+        else:
+            st.caption("GV không có ca làm việc ở khung giờ này trong lịch — chưa chắc chắn rảnh, cần xác nhận thêm trước khi xếp cover.")
+            st.dataframe(no_shift[show].reset_index(drop=True), use_container_width=True)
 
 
 def _day_sort_key(thu: str) -> int:
@@ -533,18 +553,21 @@ with tab1:
                 for thu in thu_list:
                     if thu not in df_gv.columns:
                         continue
-                    mask_avail = build_avail_mask(df_gv[thu], free_classes)
+                    status = classify_slot(df_gv[thu], free_classes)
                     if selected_time != "Tất cả khung giờ":
                         mask_time = (
                             (df_gv["Khung giờ 1"].str.strip() == selected_time) |
                             (df_gv["Khung giờ 2"].str.strip() == selected_time)
                         )
-                        sub = df_gv[mask_avail & mask_time]
+                        sub = df_gv[mask_time].copy()
+                        sub["_status"] = status[mask_time]
+                        sub = sub[sub["_status"] != "busy"]
                         # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
                         sub = sub.drop_duplicates(["Chương trình", "Mã GV"])
                     else:
-                        sub = df_gv[mask_avail]
-                    sub = sub.copy()
+                        sub = df_gv.copy()
+                        sub["_status"] = status
+                        sub = sub[sub["_status"] != "busy"]
                     sub["Thứ"] = thu
                     frames.append(sub)
 
@@ -556,9 +579,11 @@ with tab1:
                     )
                     result = result[mask_level]
 
-                if not result.empty and selected_time != "Tất cả khung giờ":
+                def _group_by_teacher(df):
+                    if df.empty or selected_time == "Tất cả khung giờ":
+                        return df
                     # gộp lại 1 dòng / GV, liệt kê các Thứ rảnh trong khoảng đã chọn
-                    result = result.groupby(["Chương trình", "Mã GV"], sort=False).agg({
+                    return df.groupby(["Chương trình", "Mã GV"], sort=False).agg({
                         "Giáo viên": "first",
                         "Quốc tịch": "first",
                         "Trình độ giảng dạy": "first",
@@ -573,16 +598,28 @@ with tab1:
                 elif date_range:
                     date_label = f" ({date_range[0].strftime('%d/%m/%Y')} → {date_range[1].strftime('%d/%m/%Y')})"
 
-                st.markdown(f"**{len(result)} kết quả** — {', '.join(thu_list)}{date_label}"
+                st.markdown(f"{', '.join(thu_list)}{date_label}"
                             + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else "")
                             + (f" | {selected_program}" if selected_program != "Tất cả" else ""))
 
-                if result.empty:
-                    st.info("Không có giáo viên nào rảnh trong khung giờ này.")
-                else:
-                    show = ["Chương trình", "Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy",
-                            "Thứ", "Khung giờ 1", "Khung giờ 2"]
-                    st.dataframe(result[show].reset_index(drop=True), use_container_width=True)
+                available = _group_by_teacher(result[result["_status"] == "available"])
+                no_shift = _group_by_teacher(result[result["_status"] == "no_shift"])
+                show = ["Chương trình", "Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy",
+                        "Thứ", "Khung giờ 1", "Khung giờ 2"]
+
+                tab_a, tab_b = st.tabs([f"✅ GV available ({len(available)})",
+                                        f"❔ GV không có ca ({len(no_shift)})"])
+                with tab_a:
+                    if available.empty:
+                        st.info("Không có giáo viên nào rảnh trong khung giờ này.")
+                    else:
+                        st.dataframe(available[show].reset_index(drop=True), use_container_width=True)
+                with tab_b:
+                    if no_shift.empty:
+                        st.info("Không có giáo viên nào.")
+                    else:
+                        st.caption("GV không có ca làm việc ở khung giờ này trong lịch — chưa chắc chắn rảnh, cần xác nhận thêm.")
+                        st.dataframe(no_shift[show].reset_index(drop=True), use_container_width=True)
 
     # ── Chế độ 2: theo mã lớp cần cover ──
     elif find_mode == "Theo mã lớp":
