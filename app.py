@@ -82,6 +82,12 @@ def _detect_lophoc_layout(cat_row, col_row):
     if "Trình độ" in base_idx and base_idx["Trình độ"] + 1 < first_group_start:
         base_idx["Ngày dự kiến KG"] = base_idx["Trình độ"] + 1
 
+    # "Trạng thái lớp" nằm sau tất cả các nhóm Buổi, dò theo tên trên toàn dòng.
+    for i, name in enumerate(col_row):
+        if "Trạng thái" in name:
+            base_idx["Trạng thái lớp"] = i
+            break
+
     bounds = marker_idxs + [n]
     groups = []
     for gi in range(len(marker_idxs)):
@@ -104,7 +110,7 @@ def _detect_lophoc_layout(cat_row, col_row):
     return base_idx, groups
 
 
-SESSION_COLS = ["Chương trình", "Mã lớp", "Trình độ", "Ngày dự kiến KG",
+SESSION_COLS = ["Chương trình", "Mã lớp", "Trình độ", "Ngày dự kiến KG", "Trạng thái lớp",
                 "Thứ", "Giờ học", "Mã GV", "Giáo viên"]
 
 
@@ -126,6 +132,7 @@ def _load_lophoc_program(program: str) -> pd.DataFrame:
             continue
         trinh_do = r[base_idx["Trình độ"]].strip() if "Trình độ" in base_idx else ""
         ngay_kg = r[base_idx["Ngày dự kiến KG"]].strip() if "Ngày dự kiến KG" in base_idx else ""
+        trang_thai = r[base_idx["Trạng thái lớp"]].strip() if "Trạng thái lớp" in base_idx else ""
 
         for role in groups:
             thu = r[role["day"]].strip() if role["day"] is not None else ""
@@ -139,6 +146,7 @@ def _load_lophoc_program(program: str) -> pd.DataFrame:
                 "Mã lớp": ma_lop,
                 "Trình độ": trinh_do,
                 "Ngày dự kiến KG": ngay_kg,
+                "Trạng thái lớp": trang_thai,
                 "Thứ": thu,
                 "Giờ học": gio,
                 "Mã GV": ma_gv,
@@ -343,6 +351,7 @@ with tab3:
                     with st.expander(f"🏫 {ma_lop} — {ctr}", expanded=True):
                         st.markdown(f"**Trình độ:** {first['Trình độ']}")
                         st.markdown(f"**Ngày dự kiến KG:** {first['Ngày dự kiến KG']}")
+                        st.markdown(f"**Trạng thái lớp:** {first['Trạng thái lớp']}")
                         st.markdown("**Lịch học:**")
                         st.dataframe(class_sessions_table(g), use_container_width=True)
 
