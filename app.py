@@ -1,3 +1,5 @@
+import re
+
 import streamlit as st
 import gspread
 import pandas as pd
@@ -148,6 +150,18 @@ def load_lophoc() -> pd.DataFrame:
 
 # ===== HELPERS =====
 
+def _time_sort_key(slot: str):
+    """Sắp xếp khung giờ theo thời gian thực (hỗ trợ cả '8h30' và '08:30')."""
+    m = re.search(r"(\d{1,2})[h:](\d{2})", slot)
+    return (int(m.group(1)), int(m.group(2))) if m else (99, 99)
+
+
+def get_time_slots(df_gv: pd.DataFrame) -> list:
+    slots = set(df_gv["Khung giờ 1"]) | set(df_gv["Khung giờ 2"])
+    slots = {s.strip() for s in slots if s.strip()}
+    return sorted(slots, key=_time_sort_key)
+
+
 def summarize_classes(df_sessions: pd.DataFrame) -> pd.DataFrame:
     """Gộp các buổi học (long format) thành 1 dòng / lớp, liệt kê đủ Lịch học
     và Giáo viên (1 lớp mix có thể có nhiều GV dạy các buổi khác nhau)."""
@@ -215,15 +229,19 @@ tab1, tab2, tab3 = st.tabs(["🔍 Tìm GV rảnh theo ca", "👤 Tra cứu theo 
 with tab1:
     st.subheader("Tìm giáo viên rảnh theo Thứ và Khung giờ")
 
+    with st.spinner("Đang tải dữ liệu..."):
+        df_gv_all = load_gv()
+
+    time_options = ["Tất cả khung giờ"] + get_time_slots(df_gv_all) if not df_gv_all.empty else ["Tất cả khung giờ"]
+
     col1, col2 = st.columns(2)
     with col1:
         selected_day = st.selectbox("Chọn Thứ", DAYS)
     with col2:
-        search_time = st.text_input("Nhập giờ cần tìm (ví dụ: 8h30, 14h00)", placeholder="8h30")
+        selected_time = st.selectbox("Chọn khung giờ", time_options)
 
     if st.button("Tìm kiếm", key="btn_find_free"):
-        with st.spinner("Đang tải dữ liệu..."):
-            df_gv = load_gv()
+        df_gv = df_gv_all
 
         if df_gv.empty:
             st.error("Không tải được dữ liệu. Kiểm tra lại kết nối sheet.")
@@ -232,18 +250,17 @@ with tab1:
         else:
             mask_avail = df_gv[selected_day].str.strip().str.lower() == "available"
 
-            if search_time.strip():
-                t = search_time.strip().lower().replace(" ", "")
+            if selected_time != "Tất cả khung giờ":
                 mask_time = (
-                    df_gv["Khung giờ 1"].str.lower().str.replace(" ", "").str.contains(t, na=False) |
-                    df_gv["Khung giờ 2"].str.lower().str.replace(" ", "").str.contains(t, na=False)
+                    (df_gv["Khung giờ 1"].str.strip() == selected_time) |
+                    (df_gv["Khung giờ 2"].str.strip() == selected_time)
                 )
                 result = df_gv[mask_avail & mask_time]
             else:
                 result = df_gv[mask_avail]
 
             st.markdown(f"**{len(result)} khung giờ trống** — {selected_day}"
-                        + (f" | giờ chứa '{search_time}'" if search_time.strip() else ""))
+                        + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else ""))
 
             if result.empty:
                 st.info("Không có giáo viên nào rảnh trong khung giờ này.")
