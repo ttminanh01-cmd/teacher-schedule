@@ -239,17 +239,28 @@ def get_teacher_sessions(program: str, ma_gv: str, df_sessions: pd.DataFrame,
     return g
 
 
+def build_schedule_grid(sessions: pd.DataFrame) -> pd.DataFrame:
+    """Bảng lịch dạng lưới: hàng = ca học (Giờ học), cột = Thứ, ô = Mã lớp."""
+    if sessions.empty:
+        return pd.DataFrame()
+
+    pivot = sessions.pivot_table(
+        index="Giờ học", columns="Thứ", values="Mã lớp",
+        aggfunc=lambda s: ", ".join(s), fill_value="",
+    )
+    cols = [d for d in DAYS if d in pivot.columns]
+    pivot = pivot[cols]
+    pivot = pivot.reindex(sorted(pivot.index, key=_time_sort_key))
+    pivot.index.name = "Ca học"
+    return pivot.reset_index()
+
+
 def render_teacher_schedule(sessions: pd.DataFrame):
-    """Hiển thị lịch dạy gọn theo từng Thứ: 'Mã lớp | Giờ học'."""
+    """Hiển thị lịch dạy dạng lưới: hàng ca học, cột Thứ."""
     if sessions.empty:
         st.info("Không có lớp nào trong hệ thống.")
         return
-    for thu in DAYS:
-        day_rows = sessions[sessions["Thứ"].str.strip() == thu].sort_values("Giờ học")
-        if day_rows.empty:
-            continue
-        st.markdown(f"**{thu}**")
-        st.markdown("\n".join(f"- {row['Mã lớp']} | {row['Giờ học']}" for _, row in day_rows.iterrows()))
+    st.dataframe(build_schedule_grid(sessions), use_container_width=True, hide_index=True)
 
 # ===== UI =====
 
