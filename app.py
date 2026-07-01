@@ -9,6 +9,12 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="Tra cứu thông tin", page_icon="📚", layout="wide")
 
+st.markdown("""
+<style>
+.stSelectbox, .stTextInput, .stDateInput, .stMultiSelect { max-width: 320px; }
+</style>
+""", unsafe_allow_html=True)
+
 SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "")
 DAYS = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
 WEEKDAY_TO_THU = {0: "Thứ 2", 1: "Thứ 3", 2: "Thứ 4", 3: "Thứ 5",
