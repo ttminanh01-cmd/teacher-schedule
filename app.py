@@ -724,7 +724,7 @@ with tab1:
                                 )
                                 incidents = get_class_incidents(sess["Mã lớp"], sess["Chương trình"], df_xuly)
                                 if not incidents.empty:
-                                    st.warning(f"⚠️ Lớp {sess['Mã lớp']} có {len(incidents)} sự vụ phát sinh:")
+                                    st.warning(f"⚠️ Lớp {sess['Mã lớp']} có {len(incidents)} phát sinh:")
                                     st.dataframe(incidents, use_container_width=True, hide_index=True)
                                 candidates = find_cover_candidates(sess, df_gv_all, df_lop,
                                                                     as_of, cover_loai_gv)
@@ -808,7 +808,7 @@ with tab1:
                     )
                     incidents = get_class_incidents(sess["Mã lớp"], sess["Chương trình"], df_xuly)
                     if not incidents.empty:
-                        st.warning(f"⚠️ Lớp {sess['Mã lớp']} có {len(incidents)} sự vụ phát sinh:")
+                        st.warning(f"⚠️ Lớp {sess['Mã lớp']} có {len(incidents)} phát sinh:")
                         st.dataframe(incidents, use_container_width=True, hide_index=True)
                     candidates = find_cover_candidates(sess, df_gv_all, df_lop_full,
                                                         as_of, loai_gv_absent)
