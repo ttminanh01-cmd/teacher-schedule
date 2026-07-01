@@ -464,7 +464,7 @@ with tab1:
         with st.spinner("Đang tải dữ liệu..."):
             df_gv_all = load_gv()
 
-        col0, col1, col2, _ = st.columns([1, 1, 1, 3])
+        col0, col1, col2, col3, col4 = st.columns(5)
         with col0:
             selected_program = st.selectbox("Chương trình", ["Tất cả"] + list(PROGRAMS.keys()))
 
@@ -476,8 +476,6 @@ with tab1:
             selected_day = st.selectbox("Chọn Thứ", DAYS)
         with col2:
             selected_time = st.selectbox("Chọn khung giờ", time_options)
-
-        col3, col4, _sp1 = st.columns([1, 1, 4])
         with col3:
             selected_date = st.date_input("Hoặc chọn ngày cụ thể (tuỳ chọn, sẽ tự suy ra Thứ)",
                                            value=None, key="find_free_date")
