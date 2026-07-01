@@ -340,13 +340,15 @@ def get_all_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) ->
                 "Vấn đề cần xử lý", "Giáo viên cover"]].reset_index(drop=True)
 
 
-def get_gv_incidents(ma_gv: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
-    """Toàn bộ sự vụ (Cover/Hủy đơn/Hủy lớp) mà 1 GV là người chính đứng đơn."""
-    if df_xuly.empty or not ma_gv:
+def get_gv_incidents(ten_gv: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
+    """Toàn bộ sự vụ (Cover/Hủy đơn/Hủy lớp) mà 1 GV là người chính đứng đơn.
+    Khớp theo Tên Gv vì cột Mã Gv trong sheet Xử lý phát sinh dùng hệ mã khác
+    (VD 'TC018xxx') với Mã GV bên Data lịch GV, không thể so khớp theo mã."""
+    if df_xuly.empty or not ten_gv:
         return pd.DataFrame()
     rows = df_xuly[
         (df_xuly["Chương trình"] == program) &
-        (df_xuly["Mã Gv"].str.strip().str.lower() == ma_gv.strip().lower())
+        (df_xuly["Tên Gv"].str.strip().str.lower() == ten_gv.strip().lower())
     ]
     if rows.empty:
         return pd.DataFrame()
@@ -869,7 +871,7 @@ with tab2:
                         if effective_status:
                             label += f" — {effective_status}"
 
-                        gv_incidents = get_gv_incidents(t["Mã GV"], t["Chương trình"], df_xuly)
+                        gv_incidents = get_gv_incidents(t["Giáo viên"], t["Chương trình"], df_xuly)
                         sub_tab1, sub_tab2 = st.tabs([label, f"Data phát sinh ({len(gv_incidents)})"])
                         with sub_tab1:
                             sessions = get_teacher_sessions(t["Chương trình"], t["Mã GV"], df_lop,
