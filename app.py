@@ -20,10 +20,12 @@ DAYS = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ
 WEEKDAY_TO_THU = {0: "Thứ 2", 1: "Thứ 3", 2: "Thứ 4", 3: "Thứ 5",
                   4: "Thứ 6", 5: "Thứ 7", 6: "Chủ nhật"}
 
-# Mỗi chương trình có 1 sheet lịch GV + 1 sheet lớp học riêng.
+# Mỗi chương trình có 1 sheet lịch GV + 1 sheet lớp học + 1 sheet xử lý phát sinh riêng.
 PROGRAMS = {
-    "EZP": {"sheet_gv": "Data lịch GV EZP", "sheet_lop": "Data lớp học EZP"},
-    "IE": {"sheet_gv": "Data lịch GV IE", "sheet_lop": "Data lớp học IE"},
+    "EZP": {"sheet_gv": "Data lịch GV EZP", "sheet_lop": "Data lớp học EZP",
+            "sheet_xuly": "Xử lý phát sinh EZP"},
+    "IE": {"sheet_gv": "Data lịch GV IE", "sheet_lop": "Data lớp học IE",
+           "sheet_xuly": "Xử lý phát sinh IE"},
 }
 
 # 13 cột đầu của cả 2 sheet lịch GV theo cùng thứ tự (chỉ khác nhãn cột).
@@ -212,6 +214,30 @@ def load_hocvien() -> pd.DataFrame:
         df[col] = df[col].apply(lambda v: format_date(v, dayfirst=False))
     return df.reset_index(drop=True)
 
+
+XULY_COLS = ["Ngày/tháng", "Mã lớp", "Ca học", "Quốc tịch", "Mã Gv", "Tên Gv",
+             "Loại đơn nghỉ", "Vấn đề cần xử lý", "Lý do"]
+
+
+def _load_xuly_program(program: str) -> pd.DataFrame:
+    ws = get_gc().open_by_key(SPREADSHEET_ID).worksheet(PROGRAMS[program]["sheet_xuly"])
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return pd.DataFrame(columns=["Chương trình"] + XULY_COLS)
+
+    data = _pad_rows(rows[1:], len(XULY_COLS))
+    df = pd.DataFrame(data, columns=XULY_COLS)
+    df = df[(df["Mã lớp"].str.strip() != "") & (df["Loại đơn nghỉ"].str.strip() != "")]
+    df["Ngày/tháng"] = df["Ngày/tháng"].apply(lambda v: format_date(v, dayfirst=True))
+    df.insert(0, "Chương trình", program)
+    return df.reset_index(drop=True)
+
+
+@st.cache_data(ttl=300)
+def load_xuly() -> pd.DataFrame:
+    frames = [_load_xuly_program(p) for p in PROGRAMS]
+    return pd.concat(frames, ignore_index=True)
+
 # ===== HELPERS =====
 
 def _time_sort_key(slot: str):
@@ -296,6 +322,21 @@ def gv_loai(quoc_tich: str) -> str:
     """GVVN nếu Quốc tịch là Vietnamese/Vietnam (EZP và IE ghi khác nhau),
     còn lại tính là GVNN (nước ngoài)."""
     return "GVVN" if quoc_tich.strip().lower().startswith("vietnam") else "GVNN"
+
+
+def get_class_incident_warning(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> str:
+    """Nếu 1 mã lớp có từ 2 sự vụ (Cover/Hủy đơn/Hủy lớp) trở lên trong sheet
+    Xử lý phát sinh, dựng câu cảnh báo liệt kê từng sự vụ kèm ngày."""
+    if df_xuly.empty or not ma_lop:
+        return ""
+    rows = df_xuly[
+        (df_xuly["Chương trình"] == program) &
+        (df_xuly["Mã lớp"].str.strip().str.lower() == ma_lop.strip().lower())
+    ]
+    if len(rows) < 2:
+        return ""
+    parts = [f"{r['Loại đơn nghỉ'].strip()} ngày {r['Ngày/tháng']}" for _, r in rows.iterrows()]
+    return f"⚠️ Lớp {ma_lop} có {len(rows)} sự vụ phát sinh: " + "; ".join(parts)
 
 
 def resolve_date_range(value):
@@ -644,6 +685,7 @@ with tab1:
                 with st.spinner("Đang tải dữ liệu..."):
                     df_lop = load_lophoc()
                     df_gv_all = load_gv()
+                    df_xuly = load_xuly()
 
                 if df_lop.empty:
                     st.error("Không tải được dữ liệu.")
@@ -672,6 +714,9 @@ with tab1:
                                     f"{sess['Thứ']} {sess['Giờ học']} ({as_of.strftime('%d/%m/%Y')}) — "
                                     f"GV hiện tại: {sess['Giáo viên'] or '(chưa có)'}"
                                 )
+                                warning = get_class_incident_warning(sess["Mã lớp"], sess["Chương trình"], df_xuly)
+                                if warning:
+                                    st.warning(warning)
                                 candidates = find_cover_candidates(sess, df_gv_all, df_lop,
                                                                     as_of, cover_loai_gv)
                                 render_cover_candidates(candidates)
@@ -738,6 +783,7 @@ with tab1:
             else:
                 with st.spinner("Đang tải dữ liệu..."):
                     df_lop_full = load_lophoc()
+                    df_xuly = load_xuly()
 
                 sessions_to_cover = day_sessions_teacher if selected_ca == "Tất cả" else day_sessions_teacher[
                     day_sessions_teacher.apply(
@@ -751,6 +797,9 @@ with tab1:
                         f"Trình độ lớp: **{sess['Trình độ']}** — "
                         f"{sess['Thứ']} {sess['Giờ học']} ({as_of.strftime('%d/%m/%Y')})"
                     )
+                    warning = get_class_incident_warning(sess["Mã lớp"], sess["Chương trình"], df_xuly)
+                    if warning:
+                        st.warning(warning)
                     candidates = find_cover_candidates(sess, df_gv_all, df_lop_full,
                                                         as_of, loai_gv_absent)
                     render_cover_candidates(candidates)
