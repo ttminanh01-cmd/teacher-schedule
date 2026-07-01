@@ -590,14 +590,17 @@ with tab1:
         with col_x:
             cover_class = st.text_input("Mã lớp cần cover", placeholder="EPP-0715", key="cover_class")
         with col_y:
-            cover_date = st.date_input("Ngày cần cover", value=None, key="cover_date")
+            cover_date_val = st.date_input("Ngày cần cover (1 ngày hoặc khoảng ngày)", value=(), key="cover_date")
         with col_z:
             cover_loai_gv = st.selectbox("Loại GV", ["Tất cả", "GVVN", "GVNN"], key="cover_loai_gv")
+
+        cover_range = resolve_date_range(cover_date_val)
+        cover_thu_map = thu_date_map_from_range(cover_range)
 
         if st.button("Tìm GV Cover", key="btn_find_cover"):
             if not cover_class.strip():
                 st.warning("Nhập mã lớp cần cover.")
-            elif not cover_date:
+            elif not cover_range:
                 st.warning("Chọn ngày cần cover.")
             else:
                 with st.spinner("Đang tải dữ liệu..."):
@@ -615,22 +618,24 @@ with tab1:
                     if class_sessions.empty:
                         st.info(f"Không tìm thấy lớp '{cover_class}'.")
                     else:
-                        thu_needed = WEEKDAY_TO_THU[cover_date.weekday()]
-                        day_sessions = class_sessions[class_sessions["Thứ"].str.strip() == thu_needed]
+                        day_sessions = class_sessions[
+                            class_sessions["Thứ"].str.strip().isin(cover_thu_map.keys())
+                        ]
 
                         if day_sessions.empty:
-                            st.info(f"Lớp '{cover_class}' không có buổi học vào {thu_needed} "
-                                    f"({cover_date.strftime('%d/%m/%Y')}).")
+                            st.info(f"Lớp '{cover_class}' không có buổi học vào "
+                                    f"{', '.join(cover_thu_map.keys())} trong khoảng đã chọn.")
                         else:
                             for _, sess in day_sessions.iterrows():
+                                as_of = cover_thu_map[sess["Thứ"].strip()]
                                 st.markdown(
                                     f"**Lớp {sess['Mã lớp']}** ({sess['Chương trình']}) — "
                                     f"Trình độ lớp: **{sess['Trình độ']}** — "
-                                    f"{thu_needed} {sess['Giờ học']} — "
+                                    f"{sess['Thứ']} {sess['Giờ học']} ({as_of.strftime('%d/%m/%Y')}) — "
                                     f"GV hiện tại: {sess['Giáo viên'] or '(chưa có)'}"
                                 )
                                 candidates = find_cover_candidates(sess, df_gv_all, df_lop,
-                                                                    cover_date, cover_loai_gv)
+                                                                    as_of, cover_loai_gv)
                                 render_cover_candidates(candidates)
                                 st.divider()
 
