@@ -1,5 +1,6 @@
 import html
 import re
+from datetime import date, datetime
 
 import streamlit as st
 import gspread
@@ -239,8 +240,25 @@ def get_ended_classes(df_lop: pd.DataFrame) -> set:
     return set(ended["Mã lớp"])
 
 
-def build_avail_mask(day_col: pd.Series, ended_classes: set) -> pd.Series:
-    """Rảnh nếu ô ghi 'Available', hoặc ô đang ghi mã lớp nhưng lớp đó đã kết thúc."""
+def _parse_ddmmyyyy(s: str):
+    try:
+        return datetime.strptime(s.strip(), "%d/%m/%Y").date()
+    except (ValueError, AttributeError):
+        return None
+
+
+def get_not_started_classes(df_lop: pd.DataFrame, as_of: date) -> set:
+    """Lớp có Ngày dự kiến KG sau ngày as_of (chưa khai giảng nên vẫn rảnh)."""
+    if df_lop.empty or as_of is None:
+        return set()
+    parsed = df_lop["Ngày dự kiến KG"].apply(_parse_ddmmyyyy)
+    mask = parsed.apply(lambda d: d is not None and d > as_of)
+    return set(df_lop[mask]["Mã lớp"])
+
+
+def build_avail_mask(day_col: pd.Series, free_classes: set) -> pd.Series:
+    """Rảnh nếu ô ghi 'Available', hoặc ô đang ghi mã lớp nằm trong free_classes
+    (lớp đã kết thúc, hoặc chưa tới ngày khai giảng)."""
     def _is_free(cell: str) -> bool:
         c = cell.strip()
         if not c:
@@ -248,7 +266,7 @@ def build_avail_mask(day_col: pd.Series, ended_classes: set) -> pd.Series:
         if c.lower() == "available":
             return True
         m = _CLASS_CODE_RE.match(c)
-        return bool(m and m.group(1) in ended_classes)
+        return bool(m and m.group(1) in free_classes)
 
     return day_col.apply(_is_free)
 
@@ -429,8 +447,10 @@ with tab1:
             st.error(f"Không tìm thấy cột '{effective_day}' trong sheet.")
         else:
             with st.spinner("Đang tải dữ liệu..."):
-                ended_classes = get_ended_classes(load_lophoc())
-            mask_avail = build_avail_mask(df_gv[effective_day], ended_classes)
+                df_lop_for_avail = load_lophoc()
+            as_of = selected_date if selected_date else date.today()
+            free_classes = get_ended_classes(df_lop_for_avail) | get_not_started_classes(df_lop_for_avail, as_of)
+            mask_avail = build_avail_mask(df_gv[effective_day], free_classes)
 
             if selected_time != "Tất cả khung giờ":
                 mask_time = (
@@ -438,6 +458,8 @@ with tab1:
                     (df_gv["Khung giờ 2"].str.strip() == selected_time)
                 )
                 result = df_gv[mask_avail & mask_time]
+                # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
+                result = result.drop_duplicates(["Chương trình", "Mã GV"])
             else:
                 result = df_gv[mask_avail]
 
@@ -645,7 +667,7 @@ with tab5:
                         st.info(f"Lớp '{cover_class}' không có buổi học vào {thu_needed} "
                                 f"({cover_date.strftime('%d/%m/%Y')}).")
                     else:
-                        ended_classes = get_ended_classes(df_lop)
+                        free_classes = get_ended_classes(df_lop) | get_not_started_classes(df_lop, cover_date)
 
                         for _, sess in day_sessions.iterrows():
                             ctr = sess["Chương trình"]
@@ -664,12 +686,14 @@ with tab5:
                                 st.divider()
                                 continue
 
-                            mask_avail = build_avail_mask(df_gv_ct[thu_needed], ended_classes)
+                            mask_avail = build_avail_mask(df_gv_ct[thu_needed], free_classes)
                             mask_time = (
                                 df_gv_ct["Khung giờ 1"].apply(lambda v: times_match(v, gio_hoc)) |
                                 df_gv_ct["Khung giờ 2"].apply(lambda v: times_match(v, gio_hoc))
                             )
                             candidates = df_gv_ct[mask_avail & mask_time]
+                            # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
+                            candidates = candidates.drop_duplicates(["Chương trình", "Mã GV"])
 
                             if cover_loai_gv != "Tất cả":
                                 mask_loai = candidates["Quốc tịch"].apply(lambda q: gv_loai(q) == cover_loai_gv)
