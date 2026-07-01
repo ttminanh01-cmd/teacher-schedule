@@ -48,6 +48,29 @@ def _pad_rows(rows, width):
     return out
 
 
+_DATE_RE = re.compile(r"^(\d{1,4})[/\-](\d{1,2})[/\-](\d{1,4})$")
+
+
+def format_date(raw: str, dayfirst: bool = True) -> str:
+    """Chuẩn hoá ngày về dd/mm/yyyy. dayfirst=True nếu nguồn đã là d/m/y
+    (VD sheet lớp học), False nếu nguồn là m/d/y (VD sheet học viên)."""
+    raw = (raw or "").strip()
+    m = _DATE_RE.match(raw)
+    if not m:
+        return raw
+    a, b, c = m.groups()
+    if len(a) == 4:
+        year, month, day = a, b, c
+    elif dayfirst:
+        day, month, year = a, b, c
+    else:
+        month, day, year = a, b, c
+    try:
+        return f"{int(day):02d}/{int(month):02d}/{int(year):04d}"
+    except ValueError:
+        return raw
+
+
 def _load_gv_program(program: str) -> pd.DataFrame:
     ws = get_gc().open_by_key(SPREADSHEET_ID).worksheet(PROGRAMS[program]["sheet_gv"])
     rows = ws.get_all_values()
@@ -137,7 +160,7 @@ def _load_lophoc_program(program: str) -> pd.DataFrame:
         if not ma_lop:
             continue
         trinh_do = r[base_idx["Trình độ"]].strip() if "Trình độ" in base_idx else ""
-        ngay_kg = r[base_idx["Ngày dự kiến KG"]].strip() if "Ngày dự kiến KG" in base_idx else ""
+        ngay_kg = format_date(r[base_idx["Ngày dự kiến KG"]], dayfirst=True) if "Ngày dự kiến KG" in base_idx else ""
         trang_thai = r[base_idx["Trạng thái lớp"]].strip() if "Trạng thái lớp" in base_idx else ""
 
         for role in groups:
@@ -178,6 +201,8 @@ def load_hocvien() -> pd.DataFrame:
     data = _pad_rows(rows[1:], len(HOCVIEN_COLS))
     df = pd.DataFrame(data, columns=HOCVIEN_COLS)
     df = df[df["ID"].str.strip() != ""]
+    for col in ["Ngày khai giảng", "Ngày kết thúc dự kiến"]:
+        df[col] = df[col].apply(lambda v: format_date(v, dayfirst=False))
     return df.reset_index(drop=True)
 
 # ===== HELPERS =====
