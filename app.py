@@ -66,7 +66,7 @@ def _detect_lophoc_layout(cat_row, col_row):
     dựa theo dòng danh mục (cat_row) + dòng tên cột (col_row), không phụ thuộc
     số lượng cột base hay tên cột GV khác nhau giữa các sheet."""
     n = len(col_row)
-    marker_idxs = [i for i, c in enumerate(cat_row) if c.strip()]
+    marker_idxs = [i for i, c in enumerate(cat_row) if "Buổi" in c]
     first_group_start = marker_idxs[0] if marker_idxs else n
 
     base_idx = {}
