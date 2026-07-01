@@ -1,3 +1,4 @@
+import html
 import re
 
 import streamlit as st
@@ -258,13 +259,13 @@ def get_teacher_sessions(program: str, ma_gv: str, df_sessions: pd.DataFrame,
 
 
 def build_schedule_grid(sessions: pd.DataFrame) -> pd.DataFrame:
-    """Bảng lịch dạng lưới: hàng = ca học (Giờ học), cột = Thứ, ô = Mã lớp."""
+    """Bảng lịch dạng lưới: hàng = ca học (Giờ học), cột = Thứ, ô = Mã lớp (mỗi mã 1 dòng)."""
     if sessions.empty:
         return pd.DataFrame()
 
     pivot = sessions.pivot_table(
         index="Giờ học", columns="Thứ", values="Mã lớp",
-        aggfunc=lambda s: ", ".join(s), fill_value="",
+        aggfunc=lambda s: "\n".join(s), fill_value="",
     )
     cols = [d for d in DAYS if d in pivot.columns]
     pivot = pivot[cols]
@@ -273,12 +274,29 @@ def build_schedule_grid(sessions: pd.DataFrame) -> pd.DataFrame:
     return pivot.reset_index()
 
 
+def render_schedule_grid_html(grid: pd.DataFrame):
+    """Vẽ bảng lịch bằng HTML để mã lớp trong 1 ô xuống dòng thay vì nối dấu phẩy."""
+    lines = ["<table style='width:100%; border-collapse:collapse;'>",
+             "<tr>" + "".join(
+                 f"<th style='text-align:left;padding:6px;border-bottom:1px solid #555;'>{html.escape(str(c))}</th>"
+                 for c in grid.columns
+             ) + "</tr>"]
+    for _, row in grid.iterrows():
+        lines.append("<tr>")
+        for c in grid.columns:
+            cell = html.escape(str(row[c])).replace("\n", "<br>")
+            lines.append(f"<td style='padding:6px;border-bottom:1px solid #333;vertical-align:top;'>{cell}</td>")
+        lines.append("</tr>")
+    lines.append("</table>")
+    st.markdown("".join(lines), unsafe_allow_html=True)
+
+
 def render_teacher_schedule(sessions: pd.DataFrame):
     """Hiển thị lịch dạy dạng lưới: hàng ca học, cột Thứ."""
     if sessions.empty:
         st.info("Không có lớp nào trong hệ thống.")
         return
-    st.dataframe(build_schedule_grid(sessions), use_container_width=True, hide_index=True)
+    render_schedule_grid_html(build_schedule_grid(sessions))
 
 # ===== UI =====
 
@@ -397,10 +415,9 @@ with tab2:
                 ]
 
                 for _, t in teachers.iterrows():
-                    with st.expander(f"👤 {t['Giáo viên']}  ({t['Mã GV']} — {t['Chương trình']})", expanded=True):
-                        st.markdown(f"**Quốc tịch:** {t['Quốc tịch']}")
-                        st.markdown(f"**Trình độ giảng dạy:** {t['Trình độ giảng dạy']}")
-
+                    title = (f"👤 {t['Giáo viên']} ({t['Mã GV']} — {t['Chương trình']}) — "
+                             f"{t['Quốc tịch']} — {t['Trình độ giảng dạy']}")
+                    with st.expander(title, expanded=True):
                         label = "🏫 Các lớp giảng dạy"
                         if effective_thu:
                             label += f" — {effective_thu}" + (f" ({filter_date.strftime('%d/%m/%Y')})" if filter_date else "")
