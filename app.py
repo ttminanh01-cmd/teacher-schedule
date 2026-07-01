@@ -464,7 +464,7 @@ with tab1:
         with st.spinner("Đang tải dữ liệu..."):
             df_gv_all = load_gv()
 
-        col0, col1, col2 = st.columns(3)
+        col0, col1, col2, _ = st.columns([1, 1, 1, 3])
         with col0:
             selected_program = st.selectbox("Chương trình", ["Tất cả"] + list(PROGRAMS.keys()))
 
@@ -528,7 +528,7 @@ with tab1:
 
     # ── Chế độ 2: theo mã lớp cần cover ──
     elif find_mode == "Theo mã lớp":
-        col_x, col_y, col_z = st.columns(3)
+        col_x, col_y, col_z, _ = st.columns([1, 1, 1, 3])
         with col_x:
             cover_class = st.text_input("Mã lớp cần cover", placeholder="EPP-0715", key="cover_class")
         with col_y:
@@ -581,7 +581,7 @@ with tab1:
         with st.spinner("Đang tải dữ liệu..."):
             df_gv_all = load_gv()
 
-        col_p, col_q = st.columns(2)
+        col_p, col_q, _ = st.columns([1, 1, 3])
         with col_p:
             absent_query = st.text_input("Nhập tên hoặc mã GV nghỉ",
                                           placeholder="Nguyễn Thị Hồng Hạnh / GV0001", key="absent_gv_query")
@@ -661,7 +661,7 @@ with tab2:
     status_options = ["Tất cả"] + sorted({s.strip() for s in df_lop_all["Trạng thái lớp"] if s.strip()}) \
         if not df_lop_all.empty else ["Tất cả"]
 
-    col_a, col_b, col_c = st.columns(3)
+    col_a, col_b, col_c, _ = st.columns([1, 1, 1, 3])
     with col_a:
         filter_thu = st.selectbox("Lọc lớp theo Thứ (tuỳ chọn)", ["Tất cả"] + DAYS, key="gv_filter_thu")
     with col_b:
