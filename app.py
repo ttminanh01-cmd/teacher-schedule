@@ -294,6 +294,29 @@ def render_html_table(df: pd.DataFrame):
     st.markdown("".join(lines), unsafe_allow_html=True)
 
 
+def render_class_info(ma_lop: str, ngay_kg: str, ngay_kt: str, trang_thai: str, schedule: str):
+    """Bảng thông tin lớp nằm ngang (Mã lớp/Ngày KG/Ngày KT/Trạng thái),
+    hàng dưới cùng gộp cả 4 cột hiển thị Lịch học & Giáo viên."""
+    labels = ["Mã lớp", "Ngày khai giảng", "Ngày kết thúc dự kiến", "Trạng thái lớp"]
+    values = [ma_lop, ngay_kg, ngay_kt, trang_thai]
+    header_cells = "".join(
+        f"<th style='text-align:left;padding:6px;border:1px solid #444;'>{html.escape(l)}</th>" for l in labels
+    )
+    value_cells = "".join(
+        f"<td style='padding:6px;border:1px solid #333;'>{html.escape(str(v))}</td>" for v in values
+    )
+    schedule_html = "<br>".join(html.escape(line) for line in schedule.split("\n") if line)
+    table_html = (
+        "<table style='width:100%; border-collapse:collapse; margin-bottom:8px;'>"
+        f"<tr>{header_cells}</tr>"
+        f"<tr>{value_cells}</tr>"
+        f"<tr><td colspan='4' style='padding:6px;border:1px solid #333;'>"
+        f"<strong>Lịch học & Giáo viên:</strong><br>{schedule_html}</td></tr>"
+        "</table>"
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
+
+
 _SESSION_RE = re.compile(r"(Thứ\s*\d+|Chủ\s*nhật)\s*:\s*(.*?)(?=Thứ\s*\d+\s*:|Chủ\s*nhật\s*:|$)", re.S)
 
 
@@ -528,13 +551,9 @@ with tab4:
                 for (sp, ma_lop), g in groups:
                     first = g.iloc[0]
                     with st.expander(f"🏫 {ma_lop} — {sp}", expanded=True):
-                        st.markdown(f"**Mã lớp:** {ma_lop}")
-                        st.markdown(f"**Ngày khai giảng:** {first['Ngày khai giảng']}")
-                        st.markdown(f"**Ngày kết thúc dự kiến:** {first['Ngày kết thúc dự kiến']}")
-                        st.markdown(f"**Trạng thái lớp:** {first['Trạng thái lớp']}")
-                        st.markdown("**Lịch học & Giáo viên:**")
                         schedule = format_hocvien_schedule(first["Lịch học"], first["Giáo viên"])
-                        st.markdown(schedule.replace("\n", "  \n"))
+                        render_class_info(ma_lop, first["Ngày khai giảng"], first["Ngày kết thúc dự kiến"],
+                                           first["Trạng thái lớp"], schedule)
 
                         st.markdown("**Học viên:**")
                         st.dataframe(g[student_cols].reset_index(drop=True),
