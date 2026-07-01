@@ -175,6 +175,16 @@ def get_time_slots(df_gv: pd.DataFrame) -> list:
     return sorted(slots, key=_time_sort_key)
 
 
+def get_level_options(df_gv: pd.DataFrame) -> list:
+    levels = set()
+    for cell in df_gv["Trình độ giảng dạy"]:
+        for part in cell.split(","):
+            part = part.strip()
+            if part:
+                levels.add(part)
+    return sorted(levels)
+
+
 _CLASS_CODE_RE = re.compile(r"^([A-Za-z0-9]+-[A-Za-z0-9]+)")
 
 
@@ -261,11 +271,14 @@ with tab1:
 
     df_gv_scoped = df_gv_all if selected_program == "Tất cả" else df_gv_all[df_gv_all["Chương trình"] == selected_program]
     time_options = ["Tất cả khung giờ"] + get_time_slots(df_gv_scoped) if not df_gv_scoped.empty else ["Tất cả khung giờ"]
+    level_options = get_level_options(df_gv_scoped) if not df_gv_scoped.empty else []
 
     with col1:
         selected_day = st.selectbox("Chọn Thứ", DAYS)
     with col2:
         selected_time = st.selectbox("Chọn khung giờ", time_options)
+
+    selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
 
     if st.button("Tìm kiếm", key="btn_find_free"):
         df_gv = df_gv_scoped
@@ -287,6 +300,12 @@ with tab1:
                 result = df_gv[mask_avail & mask_time]
             else:
                 result = df_gv[mask_avail]
+
+            if selected_levels:
+                mask_level = result["Trình độ giảng dạy"].apply(
+                    lambda cell: any(lv in cell for lv in selected_levels)
+                )
+                result = result[mask_level]
 
             st.markdown(f"**{len(result)} khung giờ trống** — {selected_day}"
                         + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else "")
