@@ -219,9 +219,9 @@ def class_sessions_table(g: pd.DataFrame) -> pd.DataFrame:
     return gg[["Thứ", "Giờ học", "Giáo viên"]].reset_index(drop=True)
 
 
-def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame,
-                            thu_filter: str = None, trang_thai_filter: str = None) -> pd.DataFrame:
-    """Các lớp 1 GV đang dạy, kèm lịch học + ngày KG (tra từ data lớp học).
+def get_teacher_sessions(program: str, ma_gv: str, df_sessions: pd.DataFrame,
+                          thu_filter: str = None, trang_thai_filter: str = None) -> pd.DataFrame:
+    """Các buổi dạy của 1 GV (tra từ data lớp học).
     Nếu có thu_filter, chỉ giữ các buổi rơi vào đúng Thứ đó.
     Nếu có trang_thai_filter, chỉ giữ các lớp đúng Trạng thái lớp đó."""
     if df_sessions.empty or not ma_gv:
@@ -236,21 +236,20 @@ def get_classes_of_teacher(program: str, ma_gv: str, df_sessions: pd.DataFrame,
         g = g[g["Thứ"].str.strip() == thu_filter]
     if trang_thai_filter:
         g = g[g["Trạng thái lớp"].str.strip() == trang_thai_filter]
-    if g.empty:
-        return pd.DataFrame()
+    return g
 
-    out = []
-    for ma_lop, gg in g.groupby("Mã lớp", sort=False):
-        first = gg.iloc[0]
-        lich = "; ".join(f"{row['Thứ']} {row['Giờ học']}".strip() for _, row in gg.iterrows())
-        out.append({
-            "Mã lớp": ma_lop,
-            "Trình độ": first["Trình độ"],
-            "Ngày dự kiến KG": first["Ngày dự kiến KG"],
-            "Trạng thái lớp": first["Trạng thái lớp"],
-            "Lịch học": lich,
-        })
-    return pd.DataFrame(out)
+
+def render_teacher_schedule(sessions: pd.DataFrame):
+    """Hiển thị lịch dạy gọn theo từng Thứ: 'Mã lớp | Giờ học'."""
+    if sessions.empty:
+        st.info("Không có lớp nào trong hệ thống.")
+        return
+    for thu in DAYS:
+        day_rows = sessions[sessions["Thứ"].str.strip() == thu].sort_values("Giờ học")
+        if day_rows.empty:
+            continue
+        st.markdown(f"**{thu}**")
+        st.markdown("\n".join(f"- {row['Mã lớp']} | {row['Giờ học']}" for _, row in day_rows.iterrows()))
 
 # ===== UI =====
 
@@ -379,12 +378,9 @@ with tab2:
                             label += f" — {effective_status}"
                         st.markdown(f"**{label}:**")
 
-                        classes = get_classes_of_teacher(t["Chương trình"], t["Mã GV"], df_lop,
-                                                          effective_thu, effective_status)
-                        if classes.empty:
-                            st.info("Không có lớp nào trong hệ thống.")
-                        else:
-                            st.dataframe(classes, use_container_width=True)
+                        sessions = get_teacher_sessions(t["Chương trình"], t["Mã GV"], df_lop,
+                                                         effective_thu, effective_status)
+                        render_teacher_schedule(sessions)
 
 # ── Tab 3: Tra cứu Lớp học ──────────────────────────────────────────────────
 with tab3:
