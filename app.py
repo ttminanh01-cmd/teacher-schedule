@@ -325,20 +325,26 @@ def gv_loai(quoc_tich: str) -> str:
     return "GVVN" if quoc_tich.strip().lower().startswith("vietnam") else "GVNN"
 
 
-def get_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
-    """Nếu 1 mã lớp có từ 2 sự vụ (Cover/Hủy đơn/Hủy lớp) trở lên trong sheet
-    Xử lý phát sinh, trả về bảng liệt kê từng sự vụ (rỗng nếu <2)."""
+def get_all_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
+    """Toàn bộ sự vụ (Cover/Hủy đơn/Hủy lớp) của 1 mã lớp từ trước đến nay."""
     if df_xuly.empty or not ma_lop:
         return pd.DataFrame()
     rows = df_xuly[
         (df_xuly["Chương trình"] == program) &
         (df_xuly["Mã lớp"].str.strip().str.lower() == ma_lop.strip().lower())
     ]
-    if len(rows) < 2:
+    if rows.empty:
         return pd.DataFrame()
     out = rows.rename(columns={"Tên Gv": "Gv chính"})
     return out[["Ngày/tháng", "Mã lớp", "Ca học", "Gv chính", "Loại đơn nghỉ",
                 "Vấn đề cần xử lý", "Giáo viên cover"]].reset_index(drop=True)
+
+
+def get_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
+    """Như get_all_class_incidents, nhưng chỉ trả về nếu có từ 2 sự vụ trở lên
+    (dùng để cảnh báo khi tìm cover)."""
+    incidents = get_all_class_incidents(ma_lop, program, df_xuly)
+    return incidents if len(incidents) >= 2 else pd.DataFrame()
 
 
 def resolve_date_range(value):
@@ -882,6 +888,7 @@ with tab3:
     if st.button("Tra cứu", key="btn_search_class"):
         with st.spinner("Đang tải dữ liệu..."):
             df_lop = load_lophoc()
+            df_xuly = load_xuly()
 
         if df_lop.empty:
             st.error("Không tải được dữ liệu.")
@@ -905,8 +912,16 @@ with tab3:
                         st.markdown(f"**Trình độ:** {first['Trình độ']}")
                         st.markdown(f"**Ngày dự kiến KG:** {first['Ngày dự kiến KG']}")
                         st.markdown(f"**Trạng thái lớp:** {first['Trạng thái lớp']}")
-                        st.markdown("**Lịch học:**")
-                        st.dataframe(class_sessions_table(g), use_container_width=True)
+
+                        incidents = get_all_class_incidents(ma_lop, ctr, df_xuly)
+                        sub_tab1, sub_tab2 = st.tabs(["Lịch học", f"Data phát sinh ({len(incidents)})"])
+                        with sub_tab1:
+                            st.dataframe(class_sessions_table(g), use_container_width=True)
+                        with sub_tab2:
+                            if incidents.empty:
+                                st.info("Chưa có sự vụ phát sinh nào.")
+                            else:
+                                st.dataframe(incidents, use_container_width=True, hide_index=True)
 
 # ── Tab 4: Tra cứu Học viên ──────────────────────────────────────────────────
 with tab4:
