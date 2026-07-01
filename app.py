@@ -292,6 +292,33 @@ def gv_loai(quoc_tich: str) -> str:
     return "GVVN" if quoc_tich.strip().lower() == "vietnamese" else "GVNN"
 
 
+def resolve_date_range(value):
+    """Chuẩn hoá giá trị st.date_input (range-mode) về tuple (start, end) hoặc None."""
+    if isinstance(value, (list, tuple)):
+        if len(value) == 1:
+            return (value[0], value[0])
+        if len(value) == 2:
+            return tuple(value)
+        return None
+    if value:
+        return (value, value)
+    return None
+
+
+def thu_date_map_from_range(date_range) -> dict:
+    """Map mỗi Thứ xuất hiện trong khoảng ngày -> ngày cụ thể đầu tiên của Thứ đó."""
+    mapping = {}
+    if not date_range:
+        return mapping
+    cur = date_range[0]
+    while cur <= date_range[1] and len(mapping) < 7:
+        thu = WEEKDAY_TO_THU[cur.weekday()]
+        if thu not in mapping:
+            mapping[thu] = cur
+        cur += timedelta(days=1)
+    return mapping
+
+
 def find_cover_candidates(sess: pd.Series, df_gv_all: pd.DataFrame, df_lop: pd.DataFrame,
                            as_of: date, loai_gv_filter: str = "Tất cả") -> pd.DataFrame:
     """GV cùng chương trình, rảnh đúng Thứ + khung giờ của buổi `sess` cần cover."""
@@ -488,25 +515,8 @@ with tab1:
         with col4:
             selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
 
-        date_range = None
-        if isinstance(date_input_val, (list, tuple)):
-            if len(date_input_val) == 1:
-                date_range = (date_input_val[0], date_input_val[0])
-            elif len(date_input_val) == 2:
-                date_range = tuple(date_input_val)
-        elif date_input_val:
-            date_range = (date_input_val, date_input_val)
-
-        if date_range:
-            thu_list = []
-            cur = date_range[0]
-            while cur <= date_range[1] and len(thu_list) < 7:
-                thu = WEEKDAY_TO_THU[cur.weekday()]
-                if thu not in thu_list:
-                    thu_list.append(thu)
-                cur += timedelta(days=1)
-        else:
-            thu_list = [selected_day]
+        date_range = resolve_date_range(date_input_val)
+        thu_list = list(thu_date_map_from_range(date_range).keys()) if date_range else [selected_day]
 
         if st.button("Tìm kiếm", key="btn_find_free"):
             df_gv = df_gv_scoped
@@ -634,7 +644,9 @@ with tab1:
             absent_query = st.text_input("Nhập tên hoặc mã GV nghỉ",
                                           placeholder="Nguyễn Thị Hồng Hạnh / GV0001", key="absent_gv_query")
         with col_q:
-            absent_date = st.date_input("Ngày nghỉ", value=None, key="absent_date")
+            absent_date_val = st.date_input("Ngày nghỉ (1 ngày hoặc khoảng ngày)", value=(), key="absent_date")
+        absent_range = resolve_date_range(absent_date_val)
+        absent_thu_map = thu_date_map_from_range(absent_range)
 
         teacher_key = None
         if absent_query.strip() and not df_gv_all.empty:
@@ -655,18 +667,18 @@ with tab1:
                 teacher_key = options[picked_label]
 
         day_sessions_teacher = pd.DataFrame()
-        if teacher_key and absent_date:
+        if teacher_key and absent_thu_map:
             ctr_t, ma_gv_t = teacher_key
             with st.spinner("Đang tải dữ liệu..."):
                 df_lop_t = load_lophoc()
-            thu_absent = WEEKDAY_TO_THU[absent_date.weekday()]
             day_sessions_teacher = df_lop_t[
                 (df_lop_t["Chương trình"] == ctr_t) &
                 (df_lop_t["Mã GV"].str.strip() == ma_gv_t) &
-                (df_lop_t["Thứ"].str.strip() == thu_absent)
+                (df_lop_t["Thứ"].str.strip().isin(absent_thu_map.keys()))
             ]
 
-        ca_labels = [f"{row['Giờ học']} — {row['Mã lớp']}" for _, row in day_sessions_teacher.iterrows()]
+        ca_labels = [f"{row['Thứ']} {row['Giờ học']} — {row['Mã lớp']}"
+                     for _, row in day_sessions_teacher.iterrows()]
         with col_ca:
             selected_ca = st.selectbox("Ca dạy nghỉ", ["Tất cả"] + ca_labels, key="absent_ca")
         with col_loai:
@@ -675,28 +687,29 @@ with tab1:
         if st.button("Tìm GV Cover", key="btn_find_cover_absent"):
             if not teacher_key:
                 st.warning("Nhập và chọn đúng GV nghỉ.")
-            elif not absent_date:
+            elif not absent_range:
                 st.warning("Chọn ngày nghỉ.")
             elif day_sessions_teacher.empty:
-                thu_absent = WEEKDAY_TO_THU[absent_date.weekday()]
-                st.info(f"GV này không có ca dạy vào {thu_absent} ({absent_date.strftime('%d/%m/%Y')}).")
+                st.info(f"GV này không có ca dạy vào {', '.join(absent_thu_map.keys())} "
+                        f"trong khoảng đã chọn.")
             else:
                 with st.spinner("Đang tải dữ liệu..."):
                     df_lop_full = load_lophoc()
 
                 sessions_to_cover = day_sessions_teacher if selected_ca == "Tất cả" else day_sessions_teacher[
                     day_sessions_teacher.apply(
-                        lambda r: f"{r['Giờ học']} — {r['Mã lớp']}" == selected_ca, axis=1)
+                        lambda r: f"{r['Thứ']} {r['Giờ học']} — {r['Mã lớp']}" == selected_ca, axis=1)
                 ]
 
                 for _, sess in sessions_to_cover.iterrows():
+                    as_of = absent_thu_map[sess["Thứ"].strip()]
                     st.markdown(
                         f"**Lớp {sess['Mã lớp']}** ({sess['Chương trình']}) — "
                         f"Trình độ lớp: **{sess['Trình độ']}** — "
-                        f"{sess['Thứ']} {sess['Giờ học']}"
+                        f"{sess['Thứ']} {sess['Giờ học']} ({as_of.strftime('%d/%m/%Y')})"
                     )
                     candidates = find_cover_candidates(sess, df_gv_all, df_lop_full,
-                                                        absent_date, loai_gv_absent)
+                                                        as_of, loai_gv_absent)
                     render_cover_candidates(candidates)
                     st.divider()
 
