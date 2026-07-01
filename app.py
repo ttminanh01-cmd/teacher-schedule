@@ -255,16 +255,20 @@ with tab1:
     with st.spinner("Đang tải dữ liệu..."):
         df_gv_all = load_gv()
 
-    time_options = ["Tất cả khung giờ"] + get_time_slots(df_gv_all) if not df_gv_all.empty else ["Tất cả khung giờ"]
+    col0, col1, col2 = st.columns(3)
+    with col0:
+        selected_program = st.selectbox("Chương trình", ["Tất cả"] + list(PROGRAMS.keys()))
 
-    col1, col2 = st.columns(2)
+    df_gv_scoped = df_gv_all if selected_program == "Tất cả" else df_gv_all[df_gv_all["Chương trình"] == selected_program]
+    time_options = ["Tất cả khung giờ"] + get_time_slots(df_gv_scoped) if not df_gv_scoped.empty else ["Tất cả khung giờ"]
+
     with col1:
         selected_day = st.selectbox("Chọn Thứ", DAYS)
     with col2:
         selected_time = st.selectbox("Chọn khung giờ", time_options)
 
     if st.button("Tìm kiếm", key="btn_find_free"):
-        df_gv = df_gv_all
+        df_gv = df_gv_scoped
 
         if df_gv.empty:
             st.error("Không tải được dữ liệu. Kiểm tra lại kết nối sheet.")
@@ -285,7 +289,8 @@ with tab1:
                 result = df_gv[mask_avail]
 
             st.markdown(f"**{len(result)} khung giờ trống** — {selected_day}"
-                        + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else ""))
+                        + (f" | {selected_time}" if selected_time != "Tất cả khung giờ" else "")
+                        + (f" | {selected_program}" if selected_program != "Tất cả" else ""))
 
             if result.empty:
                 st.info("Không có giáo viên nào rảnh trong khung giờ này.")
