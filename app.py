@@ -340,6 +340,20 @@ def get_all_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) ->
                 "Vấn đề cần xử lý", "Giáo viên cover"]].reset_index(drop=True)
 
 
+def get_gv_incidents(ma_gv: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
+    """Toàn bộ sự vụ (Cover/Hủy đơn/Hủy lớp) mà 1 GV là người chính đứng đơn."""
+    if df_xuly.empty or not ma_gv:
+        return pd.DataFrame()
+    rows = df_xuly[
+        (df_xuly["Chương trình"] == program) &
+        (df_xuly["Mã Gv"].str.strip().str.lower() == ma_gv.strip().lower())
+    ]
+    if rows.empty:
+        return pd.DataFrame()
+    return rows[["Ngày/tháng", "Mã lớp", "Ca học", "Loại đơn nghỉ",
+                 "Vấn đề cần xử lý", "Giáo viên cover"]].reset_index(drop=True)
+
+
 def get_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
     """Như get_all_class_incidents, nhưng chỉ trả về nếu có từ 2 sự vụ trở lên
     (dùng để cảnh báo khi tìm cover)."""
@@ -461,10 +475,16 @@ def build_schedule_grid(sessions: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     sessions = sessions.copy()
-    sessions["_label"] = sessions.apply(
-        lambda r: f"{r['Mã lớp']} (KG: {r['Ngày dự kiến KG']})" if r["Ngày dự kiến KG"] else r["Mã lớp"],
-        axis=1,
-    )
+
+    def _cell_label(r):
+        label = r["Mã lớp"]
+        if r["Ngày dự kiến KG"]:
+            label += f" (KG: {r['Ngày dự kiến KG']})"
+        if r["Trạng thái lớp"]:
+            label += f" - {r['Trạng thái lớp']}"
+        return label
+
+    sessions["_label"] = sessions.apply(_cell_label, axis=1)
 
     pivot = sessions.pivot_table(
         index="Giờ học", columns="Thứ", values="_label",
@@ -846,6 +866,7 @@ with tab2:
         with st.spinner("Đang tải dữ liệu..."):
             df_gv = load_gv()
             df_lop = df_lop_all
+            df_xuly = load_xuly()
 
         if df_gv.empty:
             st.error("Không tải được dữ liệu.")
@@ -873,11 +894,18 @@ with tab2:
                             label += f" — {effective_thu}" + (f" ({filter_date.strftime('%d/%m/%Y')})" if filter_date else "")
                         if effective_status:
                             label += f" — {effective_status}"
-                        st.markdown(f"**{label}:**")
 
-                        sessions = get_teacher_sessions(t["Chương trình"], t["Mã GV"], df_lop,
-                                                         effective_thu, effective_status)
-                        render_teacher_schedule(sessions)
+                        gv_incidents = get_gv_incidents(t["Mã GV"], t["Chương trình"], df_xuly)
+                        sub_tab1, sub_tab2 = st.tabs([label, f"Data phát sinh ({len(gv_incidents)})"])
+                        with sub_tab1:
+                            sessions = get_teacher_sessions(t["Chương trình"], t["Mã GV"], df_lop,
+                                                             effective_thu, effective_status)
+                            render_teacher_schedule(sessions)
+                        with sub_tab2:
+                            if gv_incidents.empty:
+                                st.info("Chưa có sự vụ phát sinh nào.")
+                            else:
+                                st.dataframe(gv_incidents, use_container_width=True, hide_index=True)
 
 # ── Tab 3: Tra cứu Lớp học ──────────────────────────────────────────────────
 with tab3:
