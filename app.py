@@ -293,8 +293,9 @@ def times_match(a: str, b: str) -> bool:
 
 
 def gv_loai(quoc_tich: str) -> str:
-    """GVVN nếu Quốc tịch là Vietnamese, còn lại tính là GVNN (nước ngoài)."""
-    return "GVVN" if quoc_tich.strip().lower() == "vietnamese" else "GVNN"
+    """GVVN nếu Quốc tịch là Vietnamese/Vietnam (EZP và IE ghi khác nhau),
+    còn lại tính là GVNN (nước ngoài)."""
+    return "GVVN" if quoc_tich.strip().lower().startswith("vietnam") else "GVNN"
 
 
 def resolve_date_range(value):
