@@ -358,12 +358,19 @@ def get_teacher_sessions(program: str, ma_gv: str, df_sessions: pd.DataFrame,
 
 
 def build_schedule_grid(sessions: pd.DataFrame) -> pd.DataFrame:
-    """Bảng lịch dạng lưới: hàng = ca học (Giờ học), cột = Thứ, ô = Mã lớp (mỗi mã 1 dòng)."""
+    """Bảng lịch dạng lưới: hàng = ca học (Giờ học), cột = Thứ,
+    ô = Mã lớp kèm Ngày dự kiến KG (mỗi lớp 1 dòng)."""
     if sessions.empty:
         return pd.DataFrame()
 
+    sessions = sessions.copy()
+    sessions["_label"] = sessions.apply(
+        lambda r: f"{r['Mã lớp']} (KG: {r['Ngày dự kiến KG']})" if r["Ngày dự kiến KG"] else r["Mã lớp"],
+        axis=1,
+    )
+
     pivot = sessions.pivot_table(
-        index="Giờ học", columns="Thứ", values="Mã lớp",
+        index="Giờ học", columns="Thứ", values="_label",
         aggfunc=lambda s: "\n".join(s), fill_value="",
     )
     cols = [d for d in DAYS if d in pivot.columns]
