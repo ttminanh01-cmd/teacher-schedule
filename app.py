@@ -6,7 +6,7 @@ import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
 
-st.set_page_config(page_title="Tra cứu Giáo Viên", page_icon="📚", layout="wide")
+st.set_page_config(page_title="Tra cứu thông tin", page_icon="📚", layout="wide")
 
 SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "")
 DAYS = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
@@ -274,16 +274,19 @@ def build_schedule_grid(sessions: pd.DataFrame) -> pd.DataFrame:
     return pivot.reset_index()
 
 
-def render_schedule_grid_html(grid: pd.DataFrame):
-    """Vẽ bảng lịch bằng HTML để mã lớp trong 1 ô xuống dòng thay vì nối dấu phẩy."""
+def render_html_table(df: pd.DataFrame):
+    """Vẽ bảng bằng HTML để các ô nhiều dòng (chứa '\\n') xuống dòng thật,
+    thay vì bị nối liền như trong st.dataframe."""
+    if df.empty:
+        return
     lines = ["<table style='width:100%; border-collapse:collapse;'>",
              "<tr>" + "".join(
                  f"<th style='text-align:left;padding:6px;border-bottom:1px solid #555;'>{html.escape(str(c))}</th>"
-                 for c in grid.columns
+                 for c in df.columns
              ) + "</tr>"]
-    for _, row in grid.iterrows():
+    for _, row in df.iterrows():
         lines.append("<tr>")
-        for c in grid.columns:
+        for c in df.columns:
             cell = html.escape(str(row[c])).replace("\n", "<br>")
             lines.append(f"<td style='padding:6px;border-bottom:1px solid #333;vertical-align:top;'>{cell}</td>")
         lines.append("</tr>")
@@ -291,16 +294,38 @@ def render_schedule_grid_html(grid: pd.DataFrame):
     st.markdown("".join(lines), unsafe_allow_html=True)
 
 
+_SESSION_RE = re.compile(r"(Thứ\s*\d+|Chủ\s*nhật)\s*:\s*(.*?)(?=Thứ\s*\d+\s*:|Chủ\s*nhật\s*:|$)", re.S)
+
+
+def _parse_sessions(text: str) -> list:
+    return [(thu.strip(), val.strip()) for thu, val in _SESSION_RE.findall(text or "")]
+
+
+def format_hocvien_schedule(lich_hoc: str, giao_vien: str) -> str:
+    """Ghép 'Lịch học' + 'Giáo viên' (mỗi ô đang dồn nhiều buổi liền nhau,
+    không dấu ngăn cách) thành các dòng riêng: 'Thứ X: giờ - GV'."""
+    lich_parts = _parse_sessions(lich_hoc)
+    if not lich_parts:
+        return lich_hoc or ""
+    gv_map = dict(_parse_sessions(giao_vien))
+
+    lines = []
+    for thu, gio in lich_parts:
+        gv = gv_map.get(thu, "")
+        lines.append(f"{thu}: {gio} - {gv}" if gv else f"{thu}: {gio}")
+    return "\n".join(lines)
+
+
 def render_teacher_schedule(sessions: pd.DataFrame):
     """Hiển thị lịch dạy dạng lưới: hàng ca học, cột Thứ."""
     if sessions.empty:
         st.info("Không có lớp nào trong hệ thống.")
         return
-    render_schedule_grid_html(build_schedule_grid(sessions))
+    render_html_table(build_schedule_grid(sessions))
 
 # ===== UI =====
 
-st.title("📚 Tra cứu Giáo Viên")
+st.title("📚 Tra cứu thông tin")
 
 tab1, tab2, tab3, tab4 = st.tabs(["🔍 Tìm GV rảnh theo ca", "👤 Tra cứu theo tên GV",
                                   "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên"])
@@ -495,7 +520,12 @@ with tab4:
                 st.info("Không tìm thấy học viên nào.")
             else:
                 st.markdown(f"**{len(result)} học viên**")
-                st.dataframe(result, use_container_width=True, hide_index=True)
+
+                display = result.drop(columns=["Lịch học", "Giáo viên"]).copy()
+                display["Lịch học & Giáo viên"] = result.apply(
+                    lambda row: format_hocvien_schedule(row["Lịch học"], row["Giáo viên"]), axis=1
+                )
+                render_html_table(display)
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
