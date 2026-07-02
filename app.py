@@ -210,6 +210,8 @@ def load_hocvien() -> pd.DataFrame:
     data = _pad_rows(rows[1:], len(HOCVIEN_COLS))
     df = pd.DataFrame(data, columns=HOCVIEN_COLS)
     df = df[df["ID"].str.strip() != ""]
+    # Sheet nguồn (đồng bộ từ Raw IE/EZP) đôi khi có dòng bị lặp cho cùng 1 HV + lớp
+    df = df.drop_duplicates(subset=["ID", "Mã lớp"])
     for col in ["Ngày khai giảng", "Ngày kết thúc dự kiến"]:
         df[col] = df[col].apply(lambda v: format_date(v, dayfirst=False))
     return df.reset_index(drop=True)
