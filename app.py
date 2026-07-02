@@ -646,33 +646,18 @@ def get_teacher_sessions(program: str, ma_gv: str, df_sessions: pd.DataFrame,
     return g
 
 
-def build_schedule_grid(sessions: pd.DataFrame) -> pd.DataFrame:
-    """Bảng lịch dạng lưới: hàng = ca học (Giờ học), cột = Thứ,
-    ô = Mã lớp kèm Ngày dự kiến KG (mỗi lớp 1 dòng)."""
+def build_schedule_table(sessions: pd.DataFrame) -> pd.DataFrame:
+    """Bảng phẳng: mỗi buổi 1 dòng — Ca học, Thứ, Mã lớp, Ngày KG, Tình trạng lớp."""
     if sessions.empty:
         return pd.DataFrame()
 
-    sessions = sessions.copy()
-
-    def _cell_label(r):
-        label = r["Mã lớp"]
-        if r["Ngày dự kiến KG"]:
-            label += f" (KG: {r['Ngày dự kiến KG']})"
-        if r["Trạng thái lớp"]:
-            label += f" - {r['Trạng thái lớp']}"
-        return label
-
-    sessions["_label"] = sessions.apply(_cell_label, axis=1)
-
-    pivot = sessions.pivot_table(
-        index="Giờ học", columns="Thứ", values="_label",
-        aggfunc=lambda s: "\n".join(s), fill_value="",
-    )
-    cols = [d for d in DAYS if d in pivot.columns]
-    pivot = pivot[cols]
-    pivot = pivot.reindex(sorted(pivot.index, key=_time_sort_key))
-    pivot.index.name = "Ca học"
-    return pivot.reset_index()
+    out = sessions.copy()
+    out["_day_key"] = out["Thứ"].map(_day_sort_key)
+    out["_time_key"] = out["Giờ học"].map(_time_sort_key)
+    out = out.sort_values(["_day_key", "_time_key"]).drop(columns=["_day_key", "_time_key"])
+    out = out.rename(columns={"Giờ học": "Ca học", "Ngày dự kiến KG": "Ngày KG",
+                               "Trạng thái lớp": "Tình trạng lớp"})
+    return out[["Ca học", "Thứ", "Mã lớp", "Ngày KG", "Tình trạng lớp"]].reset_index(drop=True)
 
 
 def render_html_table(df: pd.DataFrame):
@@ -703,11 +688,11 @@ def _parse_sessions(text: str) -> list:
 
 
 def render_teacher_schedule(sessions: pd.DataFrame):
-    """Hiển thị lịch dạy dạng lưới: hàng ca học, cột Thứ."""
+    """Hiển thị lịch dạy dạng bảng phẳng: Ca học, Thứ, Mã lớp, Ngày KG, Tình trạng lớp."""
     if sessions.empty:
         st.info("Không có lớp nào trong hệ thống.")
         return
-    render_html_table(build_schedule_grid(sessions))
+    st.dataframe(build_schedule_table(sessions), use_container_width=True, hide_index=True)
 
 # ===== UI =====
 
