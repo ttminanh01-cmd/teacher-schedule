@@ -219,7 +219,7 @@ def get_gv_leave_history(ma_bos_gv: str, ten_gv: str, df_leave: pd.DataFrame) ->
     if rows.empty:
         return pd.DataFrame()
     rows = rows[["Loại đơn", "Ngày bắt đầu", "Ngày kết thúc", "Lý do nghỉ", "VHGV xử lý"]]
-    return _sort_by_ngay_desc(rows, col="Ngày bắt đầu").reset_index(drop=True)
+    return _sort_by_ngay(rows, col="Ngày bắt đầu").reset_index(drop=True)
 
 
 def _detect_lophoc_layout(cat_row, col_row):
@@ -455,10 +455,11 @@ def gv_loai(quoc_tich: str) -> str:
     return "GVVN" if quoc_tich.strip().lower().startswith("vietnam") else "GVNN"
 
 
-def _sort_by_ngay_desc(df: pd.DataFrame, col: str = "Ngày/tháng") -> pd.DataFrame:
-    """Sắp xếp theo ngày mới nhất trước, dòng không đọc được ngày đẩy xuống cuối."""
-    key = df[col].apply(lambda v: _parse_ddmmyyyy(v) or date.min)
-    return df.assign(_sort_key=key).sort_values("_sort_key", ascending=False).drop(columns="_sort_key")
+def _sort_by_ngay(df: pd.DataFrame, col: str = "Ngày/tháng") -> pd.DataFrame:
+    """Sắp xếp theo ngày tăng dần (cũ trước, mới sau); dòng không đọc được
+    ngày đẩy xuống cuối."""
+    key = df[col].apply(lambda v: _parse_ddmmyyyy(v) or date.max)
+    return df.assign(_sort_key=key).sort_values("_sort_key", ascending=True).drop(columns="_sort_key")
 
 
 def get_all_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
@@ -474,7 +475,7 @@ def get_all_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) ->
     out = rows.rename(columns={"Tên Gv": "Gv chính"})
     out = out[["Ngày/tháng", "Mã lớp", "Ca học", "Gv chính", "Loại đơn nghỉ",
                "Vấn đề cần xử lý", "Giáo viên cover"]]
-    return _sort_by_ngay_desc(out).reset_index(drop=True)
+    return _sort_by_ngay(out).reset_index(drop=True)
 
 
 def get_gv_incidents(ten_gv: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
@@ -491,7 +492,34 @@ def get_gv_incidents(ten_gv: str, program: str, df_xuly: pd.DataFrame) -> pd.Dat
         return pd.DataFrame()
     rows = rows[["Ngày/tháng", "Mã lớp", "Ca học", "Loại đơn nghỉ",
                  "Vấn đề cần xử lý", "Giáo viên cover"]]
-    return _sort_by_ngay_desc(rows).reset_index(drop=True)
+    return _sort_by_ngay(rows).reset_index(drop=True)
+
+
+def render_incidents_table(df: pd.DataFrame, key_prefix: str):
+    """Bảng Data phát sinh kèm bộ lọc Loại đơn nghỉ (Cover/Hủy...) và
+    Vấn đề cần xử lý (GV xin nghỉ ngắn, GV không vào lớp...)."""
+    if df.empty:
+        st.info("Chưa có sự vụ phát sinh nào.")
+        return
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        loai_opts = sorted(v for v in df["Loại đơn nghỉ"].unique() if v)
+        loai_sel = st.multiselect("Lọc theo Loại đơn nghỉ", loai_opts, key=f"{key_prefix}_loai")
+    with col_b:
+        vande_opts = sorted(v for v in df["Vấn đề cần xử lý"].unique() if v)
+        vande_sel = st.multiselect("Lọc theo Vấn đề cần xử lý", vande_opts, key=f"{key_prefix}_vande")
+
+    filtered = df
+    if loai_sel:
+        filtered = filtered[filtered["Loại đơn nghỉ"].isin(loai_sel)]
+    if vande_sel:
+        filtered = filtered[filtered["Vấn đề cần xử lý"].isin(vande_sel)]
+
+    if filtered.empty:
+        st.info("Không có sự vụ nào khớp bộ lọc.")
+    else:
+        st.dataframe(filtered, use_container_width=True, hide_index=True)
 
 
 def get_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
@@ -676,7 +704,7 @@ def build_schedule_table(sessions: pd.DataFrame) -> pd.DataFrame:
     out = sessions.rename(columns={"Giờ học": "Ca học", "Ngày dự kiến KG": "Ngày KG",
                                     "Trạng thái lớp": "Tình trạng lớp"})
     out = out[["Ca học", "Thứ", "Mã lớp", "Ngày KG", "Tình trạng lớp"]]
-    return _sort_by_ngay_desc(out, col="Ngày KG").reset_index(drop=True)
+    return _sort_by_ngay(out, col="Ngày KG").reset_index(drop=True)
 
 
 def render_html_table(df: pd.DataFrame):
@@ -1091,10 +1119,7 @@ with tab2:
                                                              effective_thu, effective_status)
                             render_teacher_schedule(sessions)
                         with sub_tab2:
-                            if gv_incidents.empty:
-                                st.info("Chưa có sự vụ phát sinh nào.")
-                            else:
-                                st.dataframe(gv_incidents, use_container_width=True, hide_index=True)
+                            render_incidents_table(gv_incidents, key_prefix=f"gv_{t['Chương trình']}_{t['Mã GV']}")
                         with sub_tab3:
                             if gv_leaves.empty:
                                 st.info("Chưa có đơn nghỉ nào.")
@@ -1140,10 +1165,7 @@ with tab3:
                         with sub_tab1:
                             st.dataframe(class_sessions_table(g), use_container_width=True)
                         with sub_tab2:
-                            if incidents.empty:
-                                st.info("Chưa có sự vụ phát sinh nào.")
-                            else:
-                                st.dataframe(incidents, use_container_width=True, hide_index=True)
+                            render_incidents_table(incidents, key_prefix=f"class_{ctr}_{ma_lop}")
 
 # ── Tab 4: Tra cứu Học viên ──────────────────────────────────────────────────
 with tab4:
@@ -1200,10 +1222,7 @@ with tab4:
                 with sub_tab1:
                     render_html_table(display[show_cols])
                 with sub_tab2:
-                    if all_incidents.empty:
-                        st.info("Chưa có sự vụ phát sinh nào.")
-                    else:
-                        st.dataframe(all_incidents, use_container_width=True, hide_index=True)
+                    render_incidents_table(all_incidents, key_prefix="hv_search")
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
