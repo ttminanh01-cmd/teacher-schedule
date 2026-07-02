@@ -595,9 +595,11 @@ with tab1:
         with col2:
             selected_time = st.selectbox("Chọn khung giờ", time_options)
         with col3:
-            date_input_val = st.date_input("Chọn ngày (1 ngày hoặc khoảng ngày)", value=(), key="find_free_date")
+            date_input_val = st.date_input("Chọn ngày", value=(), key="find_free_date",
+                                            help="Chọn 1 ngày, hoặc bấm ngày đầu rồi ngày cuối để chọn khoảng ngày")
         with col4:
-            selected_levels = st.multiselect("Lọc theo trình độ giảng dạy (tuỳ chọn)", level_options)
+            selected_levels = st.multiselect("Trình độ giảng dạy", level_options,
+                                              help="Tuỳ chọn — lọc theo trình độ giảng dạy của GV")
 
         date_range = resolve_date_range(date_input_val)
         thu_list = list(thu_date_map_from_range(date_range).keys()) if date_range else [selected_day]
@@ -687,11 +689,12 @@ with tab1:
 
     # ── Chế độ 2: theo mã lớp cần cover ──
     elif find_mode == "Theo mã lớp":
-        col_x, col_y, col_z, _ = st.columns([1, 1, 1, 3])
+        col_x, col_y, col_z = st.columns(3)
         with col_x:
             cover_class = st.text_input("Mã lớp cần cover", placeholder="EPP-0715", key="cover_class")
         with col_y:
-            cover_date_val = st.date_input("Ngày cần cover (1 ngày hoặc khoảng ngày)", value=(), key="cover_date")
+            cover_date_val = st.date_input("Ngày cần cover", value=(), key="cover_date",
+                                            help="Chọn 1 ngày, hoặc bấm ngày đầu rồi ngày cuối để chọn khoảng ngày")
         with col_z:
             cover_loai_gv = st.selectbox("Loại GV", ["Tất cả", "GVVN", "GVNN"], key="cover_loai_gv")
 
@@ -752,10 +755,11 @@ with tab1:
 
         col_p, col_q, col_ca, col_loai = st.columns(4)
         with col_p:
-            absent_query = st.text_input("Nhập tên hoặc mã GV nghỉ",
+            absent_query = st.text_input("Tên hoặc mã GV nghỉ",
                                           placeholder="Nguyễn Thị Hồng Hạnh / GV0001", key="absent_gv_query")
         with col_q:
-            absent_date_val = st.date_input("Ngày nghỉ (1 ngày hoặc khoảng ngày)", value=(), key="absent_date")
+            absent_date_val = st.date_input("Ngày nghỉ", value=(), key="absent_date",
+                                             help="Chọn 1 ngày, hoặc bấm ngày đầu rồi ngày cuối để chọn khoảng ngày")
         absent_range = resolve_date_range(absent_date_val)
         absent_thu_map = thu_date_map_from_range(absent_range)
 
@@ -842,11 +846,14 @@ with tab2:
     with col_n:
         search_name = st.text_input("Nhập tên hoặc mã GV", placeholder="Nguyễn Thị Hồng Hạnh / GV0001")
     with col_a:
-        filter_thu = st.selectbox("Lọc lớp theo Thứ (tuỳ chọn)", ["Tất cả"] + DAYS, key="gv_filter_thu")
+        filter_thu = st.selectbox("Lọc theo Thứ", ["Tất cả"] + DAYS, key="gv_filter_thu",
+                                   help="Tuỳ chọn — chỉ hiện lớp rơi vào đúng Thứ này")
     with col_b:
-        filter_date_val = st.date_input("Chọn ngày (1 ngày hoặc khoảng ngày)", value=(), key="gv_filter_date")
+        filter_date_val = st.date_input("Chọn ngày", value=(), key="gv_filter_date",
+                                         help="Chọn 1 ngày, hoặc bấm ngày đầu rồi ngày cuối để chọn khoảng ngày")
     with col_c:
-        filter_status = st.selectbox("Lọc theo tình trạng lớp (tuỳ chọn)", status_options, key="gv_filter_status")
+        filter_status = st.selectbox("Trạng thái lớp", status_options, key="gv_filter_status",
+                                      help="Tuỳ chọn — lọc theo trạng thái lớp")
 
     filter_date_range = resolve_date_range(filter_date_val)
     filter_thu_map = thu_date_map_from_range(filter_date_range)
