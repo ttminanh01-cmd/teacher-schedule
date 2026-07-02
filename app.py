@@ -1069,6 +1069,9 @@ with tab2:
     effective_status = filter_status if filter_status != "Tất cả" else None
 
     if st.button("Tra cứu", key="btn_search_gv"):
+        st.session_state["tab2_searched"] = True
+
+    if st.session_state.get("tab2_searched"):
         with st.spinner("Đang tải dữ liệu..."):
             df_gv = load_gv()
             df_lop = df_lop_all
@@ -1133,6 +1136,9 @@ with tab3:
     search_class = st.text_input("Nhập mã lớp (hoặc một phần mã lớp)", placeholder="EPP-0715")
 
     if st.button("Tra cứu", key="btn_search_class"):
+        st.session_state["tab3_searched"] = True
+
+    if st.session_state.get("tab3_searched"):
         with st.spinner("Đang tải dữ liệu..."):
             df_lop = load_lophoc()
             df_xuly = load_xuly()
@@ -1175,6 +1181,9 @@ with tab4:
                                placeholder="Nguyễn Văn A / HV-0065 / ID-0006", key="hv_search")
 
     if st.button("Tra cứu", key="btn_search_hv"):
+        st.session_state["tab4_searched"] = True
+
+    if st.session_state.get("tab4_searched"):
         with st.spinner("Đang tải dữ liệu..."):
             df_hv = load_hocvien()
             df_xuly = load_xuly()
