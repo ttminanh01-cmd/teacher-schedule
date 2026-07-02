@@ -283,11 +283,14 @@ def _parse_ddmmyyyy(s: str):
 
 
 def get_not_started_classes(df_lop: pd.DataFrame, as_of: date) -> set:
-    """Lớp có Ngày dự kiến KG sau ngày as_of (chưa khai giảng nên vẫn rảnh)."""
+    """Lớp có Ngày dự kiến KG sau ngày as_of (chưa khai giảng nên vẫn rảnh).
+    Bỏ qua nếu Trạng thái lớp đã ghi 'Đã khai giảng' — ngày dự kiến KG chỉ là
+    ước tính và có thể chưa cập nhật, không đáng tin bằng Trạng thái lớp."""
     if df_lop.empty or as_of is None:
         return set()
+    not_already_started = ~df_lop["Trạng thái lớp"].str.contains("Đã khai giảng", na=False)
     parsed = df_lop["Ngày dự kiến KG"].apply(_parse_ddmmyyyy)
-    mask = parsed.apply(lambda d: d is not None and d > as_of)
+    mask = not_already_started & parsed.apply(lambda d: d is not None and d > as_of)
     return set(df_lop[mask]["Mã lớp"])
 
 
