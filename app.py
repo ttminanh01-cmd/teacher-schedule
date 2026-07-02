@@ -32,6 +32,17 @@ PROGRAMS = {
 GV_COLS = ["Quốc tịch", "Mã GV", "Giáo viên", "Trình độ giảng dạy",
            "Khung giờ 1", "Khung giờ 2"] + DAYS
 
+# Sheet ds GV còn làm việc hay không (khác cấu trúc cột hoàn toàn giữa 2 chương trình).
+GV_STATUS_CONFIG = {
+    "EZP": {"sheet": "Data GV EZP", "code_col": "ID", "status_col": "STATUS"},
+    "IE": {"sheet": "Data GV IE", "code_col": "Mã GV", "status_col": "Tình trạng làm việc"},
+}
+
+# 2 sheet đơn nghỉ (chung cho cả EZP+IE, nối với GV qua Mã BOS GV <-> ID BOS).
+LEAVE_SHEETS = ["Đơn nghỉ ngắn", "Đơn nghỉ dài"]
+LEAVE_NEEDED_COLS = ["Tên giáo viên", "ID BOS", "Loại đơn", "Ngày bắt đầu",
+                      "Ngày kết thúc", "VHGV xử lý"]
+
 SHEET_HOCVIEN = "Tra cứu thông tin HV"
 HOCVIEN_COLS = ["Sản phẩm", "ID", "ID BOS", "Tên", "Email", "Số điện thoại",
                 "Trạng thái hv", "Mã lớp", "Ngày khai giảng", "Ngày kết thúc dự kiến",
@@ -94,10 +105,15 @@ def _load_gv_program(program: str) -> pd.DataFrame:
     ws = get_gc().open_by_key(SPREADSHEET_ID).worksheet(PROGRAMS[program]["sheet_gv"])
     rows = ws.get_all_values()
     if len(rows) < 2:
-        return pd.DataFrame(columns=["Chương trình"] + GV_COLS)
+        return pd.DataFrame(columns=["Chương trình"] + GV_COLS + ["Mã BOS GV"])
 
-    data = _pad_rows(rows[1:], len(GV_COLS))
-    df = pd.DataFrame(data, columns=GV_COLS)
+    header = rows[0]
+    bos_idx = next((i for i, h in enumerate(header) if "bos" in h.strip().lower()), None)
+    width = max(len(GV_COLS), (bos_idx + 1) if bos_idx is not None else 0)
+
+    data = _pad_rows(rows[1:], width)
+    df = pd.DataFrame([r[:len(GV_COLS)] for r in data], columns=GV_COLS)
+    df["Mã BOS GV"] = [r[bos_idx].strip() if bos_idx is not None else "" for r in data]
     df = df[df["Mã GV"].str.strip() != ""]
     df.insert(0, "Chương trình", program)
     return df.reset_index(drop=True)
@@ -107,6 +123,100 @@ def _load_gv_program(program: str) -> pd.DataFrame:
 def load_gv() -> pd.DataFrame:
     frames = [_load_gv_program(p) for p in PROGRAMS]
     return pd.concat(frames, ignore_index=True)
+
+
+def _load_gv_status_program(program: str) -> pd.DataFrame:
+    """Data GV EZP/IE: danh sách GV còn làm việc hay không. 2 sheet có cấu
+    trúc cột hoàn toàn khác nhau nên dò theo tên cột thay vì vị trí."""
+    cfg = GV_STATUS_CONFIG[program]
+    ws = get_gc().open_by_key(SPREADSHEET_ID).worksheet(cfg["sheet"])
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return pd.DataFrame(columns=["Chương trình", "Mã GV", "Trạng thái làm việc"])
+
+    header = [h.strip() for h in rows[0]]
+    try:
+        code_idx = header.index(cfg["code_col"])
+        status_idx = header.index(cfg["status_col"])
+    except ValueError:
+        return pd.DataFrame(columns=["Chương trình", "Mã GV", "Trạng thái làm việc"])
+
+    width = max(code_idx, status_idx) + 1
+    out = []
+    for r in _pad_rows(rows[1:], width):
+        code = r[code_idx].strip()
+        if code:
+            out.append({"Chương trình": program, "Mã GV": code,
+                        "Trạng thái làm việc": r[status_idx].strip()})
+    return pd.DataFrame(out)
+
+
+@st.cache_data(ttl=300)
+def load_gv_status() -> pd.DataFrame:
+    frames = [_load_gv_status_program(p) for p in GV_STATUS_CONFIG]
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+def is_gv_active(trang_thai: str) -> bool:
+    return trang_thai.strip().lower() == "working"
+
+
+def _load_leave_sheet(sheet_name: str) -> pd.DataFrame:
+    """Đơn nghỉ ngắn / Đơn nghỉ dài: chung 1 danh sách cột cần, dò theo tên cột."""
+    ws = get_gc().open_by_key(SPREADSHEET_ID).worksheet(sheet_name)
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return pd.DataFrame(columns=LEAVE_NEEDED_COLS)
+
+    header = [h.strip() for h in rows[0]]
+    idx = {col: (header.index(col) if col in header else None) for col in LEAVE_NEEDED_COLS}
+    width = max((i for i in idx.values() if i is not None), default=-1) + 1
+    if width == 0:
+        return pd.DataFrame(columns=LEAVE_NEEDED_COLS)
+
+    out = []
+    for r in _pad_rows(rows[1:], width):
+        row = {col: (r[i].strip() if i is not None else "") for col, i in idx.items()}
+        if row["ID BOS"] or row["Tên giáo viên"]:
+            out.append(row)
+    return pd.DataFrame(out, columns=LEAVE_NEEDED_COLS)
+
+
+@st.cache_data(ttl=300)
+def load_leave_requests() -> pd.DataFrame:
+    frames = [_load_leave_sheet(s) for s in LEAVE_SHEETS]
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=LEAVE_NEEDED_COLS)
+    for col in ["Ngày bắt đầu", "Ngày kết thúc"]:
+        df[col] = df[col].apply(lambda v: format_date(v, dayfirst=True))
+    return df
+
+
+def get_leave_note(ma_bos_gv: str, ten_gv: str, as_of: date, df_leave: pd.DataFrame) -> str:
+    """Trả về '' nếu không có đơn nghỉ nào trùng ngày as_of, 'done' nếu có
+    đơn đã xử lý (Done) trùng ngày (cần loại GV này), hoặc 1 câu ghi chú nếu
+    có đơn nhưng chưa note trạng thái (vẫn giữ GV, chỉ cảnh báo)."""
+    if df_leave.empty or as_of is None:
+        return ""
+
+    if ma_bos_gv:
+        rows = df_leave[df_leave["ID BOS"].str.strip().str.lower() == ma_bos_gv.strip().lower()]
+    else:
+        rows = df_leave[df_leave["Tên giáo viên"].str.strip().str.lower() == ten_gv.strip().lower()]
+    if rows.empty:
+        return ""
+
+    for _, r in rows.iterrows():
+        start = _parse_ddmmyyyy(r["Ngày bắt đầu"])
+        end = _parse_ddmmyyyy(r["Ngày kết thúc"]) or start
+        if not start or not (start <= as_of <= end):
+            continue
+        trang_thai = r["VHGV xử lý"].strip().lower()
+        if trang_thai == "cancel":
+            continue
+        if trang_thai == "done":
+            return "done"
+        return f"⚠️ GV có đơn nghỉ ({r['Loại đơn'] or 'chưa rõ loại'}) chưa xử lý: {r['Ngày bắt đầu']} → {r['Ngày kết thúc']}"
+    return ""
 
 
 def _detect_lophoc_layout(cat_row, col_row):
@@ -407,8 +517,44 @@ def thu_date_map_from_range(date_range) -> dict:
     return mapping
 
 
+def apply_gv_status_and_leave(df_gv_slice: pd.DataFrame, as_of: date,
+                               df_gv_status: pd.DataFrame, df_leave: pd.DataFrame) -> pd.DataFrame:
+    """Loại GV không còn 'Working', loại GV có đơn nghỉ đã xử lý (Done) trùng
+    ngày as_of, và gắn ghi chú cho GV có đơn nghỉ chưa note trạng thái."""
+    df = df_gv_slice.copy()
+
+    if df.empty:
+        df["_leave_note"] = ""
+        return df
+
+    if df_gv_status is not None and not df_gv_status.empty:
+        status_map = {(r["Chương trình"], r["Mã GV"]): r["Trạng thái làm việc"]
+                      for _, r in df_gv_status.iterrows()}
+        active_mask = df.apply(
+            lambda r: is_gv_active(status_map.get((r["Chương trình"], r["Mã GV"]), "Working")),
+            axis=1,
+        )
+        df = df[active_mask]
+
+    if df.empty:
+        df["_leave_note"] = ""
+        return df
+
+    if df_leave is not None and not df_leave.empty and as_of is not None:
+        df = df.assign(_leave_note=df.apply(
+            lambda r: get_leave_note(r.get("Mã BOS GV", ""), r["Giáo viên"], as_of, df_leave),
+            axis=1,
+        ))
+        df = df[df["_leave_note"] != "done"]
+    else:
+        df["_leave_note"] = ""
+
+    return df
+
+
 def find_cover_candidates(sess: pd.Series, df_gv_all: pd.DataFrame, df_lop: pd.DataFrame,
-                           as_of: date, loai_gv_filter: str = "Tất cả") -> pd.DataFrame:
+                           as_of: date, loai_gv_filter: str = "Tất cả",
+                           df_gv_status: pd.DataFrame = None, df_leave: pd.DataFrame = None) -> pd.DataFrame:
     """GV cùng chương trình, rảnh đúng Thứ + khung giờ của buổi `sess` cần cover."""
     ctr = sess["Chương trình"]
     thu = sess["Thứ"]
@@ -444,13 +590,23 @@ def find_cover_candidates(sess: pd.Series, df_gv_all: pd.DataFrame, df_lop: pd.D
 
     if loai_gv_filter != "Tất cả":
         candidates = candidates[candidates["Quốc tịch"].apply(lambda q: gv_loai(q) == loai_gv_filter)]
-    return candidates
+
+    return apply_gv_status_and_leave(candidates, as_of, df_gv_status, df_leave)
+
+
+def _show_cols_with_note(df: pd.DataFrame) -> pd.DataFrame:
+    show = ["Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy"]
+    if "_leave_note" in df.columns:
+        out = df[show + ["_leave_note"]].rename(columns={"_leave_note": "Ghi chú"})
+    else:
+        out = df[show]
+    return out.reset_index(drop=True)
 
 
 def render_cover_candidates(candidates: pd.DataFrame):
     """Tách 2 tab: GV có ghi 'Available' rõ ràng, và GV chỉ đơn giản là không
-    có ca làm ở khung này (chưa chắc chắn rảnh, cần xác nhận thêm)."""
-    show = ["Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy"]
+    có ca làm ở khung này (chưa chắc chắn rảnh, cần xác nhận thêm). GV có đơn
+    nghỉ chưa xử lý vẫn hiện nhưng kèm ghi chú ở cột 'Ghi chú'."""
     available = candidates[candidates["_status"] == "available"] if not candidates.empty else candidates
     no_shift = candidates[candidates["_status"] == "no_shift"] if not candidates.empty else candidates
 
@@ -460,13 +616,13 @@ def render_cover_candidates(candidates: pd.DataFrame):
             st.info("Không có GV nào.")
         else:
             st.caption("Đối chiếu cột 'Trình độ giảng dạy' bên dưới với Trình độ lớp/buổi ở trên để chọn GV phù hợp.")
-            st.dataframe(available[show].reset_index(drop=True), use_container_width=True)
+            st.dataframe(_show_cols_with_note(available), use_container_width=True)
     with tab_b:
         if no_shift.empty:
             st.info("Không có GV nào.")
         else:
             st.caption("GV không có ca làm việc ở khung giờ này trong lịch — chưa chắc chắn rảnh, cần xác nhận thêm trước khi xếp cover.")
-            st.dataframe(no_shift[show].reset_index(drop=True), use_container_width=True)
+            st.dataframe(_show_cols_with_note(no_shift), use_container_width=True)
 
 
 def _day_sort_key(thu: str) -> int:
@@ -612,6 +768,8 @@ with tab1:
             else:
                 with st.spinner("Đang tải dữ liệu..."):
                     df_lop_for_avail = load_lophoc()
+                    df_gv_status = load_gv_status()
+                    df_leave = load_leave_requests()
                 as_of = date_range[0] if date_range else date.today()
                 free_classes = get_ended_classes(df_lop_for_avail) | get_not_started_classes(df_lop_for_avail, as_of)
 
@@ -638,6 +796,7 @@ with tab1:
                     frames.append(sub)
 
                 result = pd.concat(frames, ignore_index=True) if frames else df_gv.iloc[0:0].copy()
+                result = apply_gv_status_and_leave(result, as_of, df_gv_status, df_leave)
 
                 if selected_levels:
                     mask_level = result["Trình độ giảng dạy"].apply(
@@ -656,6 +815,7 @@ with tab1:
                         "Khung giờ 1": "first",
                         "Khung giờ 2": "first",
                         "Thứ": lambda s: ", ".join(dict.fromkeys(s)),
+                        "_leave_note": "first",
                     }).reset_index()
 
                 date_label = ""
@@ -673,19 +833,23 @@ with tab1:
                 show = ["Chương trình", "Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy",
                         "Thứ", "Khung giờ 1", "Khung giờ 2"]
 
+                def _with_note(df):
+                    cols = show + ["_leave_note"] if "_leave_note" in df.columns else show
+                    return df[cols].rename(columns={"_leave_note": "Ghi chú"}).reset_index(drop=True)
+
                 tab_a, tab_b = st.tabs([f"✅ GV available ({len(available)})",
                                         f"❔ GV không có ca ({len(no_shift)})"])
                 with tab_a:
                     if available.empty:
                         st.info("Không có giáo viên nào rảnh trong khung giờ này.")
                     else:
-                        st.dataframe(available[show].reset_index(drop=True), use_container_width=True)
+                        st.dataframe(_with_note(available), use_container_width=True)
                 with tab_b:
                     if no_shift.empty:
                         st.info("Không có giáo viên nào.")
                     else:
                         st.caption("GV không có ca làm việc ở khung giờ này trong lịch — chưa chắc chắn rảnh, cần xác nhận thêm.")
-                        st.dataframe(no_shift[show].reset_index(drop=True), use_container_width=True)
+                        st.dataframe(_with_note(no_shift), use_container_width=True)
 
     # ── Chế độ 2: theo mã lớp cần cover ──
     elif find_mode == "Theo mã lớp":
@@ -711,6 +875,8 @@ with tab1:
                     df_lop = load_lophoc()
                     df_gv_all = load_gv()
                     df_xuly = load_xuly()
+                    df_gv_status = load_gv_status()
+                    df_leave = load_leave_requests()
 
                 if df_lop.empty:
                     st.error("Không tải được dữ liệu.")
@@ -743,8 +909,8 @@ with tab1:
                                 if not incidents.empty:
                                     st.warning(f"⚠️ Lớp {sess['Mã lớp']} có {len(incidents)} phát sinh:")
                                     st.dataframe(incidents, use_container_width=True, hide_index=True)
-                                candidates = find_cover_candidates(sess, df_gv_all, df_lop,
-                                                                    as_of, cover_loai_gv)
+                                candidates = find_cover_candidates(sess, df_gv_all, df_lop, as_of, cover_loai_gv,
+                                                                    df_gv_status, df_leave)
                                 render_cover_candidates(candidates)
                                 st.divider()
 
@@ -811,6 +977,8 @@ with tab1:
                 with st.spinner("Đang tải dữ liệu..."):
                     df_lop_full = load_lophoc()
                     df_xuly = load_xuly()
+                    df_gv_status = load_gv_status()
+                    df_leave = load_leave_requests()
 
                 sessions_to_cover = day_sessions_teacher if selected_ca == "Tất cả" else day_sessions_teacher[
                     day_sessions_teacher.apply(
@@ -828,8 +996,8 @@ with tab1:
                     if not incidents.empty:
                         st.warning(f"⚠️ Lớp {sess['Mã lớp']} có {len(incidents)} phát sinh:")
                         st.dataframe(incidents, use_container_width=True, hide_index=True)
-                    candidates = find_cover_candidates(sess, df_gv_all, df_lop_full,
-                                                        as_of, loai_gv_absent)
+                    candidates = find_cover_candidates(sess, df_gv_all, df_lop_full, as_of, loai_gv_absent,
+                                                        df_gv_status, df_leave)
                     render_cover_candidates(candidates)
                     st.divider()
 
