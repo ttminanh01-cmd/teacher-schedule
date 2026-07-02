@@ -218,7 +218,8 @@ def get_gv_leave_history(ma_bos_gv: str, ten_gv: str, df_leave: pd.DataFrame) ->
         rows = df_leave[df_leave["Tên giáo viên"].str.strip().str.lower() == ten_gv.strip().lower()]
     if rows.empty:
         return pd.DataFrame()
-    return rows[["Loại đơn", "Ngày bắt đầu", "Ngày kết thúc", "Lý do nghỉ", "VHGV xử lý"]].reset_index(drop=True)
+    rows = rows[["Loại đơn", "Ngày bắt đầu", "Ngày kết thúc", "Lý do nghỉ", "VHGV xử lý"]]
+    return _sort_by_ngay_desc(rows, col="Ngày bắt đầu").reset_index(drop=True)
 
 
 def _detect_lophoc_layout(cat_row, col_row):
@@ -454,6 +455,12 @@ def gv_loai(quoc_tich: str) -> str:
     return "GVVN" if quoc_tich.strip().lower().startswith("vietnam") else "GVNN"
 
 
+def _sort_by_ngay_desc(df: pd.DataFrame, col: str = "Ngày/tháng") -> pd.DataFrame:
+    """Sắp xếp theo ngày mới nhất trước, dòng không đọc được ngày đẩy xuống cuối."""
+    key = df[col].apply(lambda v: _parse_ddmmyyyy(v) or date.min)
+    return df.assign(_sort_key=key).sort_values("_sort_key", ascending=False).drop(columns="_sort_key")
+
+
 def get_all_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
     """Toàn bộ sự vụ (Cover/Hủy đơn/Hủy lớp) của 1 mã lớp từ trước đến nay."""
     if df_xuly.empty or not ma_lop:
@@ -465,8 +472,9 @@ def get_all_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) ->
     if rows.empty:
         return pd.DataFrame()
     out = rows.rename(columns={"Tên Gv": "Gv chính"})
-    return out[["Ngày/tháng", "Mã lớp", "Ca học", "Gv chính", "Loại đơn nghỉ",
-                "Vấn đề cần xử lý", "Giáo viên cover"]].reset_index(drop=True)
+    out = out[["Ngày/tháng", "Mã lớp", "Ca học", "Gv chính", "Loại đơn nghỉ",
+               "Vấn đề cần xử lý", "Giáo viên cover"]]
+    return _sort_by_ngay_desc(out).reset_index(drop=True)
 
 
 def get_gv_incidents(ten_gv: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
@@ -481,8 +489,9 @@ def get_gv_incidents(ten_gv: str, program: str, df_xuly: pd.DataFrame) -> pd.Dat
     ]
     if rows.empty:
         return pd.DataFrame()
-    return rows[["Ngày/tháng", "Mã lớp", "Ca học", "Loại đơn nghỉ",
-                 "Vấn đề cần xử lý", "Giáo viên cover"]].reset_index(drop=True)
+    rows = rows[["Ngày/tháng", "Mã lớp", "Ca học", "Loại đơn nghỉ",
+                 "Vấn đề cần xử lý", "Giáo viên cover"]]
+    return _sort_by_ngay_desc(rows).reset_index(drop=True)
 
 
 def get_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
@@ -664,13 +673,10 @@ def build_schedule_table(sessions: pd.DataFrame) -> pd.DataFrame:
     if sessions.empty:
         return pd.DataFrame()
 
-    out = sessions.copy()
-    out["_day_key"] = out["Thứ"].map(_day_sort_key)
-    out["_time_key"] = out["Giờ học"].map(_time_sort_key)
-    out = out.sort_values(["_day_key", "_time_key"]).drop(columns=["_day_key", "_time_key"])
-    out = out.rename(columns={"Giờ học": "Ca học", "Ngày dự kiến KG": "Ngày KG",
-                               "Trạng thái lớp": "Tình trạng lớp"})
-    return out[["Ca học", "Thứ", "Mã lớp", "Ngày KG", "Tình trạng lớp"]].reset_index(drop=True)
+    out = sessions.rename(columns={"Giờ học": "Ca học", "Ngày dự kiến KG": "Ngày KG",
+                                    "Trạng thái lớp": "Tình trạng lớp"})
+    out = out[["Ca học", "Thứ", "Mã lớp", "Ngày KG", "Tình trạng lớp"]]
+    return _sort_by_ngay_desc(out, col="Ngày KG").reset_index(drop=True)
 
 
 def render_html_table(df: pd.DataFrame):
