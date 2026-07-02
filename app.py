@@ -42,7 +42,7 @@ GV_STATUS_CONFIG = {
 # 2 sheet đơn nghỉ (chung cho cả EZP+IE, nối với GV qua Mã BOS GV <-> ID BOS).
 LEAVE_SHEETS = ["Đơn nghỉ ngắn", "Đơn nghỉ dài"]
 LEAVE_NEEDED_COLS = ["Tên giáo viên", "ID BOS", "Loại đơn", "Ngày bắt đầu",
-                      "Ngày kết thúc", "VHGV xử lý"]
+                      "Ngày kết thúc", "Lý do nghỉ", "VHGV xử lý"]
 
 SHEET_HOCVIEN = "Tra cứu thông tin HV"
 HOCVIEN_COLS = ["Sản phẩm", "ID", "ID BOS", "Tên", "Email", "Số điện thoại",
@@ -206,6 +206,19 @@ def get_leave_note(ma_bos_gv: str, ten_gv: str, as_of: date, df_leave: pd.DataFr
             return "done"
         return f"⚠️ GV có đơn nghỉ ({r['Loại đơn'] or 'chưa rõ loại'}) chưa xử lý: {r['Ngày bắt đầu']} → {r['Ngày kết thúc']}"
     return ""
+
+
+def get_gv_leave_history(ma_bos_gv: str, ten_gv: str, df_leave: pd.DataFrame) -> pd.DataFrame:
+    """Toàn bộ đơn nghỉ ngắn/dài của 1 GV từ trước đến nay (không lọc theo ngày)."""
+    if df_leave.empty:
+        return pd.DataFrame()
+    if ma_bos_gv:
+        rows = df_leave[df_leave["ID BOS"].str.strip().str.lower() == ma_bos_gv.strip().lower()]
+    else:
+        rows = df_leave[df_leave["Tên giáo viên"].str.strip().str.lower() == ten_gv.strip().lower()]
+    if rows.empty:
+        return pd.DataFrame()
+    return rows[["Loại đơn", "Ngày bắt đầu", "Ngày kết thúc", "Lý do nghỉ", "VHGV xử lý"]].reset_index(drop=True)
 
 
 def _detect_lophoc_layout(cat_row, col_row):
@@ -1026,6 +1039,7 @@ with tab2:
             df_gv = load_gv()
             df_lop = df_lop_all
             df_xuly = load_xuly()
+            df_leave = load_leave_requests()
 
         if df_gv.empty:
             st.error("Không tải được dữ liệu.")
@@ -1041,7 +1055,7 @@ with tab2:
                 st.info("Không tìm thấy giáo viên nào.")
             else:
                 teachers = result.drop_duplicates(["Chương trình", "Mã GV"])[
-                    ["Chương trình", "Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy"]
+                    ["Chương trình", "Mã GV", "Giáo viên", "Quốc tịch", "Trình độ giảng dạy", "Mã BOS GV"]
                 ]
 
                 for _, t in teachers.iterrows():
@@ -1062,7 +1076,10 @@ with tab2:
                             label += f" — {effective_status}"
 
                         gv_incidents = get_gv_incidents(t["Giáo viên"], t["Chương trình"], df_xuly)
-                        sub_tab1, sub_tab2 = st.tabs([label, f"Data phát sinh ({len(gv_incidents)})"])
+                        gv_leaves = get_gv_leave_history(t.get("Mã BOS GV", ""), t["Giáo viên"], df_leave)
+                        sub_tab1, sub_tab2, sub_tab3 = st.tabs([
+                            label, f"Data phát sinh ({len(gv_incidents)})", f"Đơn off của GV ({len(gv_leaves)})"
+                        ])
                         with sub_tab1:
                             sessions = get_teacher_sessions(t["Chương trình"], t["Mã GV"], df_lop,
                                                              effective_thu, effective_status)
@@ -1072,6 +1089,11 @@ with tab2:
                                 st.info("Chưa có sự vụ phát sinh nào.")
                             else:
                                 st.dataframe(gv_incidents, use_container_width=True, hide_index=True)
+                        with sub_tab3:
+                            if gv_leaves.empty:
+                                st.info("Chưa có đơn nghỉ nào.")
+                            else:
+                                st.dataframe(gv_leaves, use_container_width=True, hide_index=True)
 
 # ── Tab 3: Tra cứu Lớp học ──────────────────────────────────────────────────
 with tab3:
