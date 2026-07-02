@@ -60,9 +60,12 @@ def _pad_rows(rows, width):
 _DATE_RE = re.compile(r"^(\d{1,4})[/\-](\d{1,2})[/\-](\d{1,4})$")
 
 
-def format_date(raw: str, dayfirst: bool = True) -> str:
-    """Chuẩn hoá ngày về dd/mm/yyyy. dayfirst=True nếu nguồn đã là d/m/y
-    (VD sheet lớp học), False nếu nguồn là m/d/y (VD sheet học viên)."""
+def format_date(raw: str, dayfirst=True) -> str:
+    """Chuẩn hoá ngày về dd/mm/yyyy.
+    dayfirst=True: nguồn là d/m/y. dayfirst=False: nguồn là m/d/y.
+    dayfirst=None: tự đoán — nếu 1 trong 2 số > 12 thì số đó chắc chắn là
+    ngày (chỉ có 1 cách hợp lệ để đọc), còn mơ hồ (cả 2 số ≤12) thì mặc
+    định coi là m/d/y. Dùng khi 1 sheet lẫn cả 2 định dạng ngày tháng."""
     raw = (raw or "").strip()
     m = _DATE_RE.match(raw)
     if not m:
@@ -70,6 +73,13 @@ def format_date(raw: str, dayfirst: bool = True) -> str:
     a, b, c = m.groups()
     if len(a) == 4:
         year, month, day = a, b, c
+    elif dayfirst is None:
+        if int(a) > 12:
+            day, month, year = a, b, c
+        elif int(b) > 12:
+            month, day, year = a, b, c
+        else:
+            month, day, year = a, b, c
     elif dayfirst:
         day, month, year = a, b, c
     else:
@@ -169,7 +179,9 @@ def _load_lophoc_program(program: str) -> pd.DataFrame:
         if not ma_lop:
             continue
         trinh_do = r[base_idx["Trình độ"]].strip() if "Trình độ" in base_idx else ""
-        ngay_kg = format_date(r[base_idx["Ngày dự kiến KG"]], dayfirst=True) if "Ngày dự kiến KG" in base_idx else ""
+        # EZP ghi ngày kiểu d/m/y; IE lẫn cả d/m/y (dữ liệu cũ) và m/d/y (dữ liệu mới) -> tự đoán.
+        kg_dayfirst = True if program == "EZP" else None
+        ngay_kg = format_date(r[base_idx["Ngày dự kiến KG"]], dayfirst=kg_dayfirst) if "Ngày dự kiến KG" in base_idx else ""
         trang_thai = r[base_idx["Trạng thái lớp"]].strip() if "Trạng thái lớp" in base_idx else ""
 
         for role in groups:
