@@ -396,20 +396,32 @@ def find_cover_candidates(sess: pd.Series, df_gv_all: pd.DataFrame, df_lop: pd.D
     ctr = sess["Chương trình"]
     thu = sess["Thứ"]
     gio_hoc = sess["Giờ học"]
+    ma_lop = sess["Mã lớp"].strip().lower()
 
     df_gv_ct = df_gv_all[df_gv_all["Chương trình"] == ctr]
     if df_gv_ct.empty or thu not in df_gv_ct.columns:
         return pd.DataFrame()
 
+    day_col = df_gv_ct[thu]
     free_classes = get_ended_classes(df_lop) | get_not_started_classes(df_lop, as_of)
-    status = classify_slot(df_gv_ct[thu], free_classes)
+    status = classify_slot(day_col, free_classes)
+
+    # GV đang dạy chính lớp này ở đúng khung giờ này thì loại hẳn, bất kể lớp
+    # có bị tính "rảnh" (đã kết thúc/chưa khai giảng) theo free_classes hay không —
+    # tránh tự gợi ý GV cover cho đúng lớp họ đang dạy.
+    def _is_own_class(cell: str) -> bool:
+        m = _CLASS_CODE_RE.match(cell.strip())
+        return bool(m and m.group(1).strip().lower() == ma_lop)
+
+    own_class = day_col.apply(_is_own_class)
+
     mask_time = (
         df_gv_ct["Khung giờ 1"].apply(lambda v: times_match(v, gio_hoc)) |
         df_gv_ct["Khung giờ 2"].apply(lambda v: times_match(v, gio_hoc))
     )
     candidates = df_gv_ct[mask_time].copy()
     candidates["_status"] = status[mask_time]
-    candidates = candidates[candidates["_status"] != "busy"]
+    candidates = candidates[(candidates["_status"] != "busy") & (~own_class[mask_time])]
     # 1 khung giờ 90' trùng với 2 dòng khung giờ 45' liên tiếp trong sheet -> khử trùng theo GV
     candidates = candidates.drop_duplicates(["Chương trình", "Mã GV"])
 
