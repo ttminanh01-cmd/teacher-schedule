@@ -945,7 +945,8 @@ with tab1:
             day_sessions_teacher = df_lop_t[
                 (df_lop_t["Chương trình"] == ctr_t) &
                 (df_lop_t["Mã GV"].str.strip() == ma_gv_t) &
-                (df_lop_t["Thứ"].str.strip().isin(absent_thu_map.keys()))
+                (df_lop_t["Thứ"].str.strip().isin(absent_thu_map.keys())) &
+                (~df_lop_t["Trạng thái lớp"].str.contains("Ngừng|Ngưng", na=False))
             ]
 
         ca_labels = [f"{row['Thứ']} {row['Giờ học']} — {row['Mã lớp']}"
@@ -975,21 +976,31 @@ with tab1:
                         lambda r: f"{r['Thứ']} {r['Giờ học']} — {r['Mã lớp']}" == selected_ca, axis=1)
                 ]
 
-                for _, sess in sessions_to_cover.iterrows():
-                    as_of = absent_thu_map[sess["Thứ"].strip()]
-                    st.markdown(
-                        f"**Lớp {sess['Mã lớp']}** ({sess['Chương trình']}) — "
-                        f"Trình độ lớp: **{sess['Trình độ']}** — "
-                        f"{sess['Thứ']} {sess['Giờ học']} ({as_of.strftime('%d/%m/%Y')})"
-                    )
-                    incidents = get_class_incidents(sess["Mã lớp"], sess["Chương trình"], df_xuly)
-                    if not incidents.empty:
-                        st.warning(f"⚠️ Lớp {sess['Mã lớp']} có {len(incidents)} phát sinh:")
-                        st.dataframe(incidents, use_container_width=True, hide_index=True)
-                    candidates = find_cover_candidates(sess, df_gv_all, df_lop_full, as_of, loai_gv_absent,
-                                                        active_gv_codes, df_leave)
-                    render_cover_candidates(candidates)
-                    st.divider()
+                if sessions_to_cover.empty:
+                    st.info("Không có ca dạy nào phù hợp (có thể đã bị loại vì lớp ngừng hoạt động).")
+
+                session_tab_labels = [
+                    f"{sess['Mã lớp']} - {sess['Thứ']} {sess['Giờ học']} "
+                    f"({absent_thu_map[sess['Thứ'].strip()].strftime('%d/%m/%Y')})"
+                    for _, sess in sessions_to_cover.iterrows()
+                ]
+                session_tabs = st.tabs(session_tab_labels) if session_tab_labels else []
+
+                for session_tab, (_, sess) in zip(session_tabs, sessions_to_cover.iterrows()):
+                    with session_tab:
+                        as_of = absent_thu_map[sess["Thứ"].strip()]
+                        st.markdown(
+                            f"**Lớp {sess['Mã lớp']}** ({sess['Chương trình']}) — "
+                            f"Trình độ lớp: **{sess['Trình độ']}** — "
+                            f"{sess['Thứ']} {sess['Giờ học']} ({as_of.strftime('%d/%m/%Y')})"
+                        )
+                        incidents = get_class_incidents(sess["Mã lớp"], sess["Chương trình"], df_xuly)
+                        if not incidents.empty:
+                            st.warning(f"⚠️ Lớp {sess['Mã lớp']} có {len(incidents)} phát sinh:")
+                            st.dataframe(incidents, use_container_width=True, hide_index=True)
+                        candidates = find_cover_candidates(sess, df_gv_all, df_lop_full, as_of, loai_gv_absent,
+                                                            active_gv_codes, df_leave)
+                        render_cover_candidates(candidates)
 
 # ── Tab 2: Tra cứu theo GV ──────────────────────────────────────────────────
 with tab2:
