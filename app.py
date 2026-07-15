@@ -1238,8 +1238,13 @@ with tab4:
 with tab5:
     st.subheader("Cảnh báo lớp có từ 2 phát sinh (Cover/Hủy) trở lên")
 
-    alert_date = st.date_input("Ngày kiểm tra", value=date.today(), key="alert_date",
-                                help="Mặc định hôm nay, có thể chọn ngày khác")
+    col_date, col_search = st.columns(2)
+    with col_date:
+        alert_date = st.date_input("Ngày kiểm tra", value=date.today(), key="alert_date",
+                                    help="Mặc định hôm nay, có thể chọn ngày khác")
+    with col_search:
+        search_ma_lop = st.text_input("Tìm theo mã lớp (tuỳ chọn)", key="alert_search_malop",
+                                       placeholder="EPP-0715")
 
     with st.spinner("Đang tải dữ liệu..."):
         df_lop_alert = load_lophoc()
@@ -1253,6 +1258,10 @@ with tab5:
     classes_today = day_sessions_alert[["Chương trình", "Mã lớp", "Giờ học"]].drop_duplicates(
         subset=["Chương trình", "Mã lớp"]
     )
+    if search_ma_lop.strip():
+        classes_today = classes_today[
+            classes_today["Mã lớp"].str.lower().str.contains(search_ma_lop.strip().lower(), na=False)
+        ]
 
     cover_alerts, huy_alerts = [], []
     for _, row in classes_today.iterrows():
