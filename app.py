@@ -1246,7 +1246,10 @@ with tab5:
         df_xuly_alert = load_xuly()
 
     thu_alert = WEEKDAY_TO_THU[alert_date.weekday()]
-    day_sessions_alert = df_lop_alert[df_lop_alert["Thứ"].str.strip() == thu_alert]
+    day_sessions_alert = df_lop_alert[
+        (df_lop_alert["Thứ"].str.strip() == thu_alert) &
+        (~df_lop_alert["Trạng thái lớp"].str.contains("Ngừng|Ngưng", na=False))
+    ]
     classes_today = day_sessions_alert[["Chương trình", "Mã lớp"]].drop_duplicates()
 
     alerts = []
