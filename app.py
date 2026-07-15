@@ -745,8 +745,9 @@ def render_teacher_schedule(sessions: pd.DataFrame):
 
 st.title("📚 Tra cứu thông tin")
 
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
-                                  "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
+                                        "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên",
+                                        "⚠️ Cảnh báo phát sinh"])
 
 # ── Tab 1: Tìm GV rảnh / Tìm GV Cover ────────────────────────────────────────
 with tab1:
@@ -1232,6 +1233,36 @@ with tab4:
                     render_html_table(display[show_cols])
                 with sub_tab2:
                     render_incidents_table(all_incidents, key_prefix="hv_search")
+
+# ── Tab 5: Cảnh báo lớp phát sinh ────────────────────────────────────────────
+with tab5:
+    st.subheader("Cảnh báo lớp có từ 2 phát sinh (Cover/Hủy) trở lên")
+
+    alert_date = st.date_input("Ngày kiểm tra", value=date.today(), key="alert_date",
+                                help="Mặc định hôm nay, có thể chọn ngày khác")
+
+    with st.spinner("Đang tải dữ liệu..."):
+        df_lop_alert = load_lophoc()
+        df_xuly_alert = load_xuly()
+
+    thu_alert = WEEKDAY_TO_THU[alert_date.weekday()]
+    day_sessions_alert = df_lop_alert[df_lop_alert["Thứ"].str.strip() == thu_alert]
+    classes_today = day_sessions_alert[["Chương trình", "Mã lớp"]].drop_duplicates()
+
+    alerts = []
+    for _, row in classes_today.iterrows():
+        incidents = get_class_incidents(row["Mã lớp"], row["Chương trình"], df_xuly_alert)
+        if not incidents.empty:
+            alerts.append((row["Chương trình"], row["Mã lớp"], incidents))
+
+    st.markdown(f"**{thu_alert} ({alert_date.strftime('%d/%m/%Y')})** — {len(alerts)} lớp cần chú ý")
+
+    if not alerts:
+        st.success("Không có lớp nào cần cảnh báo trong ngày này.")
+    else:
+        for ctr, ma_lop, incidents in alerts:
+            with st.expander(f"⚠️ {ma_lop} ({ctr}) — {len(incidents)} phát sinh", expanded=True):
+                render_incidents_table(incidents, key_prefix=f"alert_{ctr}_{ma_lop}")
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
