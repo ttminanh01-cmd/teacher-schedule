@@ -1250,7 +1250,9 @@ with tab5:
         (df_lop_alert["Thứ"].str.strip() == thu_alert) &
         (~df_lop_alert["Trạng thái lớp"].str.contains("Ngừng|Ngưng", na=False))
     ]
-    classes_today = day_sessions_alert[["Chương trình", "Mã lớp"]].drop_duplicates()
+    classes_today = day_sessions_alert[["Chương trình", "Mã lớp", "Giờ học"]].drop_duplicates(
+        subset=["Chương trình", "Mã lớp"]
+    )
 
     cover_alerts, huy_alerts = [], []
     for _, row in classes_today.iterrows():
@@ -1259,11 +1261,14 @@ with tab5:
             continue
         # Phân loại theo phát sinh gần nhất (đã sắp tăng dần -> dòng cuối là mới nhất)
         latest_loai = incidents.iloc[-1]["Vấn đề cần xử lý"].strip().lower()
-        entry = (row["Chương trình"], row["Mã lớp"], incidents)
+        entry = (row["Chương trình"], row["Mã lớp"], row["Giờ học"], incidents)
         if latest_loai == "cover":
             cover_alerts.append(entry)
         else:
             huy_alerts.append(entry)
+
+    cover_alerts.sort(key=lambda e: _time_sort_key(e[2]))
+    huy_alerts.sort(key=lambda e: _time_sort_key(e[2]))
 
     total_alerts = len(cover_alerts) + len(huy_alerts)
     st.markdown(f"**{thu_alert} ({alert_date.strftime('%d/%m/%Y')})** — {total_alerts} lớp cần chú ý")
@@ -1276,15 +1281,15 @@ with tab5:
             if not cover_alerts:
                 st.info("Không có lớp nào.")
             else:
-                for ctr, ma_lop, incidents in cover_alerts:
-                    with st.expander(f"⚠️ {ma_lop} ({ctr}) — {len(incidents)} phát sinh", expanded=True):
+                for ctr, ma_lop, gio_hoc, incidents in cover_alerts:
+                    with st.expander(f"⚠️ {gio_hoc} — {ma_lop} ({ctr}) — {len(incidents)} phát sinh", expanded=True):
                         render_incidents_table(incidents, key_prefix=f"alert_cover_{ctr}_{ma_lop}")
         with tab_huy:
             if not huy_alerts:
                 st.info("Không có lớp nào.")
             else:
-                for ctr, ma_lop, incidents in huy_alerts:
-                    with st.expander(f"⚠️ {ma_lop} ({ctr}) — {len(incidents)} phát sinh", expanded=True):
+                for ctr, ma_lop, gio_hoc, incidents in huy_alerts:
+                    with st.expander(f"⚠️ {gio_hoc} — {ma_lop} ({ctr}) — {len(incidents)} phát sinh", expanded=True):
                         render_incidents_table(incidents, key_prefix=f"alert_huy_{ctr}_{ma_lop}")
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
