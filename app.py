@@ -1260,7 +1260,7 @@ with tab5:
         if incidents.empty:
             continue
         # Phân loại theo phát sinh gần nhất (đã sắp tăng dần -> dòng cuối là mới nhất)
-        latest_loai = incidents.iloc[-1]["Vấn đề cần xử lý"].strip().lower()
+        latest_loai = incidents.iloc[-1]["Loại đơn nghỉ"].strip().lower()
         entry = (row["Chương trình"], row["Mã lớp"], row["Giờ học"], incidents)
         if latest_loai == "cover":
             cover_alerts.append(entry)
