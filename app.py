@@ -492,9 +492,9 @@ def _next_occurrence(d: date, weekdays: set):
 
 
 def find_consecutive_incident_classes(df_lop: pd.DataFrame, df_xuly: pd.DataFrame) -> list:
-    """Danh sách (Chương trình, Mã lớp, [ngày...]) cho các chuỗi ≥2 buổi học
-    LIÊN TIẾP theo đúng lịch cố định của lớp (không có buổi bình thường xen
-    giữa) đều dính phát sinh Cover/Hủy."""
+    """Danh sách (Chương trình, Mã lớp, [ngày...], {Thứ đang học}) cho các chuỗi
+    ≥2 buổi học LIÊN TIẾP theo đúng lịch cố định của lớp (không có buổi bình
+    thường xen giữa) đều dính phát sinh Cover/Hủy. Bỏ qua lớp đã ngừng hoạt động."""
     results = []
     if df_xuly.empty or df_lop.empty:
         return results
@@ -505,9 +505,11 @@ def find_consecutive_incident_classes(df_lop: pd.DataFrame, df_xuly: pd.DataFram
             continue
         class_sessions = df_lop[
             (df_lop["Chương trình"] == ctr) &
-            (df_lop["Mã lớp"].str.strip().str.lower() == ma_lop.lower())
+            (df_lop["Mã lớp"].str.strip().str.lower() == ma_lop.lower()) &
+            (~df_lop["Trạng thái lớp"].str.contains("Ngừng|Ngưng", na=False))
         ]
-        weekdays = {THU_TO_WEEKDAY[t] for t in class_sessions["Thứ"].unique() if t in THU_TO_WEEKDAY}
+        thu_set = set(class_sessions["Thứ"].unique())
+        weekdays = {THU_TO_WEEKDAY[t] for t in thu_set if t in THU_TO_WEEKDAY}
         if not weekdays:
             continue
 
@@ -521,10 +523,10 @@ def find_consecutive_incident_classes(df_lop: pd.DataFrame, df_xuly: pd.DataFram
                 streak.append(d)
             else:
                 if len(streak) >= 2:
-                    results.append((ctr, ma_lop, list(streak)))
+                    results.append((ctr, ma_lop, list(streak), thu_set))
                 streak = [d]
         if len(streak) >= 2:
-            results.append((ctr, ma_lop, list(streak)))
+            results.append((ctr, ma_lop, list(streak), thu_set))
 
     return results
 
@@ -1359,19 +1361,24 @@ with tab6:
                "(VD lớp học Thứ 3 - Thứ 5: 2 buổi liền kề dính phát sinh mới tính, "
                "nếu có buổi bình thường xen giữa thì không tính là liên tiếp).")
 
+    seq_date = st.date_input("Ngày kiểm tra", value=date.today(), key="seq_alert_date",
+                              help="Mặc định hôm nay — chỉ hiện lớp có lịch học đúng Thứ của ngày này")
+
     with st.spinner("Đang tải dữ liệu..."):
         df_lop_seq = load_lophoc()
         df_xuly_seq = load_xuly()
 
+    thu_seq = WEEKDAY_TO_THU[seq_date.weekday()]
     streaks = find_consecutive_incident_classes(df_lop_seq, df_xuly_seq)
+    streaks = [s for s in streaks if thu_seq in s[3]]
     streaks.sort(key=lambda s: s[2][-1], reverse=True)
 
-    st.markdown(f"**{len(streaks)} chuỗi phát sinh liên tiếp**")
+    st.markdown(f"**{thu_seq} ({seq_date.strftime('%d/%m/%Y')})** — {len(streaks)} chuỗi phát sinh liên tiếp")
 
     if not streaks:
-        st.success("Không có lớp nào phát sinh liên tiếp theo lịch học.")
+        st.success("Không có lớp nào phát sinh liên tiếp theo lịch học vào ngày này.")
     else:
-        for ctr, ma_lop, streak_dates in streaks:
+        for ctr, ma_lop, streak_dates, _thu_set in streaks:
             date_labels = [d.strftime("%d/%m/%Y") for d in streak_dates]
             all_inc = get_all_class_incidents(ma_lop, ctr, df_xuly_seq)
             streak_inc = all_inc[all_inc["Ngày/tháng"].isin(date_labels)]
