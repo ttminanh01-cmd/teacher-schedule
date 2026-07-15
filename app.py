@@ -343,7 +343,7 @@ def load_hocvien() -> pd.DataFrame:
 
 
 XULY_COLS = ["Ngày/tháng", "Mã lớp", "Ca học", "Quốc tịch", "Mã Gv", "Tên Gv",
-             "Loại đơn nghỉ", "Vấn đề cần xử lý", "Lý do", "Mã Gv cover",
+             "Vấn đề cần xử lý", "Loại đơn nghỉ", "Lý do", "Mã Gv cover",
              "Giáo viên cover", "Trình độ giảng dạy", "Note Gv"]
 
 
@@ -1258,7 +1258,7 @@ with tab5:
         if incidents.empty:
             continue
         # Phân loại theo phát sinh gần nhất (đã sắp tăng dần -> dòng cuối là mới nhất)
-        latest_loai = incidents.iloc[-1]["Loại đơn nghỉ"].strip().lower()
+        latest_loai = incidents.iloc[-1]["Vấn đề cần xử lý"].strip().lower()
         entry = (row["Chương trình"], row["Mã lớp"], incidents)
         if latest_loai == "cover":
             cover_alerts.append(entry)
