@@ -19,6 +19,7 @@ SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "")
 DAYS = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
 WEEKDAY_TO_THU = {0: "Thứ 2", 1: "Thứ 3", 2: "Thứ 4", 3: "Thứ 5",
                   4: "Thứ 6", 5: "Thứ 7", 6: "Chủ nhật"}
+THU_TO_WEEKDAY = {v: k for k, v in WEEKDAY_TO_THU.items()}
 
 # Mỗi chương trình có 1 sheet lịch GV + 1 sheet lớp học + 1 sheet xử lý phát sinh riêng.
 PROGRAMS = {
@@ -478,6 +479,56 @@ def get_all_class_incidents(ma_lop: str, program: str, df_xuly: pd.DataFrame) ->
     return _sort_by_ngay(out).reset_index(drop=True)
 
 
+def _next_occurrence(d: date, weekdays: set):
+    """Ngày buổi học kế tiếp của lớp (theo lịch cố định) sau ngày d."""
+    if not weekdays:
+        return None
+    cur = d + timedelta(days=1)
+    for _ in range(14):
+        if cur.weekday() in weekdays:
+            return cur
+        cur += timedelta(days=1)
+    return None
+
+
+def find_consecutive_incident_classes(df_lop: pd.DataFrame, df_xuly: pd.DataFrame) -> list:
+    """Danh sách (Chương trình, Mã lớp, [ngày...]) cho các chuỗi ≥2 buổi học
+    LIÊN TIẾP theo đúng lịch cố định của lớp (không có buổi bình thường xen
+    giữa) đều dính phát sinh Cover/Hủy."""
+    results = []
+    if df_xuly.empty or df_lop.empty:
+        return results
+
+    for (ctr, ma_lop), group in df_xuly.groupby(["Chương trình", "Mã lớp"], sort=False):
+        ma_lop = ma_lop.strip()
+        if not ma_lop:
+            continue
+        class_sessions = df_lop[
+            (df_lop["Chương trình"] == ctr) &
+            (df_lop["Mã lớp"].str.strip().str.lower() == ma_lop.lower())
+        ]
+        weekdays = {THU_TO_WEEKDAY[t] for t in class_sessions["Thứ"].unique() if t in THU_TO_WEEKDAY}
+        if not weekdays:
+            continue
+
+        dates = sorted({d for d in group["Ngày/tháng"].apply(_parse_ddmmyyyy) if d})
+        if len(dates) < 2:
+            continue
+
+        streak = [dates[0]]
+        for d in dates[1:]:
+            if d == _next_occurrence(streak[-1], weekdays):
+                streak.append(d)
+            else:
+                if len(streak) >= 2:
+                    results.append((ctr, ma_lop, list(streak)))
+                streak = [d]
+        if len(streak) >= 2:
+            results.append((ctr, ma_lop, list(streak)))
+
+    return results
+
+
 def get_gv_incidents(ten_gv: str, program: str, df_xuly: pd.DataFrame) -> pd.DataFrame:
     """Toàn bộ sự vụ (Cover/Hủy đơn/Hủy lớp) mà 1 GV là người chính đứng đơn.
     Khớp theo Tên Gv vì cột Mã Gv trong sheet Xử lý phát sinh dùng hệ mã khác
@@ -745,9 +796,9 @@ def render_teacher_schedule(sessions: pd.DataFrame):
 
 st.title("📚 Tra cứu thông tin")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
-                                        "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên",
-                                        "⚠️ Cảnh báo phát sinh"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
+                                              "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên",
+                                              "⚠️ Cảnh báo phát sinh", "🔗 Phát sinh liên tiếp"])
 
 # ── Tab 1: Tìm GV rảnh / Tìm GV Cover ────────────────────────────────────────
 with tab1:
@@ -1300,6 +1351,33 @@ with tab5:
                 for ctr, ma_lop, gio_hoc, incidents in huy_alerts:
                     with st.expander(f"⚠️ {gio_hoc} — {ma_lop} ({ctr}) — {len(incidents)} phát sinh", expanded=True):
                         render_incidents_table(incidents, key_prefix=f"alert_huy_{ctr}_{ma_lop}")
+
+# ── Tab 6: Phát sinh liên tiếp theo lịch học ─────────────────────────────────
+with tab6:
+    st.subheader("Lớp phát sinh Cover/Hủy liên tiếp theo lịch học")
+    st.caption("Chỉ tính các buổi phát sinh LIÊN TIẾP đúng theo lịch cố định của lớp "
+               "(VD lớp học Thứ 3 - Thứ 5: 2 buổi liền kề dính phát sinh mới tính, "
+               "nếu có buổi bình thường xen giữa thì không tính là liên tiếp).")
+
+    with st.spinner("Đang tải dữ liệu..."):
+        df_lop_seq = load_lophoc()
+        df_xuly_seq = load_xuly()
+
+    streaks = find_consecutive_incident_classes(df_lop_seq, df_xuly_seq)
+    streaks.sort(key=lambda s: s[2][-1], reverse=True)
+
+    st.markdown(f"**{len(streaks)} chuỗi phát sinh liên tiếp**")
+
+    if not streaks:
+        st.success("Không có lớp nào phát sinh liên tiếp theo lịch học.")
+    else:
+        for ctr, ma_lop, streak_dates in streaks:
+            date_labels = [d.strftime("%d/%m/%Y") for d in streak_dates]
+            all_inc = get_all_class_incidents(ma_lop, ctr, df_xuly_seq)
+            streak_inc = all_inc[all_inc["Ngày/tháng"].isin(date_labels)]
+            title = f"⚠️ {ma_lop} ({ctr}) — {len(streak_dates)} buổi liên tiếp: " + " → ".join(date_labels)
+            with st.expander(title, expanded=True):
+                st.dataframe(streak_inc, use_container_width=True, hide_index=True)
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
