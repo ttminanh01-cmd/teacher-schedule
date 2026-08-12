@@ -7,6 +7,7 @@ import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
 from english_training import render_english_training
+from chinese_training import render_chinese_training
 
 st.set_page_config(page_title="Tra cứu thông tin", page_icon="📚", layout="wide")
 
@@ -812,10 +813,10 @@ def render_teacher_schedule(sessions: pd.DataFrame):
 
 st.title("📚 Tra cứu thông tin")
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
                                               "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên",
                                               "⚠️ Cảnh báo phát sinh", "🔗 Phát sinh liên tiếp",
-                                              "🇬🇧 Training tiếng Anh"])
+                                              "🇬🇧 Training tiếng Anh", "🇨🇳 Training tiếng Trung"])
 
 # ── Tab 1: Tìm GV rảnh / Tìm GV Cover ────────────────────────────────────────
 with tab1:
@@ -1407,6 +1408,9 @@ with tab6:
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with tab7:
     render_english_training()
+
+with tab8:
+    render_chinese_training()
 
 with st.sidebar:
     st.markdown("### ⚙️ Cài đặt")
