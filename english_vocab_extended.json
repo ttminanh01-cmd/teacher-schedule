@@ -1,0 +1,662 @@
+{
+  "Pre-A1 · Khởi động": [
+    {
+      "word": "office",
+      "ipa": "/ˈɑfɪs/",
+      "meaning": "văn phòng",
+      "example": "This is my office."
+    },
+    {
+      "word": "company",
+      "ipa": "/ˈkʌmp(ə)ni/",
+      "meaning": "công ty",
+      "example": "This is my company."
+    },
+    {
+      "word": "job",
+      "ipa": "/d͡ʒɒb/",
+      "meaning": "công việc",
+      "example": "This is my job."
+    },
+    {
+      "word": "manager",
+      "ipa": "/ˈmæn.ɪ.dʒə/",
+      "meaning": "giám đốc",
+      "example": "This is my manager."
+    },
+    {
+      "word": "colleague",
+      "ipa": "/ˈkɒliːɡ/",
+      "meaning": "đồng nghiệp",
+      "example": "This is my colleague."
+    },
+    {
+      "word": "desk",
+      "ipa": "/dɛsk/",
+      "meaning": "bàn làm việc",
+      "example": "This is my desk."
+    },
+    {
+      "word": "chair",
+      "ipa": "/t͡ʃɛə(ɹ)/",
+      "meaning": "cái ghế",
+      "example": "This is my chair."
+    },
+    {
+      "word": "computer",
+      "ipa": "/kəmˈpjuːtə/",
+      "meaning": "máy tính",
+      "example": "This is my computer."
+    },
+    {
+      "word": "phone",
+      "ipa": "/fəʊ̯n/",
+      "meaning": "điện thoại",
+      "example": "This is my phone."
+    },
+    {
+      "word": "address",
+      "ipa": "/æˈdɹɛs/",
+      "meaning": "Địa chỉ",
+      "example": "This is my address."
+    },
+    {
+      "word": "number",
+      "ipa": "/ˈnʌmbə/",
+      "meaning": "con số",
+      "example": "This is my number."
+    },
+    {
+      "word": "time",
+      "ipa": "/tɑem/",
+      "meaning": "thời gian",
+      "example": "This is my time."
+    },
+    {
+      "word": "day",
+      "ipa": "/deɪ/",
+      "meaning": "ngày",
+      "example": "This is my day."
+    },
+    {
+      "word": "week",
+      "ipa": "/wiːk/",
+      "meaning": "tuần",
+      "example": "This is my week."
+    },
+    {
+      "word": "lunch",
+      "ipa": "/lʌnt͡ʃ/",
+      "meaning": "bữa trưa",
+      "example": "This is my lunch."
+    },
+    {
+      "word": "break",
+      "ipa": "/bɹeɪk/",
+      "meaning": "phá vỡ",
+      "example": "This is my break."
+    },
+    {
+      "word": "room",
+      "ipa": "/ɹuːm/",
+      "meaning": "phòng",
+      "example": "This is my room."
+    },
+    {
+      "word": "door",
+      "ipa": "/dɔː/",
+      "meaning": "cửa",
+      "example": "This is my door."
+    },
+    {
+      "word": "question",
+      "ipa": "/ˈkwɛstjən/",
+      "meaning": "câu hỏi",
+      "example": "This is my question."
+    },
+    {
+      "word": "answer",
+      "ipa": "/ˈan.sə/",
+      "meaning": "trả lời",
+      "example": "This is my answer."
+    },
+    {
+      "word": "help",
+      "ipa": "/hɛlp/",
+      "meaning": "giúp đỡ",
+      "example": "This is my help."
+    }
+  ],
+  "A1 · Nền tảng": [
+    {
+      "word": "calendar",
+      "ipa": "/ˈkæl.ən.də/",
+      "meaning": "lịch",
+      "example": "Please check the calendar."
+    },
+    {
+      "word": "appointment",
+      "ipa": "/əˈpɔɪnt.mɛnt/",
+      "meaning": "cuộc hẹn",
+      "example": "Please check the appointment."
+    },
+    {
+      "word": "department",
+      "ipa": "/dɪˈpɑːtm(ə)nt/",
+      "meaning": "phòng",
+      "example": "Please check the department."
+    },
+    {
+      "word": "customer",
+      "ipa": "/ˈkʌstəmə/",
+      "meaning": "khách hàng",
+      "example": "Please check the customer."
+    },
+    {
+      "word": "document",
+      "ipa": "/ˈdɒkjʊmənt/",
+      "meaning": "tài liệu",
+      "example": "Please check the document."
+    },
+    {
+      "word": "file",
+      "ipa": "/faɪl/",
+      "meaning": "tài liệu",
+      "example": "Please check the file."
+    },
+    {
+      "word": "message",
+      "ipa": "/ˈmɛsɪd͡ʒ/",
+      "meaning": "tin nhắn",
+      "example": "Please check the message."
+    },
+    {
+      "word": "project",
+      "ipa": "/ˈprɑʤɛkt/",
+      "meaning": "dự án",
+      "example": "Please check the project."
+    },
+    {
+      "word": "workplace",
+      "ipa": "/ˈwərkˌpleɪs/",
+      "meaning": "nơi làm việc",
+      "example": "Please check the workplace."
+    },
+    {
+      "word": "routine",
+      "ipa": "/ruˈtin/",
+      "meaning": "lịch trình",
+      "example": "Please check the routine."
+    },
+    {
+      "word": "instruction",
+      "ipa": "/ˌɪnˈstrəkʃən/",
+      "meaning": "chỉ dẫn",
+      "example": "Please check the instruction."
+    },
+    {
+      "word": "location",
+      "ipa": "/loʊˈkeɪʃən/",
+      "meaning": "vị trí",
+      "example": "Please check the location."
+    },
+    {
+      "word": "entrance",
+      "ipa": "/ˈɛntrəns/",
+      "meaning": "cổng vào",
+      "example": "Please check the entrance."
+    },
+    {
+      "word": "floor",
+      "ipa": "/flɔr/",
+      "meaning": "sàn nhà",
+      "example": "Please check the floor."
+    },
+    {
+      "word": "badge",
+      "ipa": "/bæʤ/",
+      "meaning": "huy hiệu",
+      "example": "Please check the badge."
+    },
+    {
+      "word": "printer",
+      "ipa": "/ˈprɪnər/",
+      "meaning": "máy in",
+      "example": "Please check the printer."
+    },
+    {
+      "word": "password",
+      "ipa": "/ˈpæsˌwərd/",
+      "meaning": "mật khẩu",
+      "example": "Please check the password."
+    },
+    {
+      "word": "uniform",
+      "ipa": "/ˈjunəˌfɔrm/",
+      "meaning": "đồng phục",
+      "example": "Please check the uniform."
+    }
+  ],
+  "A2 · Giao tiếp chủ động": [
+    {
+      "word": "agenda",
+      "ipa": "/əˈʤɛndə/",
+      "meaning": "chương trình nghị sự",
+      "example": "We discussed the agenda this morning."
+    },
+    {
+      "word": "attachment",
+      "ipa": "/əˈtæʧmənt/",
+      "meaning": "tập tin đính kèm",
+      "example": "We discussed the attachment this morning."
+    },
+    {
+      "word": "budget",
+      "ipa": "/ˈbəʤɪt/",
+      "meaning": "ngân sách",
+      "example": "We discussed the budget this morning."
+    },
+    {
+      "word": "call",
+      "ipa": "/kɔl/",
+      "meaning": "gọi ",
+      "example": "We discussed the call this morning."
+    },
+    {
+      "word": "complaint",
+      "ipa": "/kəmˈpleɪnt/",
+      "meaning": "lời phàn nàn",
+      "example": "We discussed the complaint this morning."
+    },
+    {
+      "word": "delivery",
+      "ipa": "/dɪˈlɪvəri/",
+      "meaning": "vận chuyển",
+      "example": "We discussed the delivery this morning."
+    },
+    {
+      "word": "detail",
+      "ipa": "/ˈditeɪl/",
+      "meaning": "chi tiết",
+      "example": "We discussed the detail this morning."
+    },
+    {
+      "word": "invoice",
+      "ipa": "/ˈɪnvɔɪs/",
+      "meaning": "hóa đơn",
+      "example": "We discussed the invoice this morning."
+    },
+    {
+      "word": "issue",
+      "ipa": "/ˈɪʃu/",
+      "meaning": "vấn đề",
+      "example": "We discussed the issue this morning."
+    },
+    {
+      "word": "order",
+      "ipa": "/ˈɔrdər/",
+      "meaning": "đặt hàng",
+      "example": "We discussed the order this morning."
+    },
+    {
+      "word": "payment",
+      "ipa": "/ˈpeɪmənt/",
+      "meaning": "sự chi trả",
+      "example": "We discussed the payment this morning."
+    },
+    {
+      "word": "plan",
+      "ipa": "/plæn/",
+      "meaning": "kế hoạch",
+      "example": "We discussed the plan this morning."
+    },
+    {
+      "word": "problem",
+      "ipa": "/ˈprɑbləm/",
+      "meaning": "vấn đề",
+      "example": "We discussed the problem this morning."
+    },
+    {
+      "word": "reminder",
+      "ipa": "/riˈmaɪndər/",
+      "meaning": "lời nhắc nhở",
+      "example": "We discussed the reminder this morning."
+    },
+    {
+      "word": "reservation",
+      "ipa": "/ˌɹɛzəˈveɪʃən/",
+      "meaning": "sự đặt chỗ",
+      "example": "We discussed the reservation this morning."
+    },
+    {
+      "word": "response",
+      "ipa": "/ɹɪˈspɒns/",
+      "meaning": "phản ứng",
+      "example": "We discussed the response this morning."
+    },
+    {
+      "word": "service",
+      "ipa": "/ˈsɜːvɪs/",
+      "meaning": "dịch vụ",
+      "example": "We discussed the service this morning."
+    },
+    {
+      "word": "solution",
+      "ipa": "/səˈl(j)uːʃən/",
+      "meaning": "giải pháp",
+      "example": "We discussed the solution this morning."
+    }
+  ],
+  "B1 · Làm việc độc lập": [
+    {
+      "word": "achievement",
+      "ipa": "/əˈtʃiːvmənt/",
+      "meaning": "thành tích",
+      "example": "The team reviewed the achievement carefully."
+    },
+    {
+      "word": "analysis",
+      "ipa": "/əˈnælɪsɪs/",
+      "meaning": "Phân tích",
+      "example": "The team reviewed the analysis carefully."
+    },
+    {
+      "word": "approach",
+      "ipa": "/əˈpɹəʊt͡ʃ/",
+      "meaning": "tiếp cận",
+      "example": "The team reviewed the approach carefully."
+    },
+    {
+      "word": "challenge",
+      "ipa": "/ˈtʃæl.əndʒ/",
+      "meaning": "thử thách",
+      "example": "The team reviewed the challenge carefully."
+    },
+    {
+      "word": "collaboration",
+      "ipa": "/kəˌlæbəˈɹeɪʃən/",
+      "meaning": "sự hợp tác",
+      "example": "The team reviewed the collaboration carefully."
+    },
+    {
+      "word": "decision",
+      "ipa": "/dɪˈsɪʒən/",
+      "meaning": "phán quyết",
+      "example": "The team reviewed the decision carefully."
+    },
+    {
+      "word": "discussion",
+      "ipa": "/dɪsˈkʊʃən/",
+      "meaning": "cuộc thảo luận",
+      "example": "The team reviewed the discussion carefully."
+    },
+    {
+      "word": "goal",
+      "ipa": "/ɡɒʊl/",
+      "meaning": "mục tiêu",
+      "example": "The team reviewed the goal carefully."
+    },
+    {
+      "word": "improvement",
+      "ipa": "/ɪmˈpɹuːvmənt/",
+      "meaning": "sự cải tiến",
+      "example": "The team reviewed the improvement carefully."
+    },
+    {
+      "word": "performance",
+      "ipa": "[pə.ˈfɔː.məns]",
+      "meaning": "hiệu suất",
+      "example": "The team reviewed the performance carefully."
+    },
+    {
+      "word": "process",
+      "ipa": "/ˈpɹoʊsɛs/",
+      "meaning": "quá trình",
+      "example": "The team reviewed the process carefully."
+    },
+    {
+      "word": "progress",
+      "ipa": "/ˈpɹɒɡɹɛs/",
+      "meaning": "tiến triển",
+      "example": "The team reviewed the progress carefully."
+    },
+    {
+      "word": "quality",
+      "ipa": "/ˈkwɒlɪti/",
+      "meaning": "chất lượng",
+      "example": "The team reviewed the quality carefully."
+    },
+    {
+      "word": "recommendation",
+      "ipa": "/ˌɹɛkəmənˈdeɪʃən/",
+      "meaning": "sự giới thiệu",
+      "example": "The team reviewed the recommendation carefully."
+    },
+    {
+      "word": "responsibility",
+      "ipa": "/ɹɪˌspɑnsəˈbɪlɪɾi/",
+      "meaning": "trách nhiệm",
+      "example": "The team reviewed the responsibility carefully."
+    },
+    {
+      "word": "result",
+      "ipa": "/ɹɪˈzʌlt/",
+      "meaning": "kết quả",
+      "example": "The team reviewed the result carefully."
+    },
+    {
+      "word": "strategy",
+      "ipa": "/ˈstɹætədʒi/",
+      "meaning": "chiến lược",
+      "example": "The team reviewed the strategy carefully."
+    }
+  ],
+  "B2 · Chuyên nghiệp": [
+    {
+      "word": "alternative",
+      "ipa": "/ɒl.ˈtɜː(ɹ).nə.tɪv/",
+      "meaning": "thay thế",
+      "example": "We should consider the alternative before deciding."
+    },
+    {
+      "word": "assumption",
+      "ipa": "/əˈsʌmp.ʃən/",
+      "meaning": "giả định",
+      "example": "We should consider the assumption before deciding."
+    },
+    {
+      "word": "benefit",
+      "ipa": "/ˈbɛn.ɪ.fɪt/",
+      "meaning": "lợi ích",
+      "example": "We should consider the benefit before deciding."
+    },
+    {
+      "word": "consequence",
+      "ipa": "/ˈkɒnsɪkwɛns/",
+      "meaning": "kết quả",
+      "example": "We should consider the consequence before deciding."
+    },
+    {
+      "word": "constraint",
+      "ipa": "/kənˈstɹeɪnt/",
+      "meaning": "hạn chế",
+      "example": "We should consider the constraint before deciding."
+    },
+    {
+      "word": "contract",
+      "ipa": "/ˈkɒntɹækt/",
+      "meaning": "hợp đồng",
+      "example": "We should consider the contract before deciding."
+    },
+    {
+      "word": "criterion",
+      "ipa": "/kraɪˈtɪriən/",
+      "meaning": "tiêu chí",
+      "example": "We should consider the criterion before deciding."
+    },
+    {
+      "word": "efficiency",
+      "ipa": "/ɪˈfɪʃənsi/",
+      "meaning": "hiệu quả",
+      "example": "We should consider the efficiency before deciding."
+    },
+    {
+      "word": "evidence",
+      "ipa": "/ˈɛvədəns/",
+      "meaning": "chứng cớ",
+      "example": "We should consider the evidence before deciding."
+    },
+    {
+      "word": "expectation",
+      "ipa": "/ˌɛkspɛkˈteɪʃən/",
+      "meaning": "kỳ vọng",
+      "example": "We should consider the expectation before deciding."
+    },
+    {
+      "word": "feasibility",
+      "ipa": "/ˌfizəˈbɪləti/",
+      "meaning": "tính khả thi",
+      "example": "We should consider the feasibility before deciding."
+    },
+    {
+      "word": "impact",
+      "ipa": "/ˌɪmˈpækt/",
+      "meaning": "sự va chạm",
+      "example": "We should consider the impact before deciding."
+    },
+    {
+      "word": "negotiation",
+      "ipa": "/nɪˌgoʊʃiˈeɪʃən/",
+      "meaning": "đàm phán",
+      "example": "We should consider the negotiation before deciding."
+    },
+    {
+      "word": "objective",
+      "ipa": "/əˈbʤɛktɪv/",
+      "meaning": "khách quan",
+      "example": "We should consider the objective before deciding."
+    },
+    {
+      "word": "proposal",
+      "ipa": "/prəˈpoʊzəl/",
+      "meaning": "đề xuất",
+      "example": "We should consider the proposal before deciding."
+    },
+    {
+      "word": "stakeholder",
+      "ipa": "/ˈsteɪˌkhoʊldər/",
+      "meaning": "cổ đông",
+      "example": "We should consider the stakeholder before deciding."
+    },
+    {
+      "word": "trend",
+      "ipa": "/trɛnd/",
+      "meaning": "xu hướng",
+      "example": "We should consider the trend before deciding."
+    }
+  ],
+  "C1 · Dẫn dắt": [
+    {
+      "word": "ambiguity",
+      "ipa": "/ˌæmbɪˈgjuəti/",
+      "meaning": "sự mơ hồ",
+      "example": "The report addresses the ambiguity in detail."
+    },
+    {
+      "word": "accountability",
+      "ipa": "/əˈkaʊntəˌbɪlɪti/",
+      "meaning": "trách nhiệm giải trình",
+      "example": "The report addresses the accountability in detail."
+    },
+    {
+      "word": "allocation",
+      "ipa": "/ˌæləˈkeɪʃən/",
+      "meaning": "phân bổ",
+      "example": "The report addresses the allocation in detail."
+    },
+    {
+      "word": "credibility",
+      "ipa": "/ˌkrɛdəˈbɪlɪti/",
+      "meaning": "độ tin cậy",
+      "example": "The report addresses the credibility in detail."
+    },
+    {
+      "word": "dilemma",
+      "ipa": "/dɪˈlɛmə/",
+      "meaning": "vấn đề nan giải",
+      "example": "The report addresses the dilemma in detail."
+    },
+    {
+      "word": "disruption",
+      "ipa": "/dɪsˈrəpʃən/",
+      "meaning": "sự gián đoạn",
+      "example": "The report addresses the disruption in detail."
+    },
+    {
+      "word": "governance",
+      "ipa": "/ˈgəvərnəns/",
+      "meaning": "quản trị",
+      "example": "The report addresses the governance in detail."
+    },
+    {
+      "word": "implication",
+      "ipa": "/ˌɪmpləˈkeɪʃən/",
+      "meaning": "hàm ý",
+      "example": "The report addresses the implication in detail."
+    },
+    {
+      "word": "innovation",
+      "ipa": "/ˌɪnəˈveɪʃən/",
+      "meaning": "sự đổi mới",
+      "example": "The report addresses the innovation in detail."
+    },
+    {
+      "word": "integration",
+      "ipa": "/ˌɪnəˈgreɪʃən/",
+      "meaning": "hội nhập",
+      "example": "The report addresses the integration in detail."
+    },
+    {
+      "word": "intervention",
+      "ipa": "/ˌɪntərˈvɛnʃən/",
+      "meaning": "sự can thiệp",
+      "example": "The report addresses the intervention in detail."
+    },
+    {
+      "word": "leadership",
+      "ipa": "/ˈlidərˌʃɪp/",
+      "meaning": "Khả năng lãnh đạo",
+      "example": "The report addresses the leadership in detail."
+    },
+    {
+      "word": "limitation",
+      "ipa": "/ˌlɪmɪˈteɪʃən/",
+      "meaning": "giới hạn",
+      "example": "The report addresses the limitation in detail."
+    },
+    {
+      "word": "rationale",
+      "ipa": "/ˌræʃəˈnæl/",
+      "meaning": "lý lẽ",
+      "example": "The report addresses the rationale in detail."
+    },
+    {
+      "word": "resilience",
+      "ipa": "/ɹə.zɪl.ɪ.əns/",
+      "meaning": "khả năng phục hồi",
+      "example": "The report addresses the resilience in detail."
+    },
+    {
+      "word": "sustainability",
+      "ipa": "/səsˌteɪnəˈbɪlɪti/",
+      "meaning": "tính bền vững",
+      "example": "The report addresses the sustainability in detail."
+    },
+    {
+      "word": "transparency",
+      "ipa": "/tɹænsˈpæɹənsi/",
+      "meaning": "minh bạch",
+      "example": "The report addresses the transparency in detail."
+    }
+  ]
+}
