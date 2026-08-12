@@ -6,6 +6,7 @@ import streamlit as st
 import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
+from english_training import render_english_training
 
 st.set_page_config(page_title="Tra cứu thông tin", page_icon="📚", layout="wide")
 
@@ -811,9 +812,10 @@ def render_teacher_schedule(sessions: pd.DataFrame):
 
 st.title("📚 Tra cứu thông tin")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
                                               "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên",
-                                              "⚠️ Cảnh báo phát sinh", "🔗 Phát sinh liên tiếp"])
+                                              "⚠️ Cảnh báo phát sinh", "🔗 Phát sinh liên tiếp",
+                                              "🇬🇧 Training tiếng Anh"])
 
 # ── Tab 1: Tìm GV rảnh / Tìm GV Cover ────────────────────────────────────────
 with tab1:
@@ -1403,6 +1405,9 @@ with tab6:
                 st.dataframe(streak_inc, use_container_width=True, hide_index=True)
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
+with tab7:
+    render_english_training()
+
 with st.sidebar:
     st.markdown("### ⚙️ Cài đặt")
     if st.button("🔄 Làm mới dữ liệu"):
