@@ -35,6 +35,8 @@ TRAINING_ALLOWED_EMAILS = {
     "tt.minanh01@gmail.com",
     "anhttm@ctv.hocmai.vn",
 }
+TRAINING_ADMIN_EMAILS = {"tt.minanh01@gmail.com"}
+TRAINING_ACCESS_SHEET = "Training Access"
 
 
 def _current_user():
@@ -51,7 +53,13 @@ def _current_user():
 def _can_view_training():
     user = _current_user()
     email = str(user.get("email", "")).strip().casefold()
-    return bool(user.get("is_logged_in")) and email in TRAINING_ALLOWED_EMAILS
+    return bool(user.get("is_logged_in")) and email in _training_allowed_emails()
+
+
+def _is_training_admin():
+    user = _current_user()
+    email = str(user.get("email", "")).strip().casefold()
+    return bool(user.get("is_logged_in")) and email in TRAINING_ADMIN_EMAILS
 
 # 13 cột đầu của cả 2 sheet lịch GV theo cùng thứ tự (chỉ khác nhãn cột).
 GV_COLS = ["Quốc tịch", "Mã GV", "Giáo viên", "Trình độ giảng dạy",
@@ -77,9 +85,62 @@ HOCVIEN_COLS = ["Sản phẩm", "ID", "ID BOS", "Tên", "Email", "Số điện t
 # ===== GOOGLE SHEETS =====
 
 def get_gc():
-    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["google"], scopes=scopes)
     return gspread.authorize(creds)
+
+
+@st.cache_data(ttl=60)
+def load_training_access():
+    """Load extra Training users from the private access-control worksheet."""
+    try:
+        ws = get_gc().open_by_key(SPREADSHEET_ID).worksheet(TRAINING_ACCESS_SHEET)
+    except (gspread.exceptions.WorksheetNotFound, gspread.exceptions.GSpreadException):
+        return []
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return []
+    return [row[0].strip().casefold() for row in rows[1:] if row and row[0].strip()]
+
+
+def _training_allowed_emails():
+    return TRAINING_ALLOWED_EMAILS | set(load_training_access())
+
+
+def _training_access_worksheet():
+    spreadsheet = get_gc().open_by_key(SPREADSHEET_ID)
+    try:
+        return spreadsheet.worksheet(TRAINING_ACCESS_SHEET)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=TRAINING_ACCESS_SHEET, rows=200, cols=3)
+        ws.append_row(["Email", "Cấp bởi", "Thời gian"])
+        return ws
+
+
+def grant_training_access(email, granted_by):
+    email = email.strip().casefold()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        return False, "Email không hợp lệ."
+    if email in _training_allowed_emails():
+        return False, "Email này đã có quyền."
+    ws = _training_access_worksheet()
+    ws.append_row([email, granted_by, datetime.now().isoformat(timespec="seconds")])
+    load_training_access.clear()
+    return True, f"Đã cấp quyền cho {email}."
+
+
+def revoke_training_access(email):
+    email = email.strip().casefold()
+    if email in TRAINING_ALLOWED_EMAILS:
+        return False, "Đây là tài khoản mặc định, không thể thu hồi tại đây."
+    ws = _training_access_worksheet()
+    rows = ws.get_all_values()
+    for row_number, row in enumerate(rows[1:], start=2):
+        if row and row[0].strip().casefold() == email:
+            ws.delete_rows(row_number)
+            load_training_access.clear()
+            return True, f"Đã thu hồi quyền của {email}."
+    return False, "Không tìm thấy email trong danh sách cấp thêm."
 
 
 def _pad_rows(rows, width):
@@ -1447,6 +1508,38 @@ with st.sidebar:
         else:
             st.info("Tài khoản này không có quyền xem Training.")
         st.button("Đăng xuất", on_click=st.logout, use_container_width=True)
+        if _is_training_admin():
+            with st.expander("🔐 Quản lý quyền Training"):
+                st.caption("Cấp hoặc thu hồi quyền xem hai mục học ngôn ngữ.")
+                with st.form("grant_training_access_form", clear_on_submit=True):
+                    new_email = st.text_input("Email cần cấp quyền", placeholder="user@example.com")
+                    grant_clicked = st.form_submit_button("Cấp quyền", use_container_width=True)
+                if grant_clicked:
+                    try:
+                        success, message = grant_training_access(new_email, user.get("email", ""))
+                        (st.success if success else st.warning)(message)
+                        if success:
+                            st.rerun()
+                    except gspread.exceptions.GSpreadException as exc:
+                        st.error(f"Không thể ghi danh sách quyền: {exc}")
+
+                fixed_emails = sorted(TRAINING_ALLOWED_EMAILS)
+                extra_emails = sorted(set(load_training_access()) - TRAINING_ALLOWED_EMAILS)
+                st.markdown("**Quyền mặc định:**")
+                for allowed_email in fixed_emails:
+                    st.caption(f"✓ {allowed_email}")
+                if extra_emails:
+                    revoke_email = st.selectbox("Quyền đã cấp thêm", extra_emails, key="training_revoke_email")
+                    if st.button("Thu hồi email đã chọn", use_container_width=True):
+                        try:
+                            success, message = revoke_training_access(revoke_email)
+                            (st.success if success else st.warning)(message)
+                            if success:
+                                st.rerun()
+                        except gspread.exceptions.GSpreadException as exc:
+                            st.error(f"Không thể thu hồi quyền: {exc}")
+                else:
+                    st.caption("Chưa có email được cấp thêm.")
     else:
         st.caption("Đăng nhập bằng tài khoản được cấp quyền để mở hai mục Training.")
         st.button("Đăng nhập Google", on_click=st.login, use_container_width=True)
