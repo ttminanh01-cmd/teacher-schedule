@@ -1,4 +1,70 @@
+import json
+from pathlib import Path
+
 import streamlit as st
+
+
+CATALOG_PATH = Path(__file__).with_name("course_catalog_raw.json")
+
+
+def _drive_link(file_id, is_folder=False):
+    kind = "folders" if is_folder else "file/d"
+    suffix = "" if is_folder else "/view"
+    return f"https://drive.google.com/drive/{kind}/{file_id}{suffix}"
+
+
+@st.cache_data
+def load_course_catalog():
+    if not CATALOG_PATH.exists():
+        return []
+    return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+
+
+def _resource_type(name):
+    suffix = Path(name).suffix.lower()
+    return {".mp4": "Video", ".mp3": "Audio", ".pdf": "PDF"}.get(suffix, "Thư mục")
+
+
+def render_full_course():
+    catalog = load_course_catalog()
+    if not catalog:
+        st.warning("Chưa tải được danh mục khóa học.")
+        return
+
+    st.markdown("### Lộ trình IELTS Nguyễn Huyền")
+    st.caption("Chọn kỹ năng và mở đúng video/tài liệu gốc trên Google Drive. Tiến độ được lưu trong phiên hiện tại.")
+    modules = {entry["folder"]["name"]: entry for entry in catalog}
+    module_name = st.selectbox("Kỹ năng / khóa học", list(modules), key="course_module")
+    module = modules[module_name]
+    resources = [item for item in module["items"] if item.get("name") and item["name"] != ".DS_Store"]
+
+    type_options = ["Tất cả"] + sorted({_resource_type(item["name"]) for item in resources})
+    col_type, col_search = st.columns([1, 2])
+    with col_type:
+        selected_type = st.selectbox("Loại nội dung", type_options, key="course_resource_type")
+    with col_search:
+        keyword = st.text_input("Tìm bài", placeholder="Ví dụ: câu bị động, map, environment...", key="course_search")
+
+    if selected_type != "Tất cả":
+        resources = [item for item in resources if _resource_type(item["name"]) == selected_type]
+    if keyword.strip():
+        resources = [item for item in resources if keyword.strip().lower() in item["name"].lower()]
+
+    completed = sum(bool(st.session_state.get(f"course_done_{item['id']}")) for item in resources)
+    st.progress(completed / len(resources) if resources else 0, text=f"Tiến độ danh sách đang xem: {completed}/{len(resources)}")
+    st.link_button("📂 Mở thư mục khóa học", _drive_link(module["folder"]["id"], is_folder=True))
+
+    if not resources:
+        st.info("Không tìm thấy bài phù hợp với bộ lọc.")
+        return
+
+    icons = {"Video": "🎬", "Audio": "🎧", "PDF": "📄", "Thư mục": "📁"}
+    for index, item in enumerate(resources, 1):
+        resource_type = _resource_type(item["name"])
+        with st.expander(f"{icons[resource_type]} {index}. {item['name']}"):
+            st.markdown(f"**Loại:** {resource_type}")
+            st.link_button(f"Mở {resource_type.lower()} trên Google Drive ↗", _drive_link(item["id"], is_folder=resource_type == "Thư mục"))
+            st.checkbox("Đã học xong", key=f"course_done_{item['id']}")
 
 
 LESSONS = {
@@ -83,7 +149,15 @@ LESSONS = {
 
 def render_english_training():
     st.subheader("Training tiếng Anh")
-    st.caption("Bài luyện ngắn dành cho giao tiếp và xử lý tình huống trong lớp học.")
+    st.caption("Học theo khóa IELTS trên Drive hoặc luyện giao tiếp nhanh.")
+    course_tab, quick_tab = st.tabs(["🎓 Khóa IELTS đầy đủ", "⚡ Luyện giao tiếp nhanh"])
+    with course_tab:
+        render_full_course()
+    with quick_tab:
+        render_quick_training()
+
+
+def render_quick_training():
     left, right = st.columns(2)
     with left:
         topic = st.selectbox("Chủ đề", list(LESSONS), key="english_topic")
