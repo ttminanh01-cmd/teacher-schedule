@@ -228,6 +228,7 @@ def _dict_to_tuple(word):
     )
 
 
+@st.cache_data
 def _get_words(level, cumulative=False):
     full_data = _load_full_vocabulary()
     if level in full_data:
@@ -280,7 +281,15 @@ def _render_vocab_list(words):
     if query.strip():
         needle = query.strip().lower()
         rows = [row for row in rows if any(needle in str(value).lower() for value in row.values())]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    page_size = 100
+    page_count = max(1, (len(rows) + page_size - 1) // page_size)
+    page = st.selectbox(
+        "Trang", range(page_count), format_func=lambda value: f"{value + 1}/{page_count}",
+        key=f"zh_vocab_page_{len(words)}_{query.strip().casefold()}",
+    )
+    start = page * page_size
+    st.caption(f"Hiển thị {start + 1 if rows else 0}–{min(start + page_size, len(rows))} trong {len(rows)} từ")
+    st.dataframe(pd.DataFrame(rows[start:start + page_size]), use_container_width=True, hide_index=True)
 
 
 def _render_textbook(level):
@@ -407,20 +416,22 @@ def render_chinese_training():
         cumulative = scope == "Lũy kế đến cấp này"
     words = _get_words(level, cumulative=cumulative)
     st.caption(f"Đang học {len(words)} từ")
-    flash_tab, list_tab, story_tab, book_tab, materials_tab, grammar_tab, source_tab = st.tabs(
-        ["🃏 Flashcard", "📋 Vocabulary List", "📖 Đọc & dịch", "📘 Sách đầy đủ", "🗂 Kho HSK1–6", "📕 Ngữ pháp PDF", "📚 Nguồn khác"]
+    views = ["🃏 Flashcard", "📋 Vocabulary List", "📖 Đọc & dịch", "📘 Sách đầy đủ", "🗂 Kho HSK1–6", "📕 Ngữ pháp PDF", "📚 Nguồn khác"]
+    view = st.radio(
+        "Chế độ học", views, horizontal=True, key="zh_training_view",
+        help="Chỉ tải chế độ đang chọn để web phản hồi nhanh hơn.",
     )
-    with flash_tab:
+    if view == views[0]:
         _render_flashcards(level, words)
-    with list_tab:
+    elif view == views[1]:
         _render_vocab_list(words)
-    with story_tab:
+    elif view == views[2]:
         _render_story(level)
-    with book_tab:
+    elif view == views[3]:
         _render_textbook(level)
-    with materials_tab:
+    elif view == views[4]:
         _render_material_library(level)
-    with grammar_tab:
+    elif view == views[5]:
         _render_pdf_library()
-    with source_tab:
+    else:
         _render_sources(level)
