@@ -1,7 +1,9 @@
 import json
+import html
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 CATALOG_PATH = Path(__file__).with_name("course_catalog_raw.json")
@@ -369,20 +371,54 @@ def _render_workplace_vocab(level, data):
         needle = query.strip().casefold()
         words = [word for word in words if needle in " ".join(word).casefold()]
     st.caption(f"{len(words)} từ trong chặng này · Tổng chương trình có 144 từ và 24 cụm câu chủ lực")
-    for word, ipa, meaning, example in words:
-        st.markdown(
-            f"<div style='padding:14px 16px;border:1px solid #e5e7eb;border-radius:14px;margin:8px 0'>"
-            f"<span style='font-size:22px;font-weight:800;color:#1d4ed8'>{word}</span> "
-            f"<span style='color:#7c3aed'>{ipa}</span><br>"
-            f"<b>Nghĩa:</b> {meaning}<br><span style='color:#475569'><b>Ví dụ:</b> {example}</span></div>",
-            unsafe_allow_html=True,
-        )
+    _render_speaking_vocabulary(words)
     st.markdown("#### Cụm câu chủ lực")
-    for phrase, meaning in data["phrases"]:
-        with st.expander(phrase):
-            st.markdown(f"**Nghĩa:** {meaning}")
-            st.text_input("Viết một câu mới từ mẫu này", key=f"phrase_practice_{level}_{phrase}")
-    st.warning("Mẹo: đọc từ → đọc câu ví dụ → che lại và tự tạo một câu liên quan trực tiếp tới công việc của bạn.")
+    phrase_rows = [(phrase, "", meaning, phrase) for phrase, meaning in data["phrases"]]
+    _render_speaking_vocabulary(phrase_rows, height=330)
+    for phrase, _ in data["phrases"]:
+        st.text_input(f"Tự đặt câu với “{phrase}”", key=f"phrase_practice_{level}_{phrase}")
+    st.warning("Mẹo: bấm 🔊 Từ, nghe và nhại ba lần; sau đó bấm 🔊 Ví dụ rồi tự tạo một câu liên quan trực tiếp tới công việc của bạn.")
+
+
+def _render_speaking_vocabulary(words, height=680):
+    cards = []
+    for word, ipa, meaning, example in words:
+        safe_word = html.escape(word, quote=True)
+        safe_example = html.escape(example, quote=True)
+        cards.append(
+            f"<article class='card'><div><span class='word'>{safe_word}</span> "
+            f"<span class='ipa'>{html.escape(ipa)}</span></div>"
+            f"<div class='meaning'><b>Nghĩa:</b> {html.escape(meaning)}</div>"
+            f"<div class='example'><b>Ví dụ:</b> {safe_example}</div>"
+            f"<div class='actions'><button data-speak='{safe_word}'>🔊 Từ</button>"
+            f"<button data-speak='{safe_example}'>🔊 Ví dụ</button></div></article>"
+        )
+    content = "".join(cards) or "<p>Không tìm thấy từ phù hợp.</p>"
+    components.html(
+        f"""<!doctype html><html><head><style>
+        *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,sans-serif;color:#172033}}
+        .card{{padding:14px 16px;border:1px solid #e5e7eb;border-radius:14px;margin:8px 2px;background:#fff}}
+        .word{{font-size:22px;font-weight:800;color:#1d4ed8}} .ipa{{color:#7c3aed}}
+        .meaning,.example{{margin-top:6px;line-height:1.45}} .example{{color:#475569}}
+        .actions{{display:flex;gap:8px;margin-top:10px}} button{{border:0;border-radius:9px;padding:7px 12px;
+        background:#dbeafe;color:#1e40af;font-weight:700;cursor:pointer}} button:hover{{background:#bfdbfe}}
+        button.playing{{background:#2563eb;color:white}}
+        </style></head><body>{content}<script>
+        function speak(text, button){{
+          window.speechSynthesis.cancel();
+          document.querySelectorAll('button').forEach(b => b.classList.remove('playing'));
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'en-US'; utterance.rate = 0.82; utterance.pitch = 1;
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
+          if (preferred) utterance.voice = preferred;
+          button.classList.add('playing'); utterance.onend = () => button.classList.remove('playing');
+          utterance.onerror = () => button.classList.remove('playing'); window.speechSynthesis.speak(utterance);
+        }}
+        document.querySelectorAll('[data-speak]').forEach(button => button.addEventListener('click', () => speak(button.dataset.speak, button)));
+        </script></body></html>""",
+        height=height, scrolling=True,
+    )
 
 
 def _render_grammar_map(level):

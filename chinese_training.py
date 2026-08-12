@@ -1,6 +1,7 @@
 import random
 import json
 import re
+import html
 from pathlib import Path
 
 import pandas as pd
@@ -326,6 +327,7 @@ def _render_flashcards(level, words):
         if example_pinyin:
             st.caption(example_pinyin)
         st.caption(translation)
+    _render_chinese_audio([(hanzi, pinyin, meaning, example, translation)], height=62, compact=True)
     prev_col, random_col, next_col = st.columns(3)
     if prev_col.button("← Từ trước", use_container_width=True, key=f"zh_prev_{level}"):
         st.session_state[key] = (index - 1) % len(words)
@@ -359,7 +361,60 @@ def _render_vocab_list(words):
     )
     start = page * page_size
     st.caption(f"Hiển thị {start + 1 if rows else 0}–{min(start + page_size, len(rows))} trong {len(rows)} từ")
-    st.dataframe(pd.DataFrame(rows[start:start + page_size]), use_container_width=True, hide_index=True)
+    page_rows = rows[start:start + page_size]
+    display = st.radio("Cách xem", ["🔊 Thẻ có âm thanh", "📋 Bảng gọn"], horizontal=True, key="zh_vocab_display")
+    if display.startswith("🔊"):
+        audio_rows = [(row["Hán tự"], row["Pinyin"], row["Nghĩa"], row["Ví dụ / câu ghi nhớ"], row["Dịch ví dụ"]) for row in page_rows]
+        _render_chinese_audio(audio_rows)
+    else:
+        st.dataframe(pd.DataFrame(page_rows), use_container_width=True, hide_index=True)
+
+
+def _render_chinese_audio(rows, height=720, compact=False):
+    cards = []
+    for hanzi, pinyin, meaning, example, translation in rows:
+        safe_hanzi = html.escape(hanzi, quote=True)
+        safe_example = html.escape(example, quote=True)
+        if compact:
+            cards.append(
+                f"<div class='actions compact'><button data-speak='{safe_hanzi}'>🔊 Nghe từ</button>"
+                f"<button data-speak='{safe_example}'>🔊 Nghe ví dụ</button></div>"
+            )
+        else:
+            cards.append(
+                f"<article class='card'><div><span class='hanzi'>{safe_hanzi}</span> "
+                f"<span class='pinyin'>{html.escape(pinyin)}</span></div>"
+                f"<div><b>Nghĩa:</b> {html.escape(meaning)}</div>"
+                f"<div class='example'><b>Ví dụ:</b> {safe_example}</div>"
+                f"<div class='translation'>{html.escape(translation)}</div>"
+                f"<div class='actions'><button data-speak='{safe_hanzi}'>🔊 Từ</button>"
+                f"<button data-speak='{safe_example}'>🔊 Ví dụ</button></div></article>"
+            )
+    components.html(
+        f"""<!doctype html><html><head><style>
+        *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,'Microsoft YaHei',sans-serif;color:#172033}}
+        .card{{padding:14px 16px;border:1px solid #e5e7eb;border-radius:14px;margin:8px 2px;background:#fff}}
+        .hanzi{{font-size:27px;font-weight:800;color:#b45309}} .pinyin{{color:#7c3aed;font-size:17px}}
+        .example{{margin-top:7px;color:#334155}} .translation{{color:#64748b;margin-top:3px}}
+        .actions{{display:flex;gap:8px;margin-top:10px}} .compact{{justify-content:center;margin:3px}}
+        button{{border:0;border-radius:9px;padding:8px 13px;background:#fef3c7;color:#92400e;font-weight:700;cursor:pointer}}
+        button:hover{{background:#fde68a}} button.playing{{background:#d97706;color:white}}
+        </style></head><body>{''.join(cards)}<script>
+        function speak(text, button){{
+          window.speechSynthesis.cancel();
+          document.querySelectorAll('button').forEach(b => b.classList.remove('playing'));
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'zh-CN'; utterance.rate = 0.72; utterance.pitch = 1;
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = voices.find(v => v.lang === 'zh-CN') || voices.find(v => v.lang.startsWith('zh'));
+          if (preferred) utterance.voice = preferred;
+          button.classList.add('playing'); utterance.onend = () => button.classList.remove('playing');
+          utterance.onerror = () => button.classList.remove('playing'); window.speechSynthesis.speak(utterance);
+        }}
+        document.querySelectorAll('[data-speak]').forEach(button => button.addEventListener('click', () => speak(button.dataset.speak, button)));
+        </script></body></html>""",
+        height=height, scrolling=not compact,
+    )
 
 
 def _render_textbook(level):
