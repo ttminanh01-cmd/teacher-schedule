@@ -1,4 +1,7 @@
 import random
+import json
+import re
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -7,8 +10,34 @@ import streamlit.components.v1 as components
 
 TERABOX_URL = "https://1024terabox.com/s/1blLvuQOMDPTNE-DLJu73YQ"
 GRAMMAR_DRIVE_URL = "https://drive.google.com/drive/folders/1qDNrvYbB3ekCyFBZ9-sEq6YlKdBpoif5"
+EXTRA_DRIVE_URL = "https://drive.google.com/drive/folders/1tGJ5HKK6un3XlVX5wFKI3jziBPre4xHt"
+FULL_VOCAB_PATH = Path(__file__).with_name("hsk_vocab_full.json")
+MATERIALS_PATH = Path(__file__).with_name("chinese_materials_catalog.json")
+HSK_BOOKS = {
+    "HSK1": {"id": "1sfJfPD5TGaBsRy0nVbidfW_J5Z2nxYzD", "pages": 143},
+    "HSK2": {"id": "1Ai291o1SRtTJgcH86h0Rmgd8xQiqNO6M", "pages": 145},
+    "HSK3": {"id": "1WrylZQ2wBjAaSphfELBA-deflitf4F2E", "pages": 207},
+}
 
 PDF_LIBRARY = {
+    "Học 50 bộ thủ chữ Hán": {
+        "file_id": "1P09QWOLtlUDMOCTzCRMTeHe306l93HNr",
+        "level": "HSK1-HSK3",
+        "summary": "Nhận diện 50 bộ thủ thông dụng để ghi nhớ mặt chữ và đoán nhóm nghĩa.",
+        "focus": ["Nhìn hình dạng bộ thủ", "Ghi nhớ nghĩa gốc", "Tìm bộ thủ trong từ đang học"],
+    },
+    "Tập viết các nét cơ bản": {
+        "file_id": "1Ndv7g7GYyqSoFy-4OhNqOo8G1-Cm3HLo",
+        "level": "HSK1",
+        "summary": "Luyện các nét nền tảng và quy tắc thứ tự nét trước khi viết chữ hoàn chỉnh.",
+        "focus": ["Đọc tên nét", "Tô theo mẫu", "Tự viết lại không nhìn mẫu"],
+    },
+    "Vở kẻ ô luyện viết chữ Hán": {
+        "file_id": "1j0utSAFYzZ8EYSbOg-9Z3CR4pN4hg2AC",
+        "level": "HSK1-HSK3",
+        "summary": "Mẫu ô luyện viết để cân đối tỷ lệ và vị trí các bộ phận trong chữ Hán.",
+        "focus": ["Quan sát tâm ô", "Giữ đúng tỷ lệ trái-phải", "Viết mỗi chữ 5 lần"],
+    },
     "Tổng hợp ngữ pháp": {
         "file_id": "1pi74nE7VhuSWKUxnFld0o7P9VfThyMcA",
         "level": "HSK2-HSK6",
@@ -171,12 +200,49 @@ STORIES = {
 }
 
 
+@st.cache_data
+def _load_full_vocabulary():
+    if not FULL_VOCAB_PATH.exists():
+        return {}
+    return json.loads(FULL_VOCAB_PATH.read_text(encoding="utf-8"))
+
+
+@st.cache_data
+def _load_materials():
+    if not MATERIALS_PATH.exists():
+        return []
+    raw = json.loads(MATERIALS_PATH.read_text(encoding="utf-8"))
+    unique = {}
+    for item in raw.get("items", []):
+        if item.get("type") == "folder":
+            continue
+        key = (item.get("name", "").casefold(), item.get("type", "file"))
+        unique.setdefault(key, item)
+    return list(unique.values())
+
+
+def _dict_to_tuple(word):
+    return (
+        word["hanzi"], word["pinyin"], word["meaning"],
+        word["example"], word["example_vi"], word.get("example_pinyin", ""),
+    )
+
+
+def _get_words(level, cumulative=False):
+    full_data = _load_full_vocabulary()
+    if level in full_data:
+        levels = list(full_data)[:int(level[-1])] if cumulative else [level]
+        return [_dict_to_tuple(word) for item in levels for word in full_data[item]]
+    return VOCABULARY[level]
+
+
 def _render_flashcards(level, words):
     key = f"zh_card_index_{level}"
     if key not in st.session_state:
         st.session_state[key] = 0
     index = st.session_state[key] % len(words)
-    hanzi, pinyin, meaning, example, translation = words[index]
+    hanzi, pinyin, meaning, example, translation, *extra = words[index]
+    example_pinyin = extra[0] if extra else ""
 
     st.markdown(
         f"<div style='text-align:center;padding:35px 15px;border:1px solid #ddd;border-radius:16px;'>"
@@ -186,6 +252,8 @@ def _render_flashcards(level, words):
     )
     with st.expander("Xem ví dụ"):
         st.markdown(f"**{example}**")
+        if example_pinyin:
+            st.caption(example_pinyin)
         st.caption(translation)
     prev_col, random_col, next_col = st.columns(3)
     if prev_col.button("← Từ trước", use_container_width=True, key=f"zh_prev_{level}"):
@@ -202,11 +270,80 @@ def _render_flashcards(level, words):
 
 def _render_vocab_list(words):
     query = st.text_input("Tìm từ", placeholder="Nhập chữ Hán, pinyin hoặc nghĩa Việt...", key="zh_vocab_search")
-    rows = [{"Hán tự": h, "Pinyin": p, "Nghĩa": m, "Ví dụ": e, "Dịch ví dụ": t} for h, p, m, e, t in words]
+    rows = []
+    for word in words:
+        h, p, m, e, t, *extra = word
+        rows.append({
+            "Hán tự": h, "Pinyin": p, "Nghĩa": m, "Ví dụ / câu ghi nhớ": e,
+            "Pinyin ví dụ": extra[0] if extra else "", "Dịch ví dụ": t,
+        })
     if query.strip():
         needle = query.strip().lower()
         rows = [row for row in rows if any(needle in str(value).lower() for value in row.values())]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def _render_textbook(level):
+    book = HSK_BOOKS.get(level)
+    if not book:
+        st.info("Sách HSK4-HSK6 hiện được lưu ở TeraBox và chưa có liên kết PDF nhúng ổn định.")
+        st.link_button("Mở giáo trình trên TeraBox ↗", TERABOX_URL)
+        return
+    st.markdown(f"### Sách giáo khoa {level}")
+    st.caption(f"Bản đầy đủ {book['pages']} trang. Có thể đọc ngay trong web hoặc mở toàn màn hình.")
+    preview_url = f"https://drive.google.com/file/d/{book['id']}/preview"
+    components.iframe(preview_url, height=760, scrolling=True)
+    st.link_button("Mở sách toàn màn hình ↗", f"https://drive.google.com/file/d/{book['id']}/view")
+
+
+def _material_levels(item):
+    text = " ".join([item.get("name", ""), *item.get("path", [])]).upper()
+    found = set(re.findall(r"HSK\s*([1-6])", text))
+    for start, end in re.findall(r"(?:HSK\s*)?([1-6])\s*[-–]\s*([1-6])", text):
+        found.update(str(number) for number in range(int(start), int(end) + 1))
+    return {f"HSK{value}" for value in found}
+
+
+def _render_material_library(level):
+    materials = _load_materials()
+    st.markdown("### Kho tài liệu HSK 1–6")
+    st.caption(f"Đã lập chỉ mục {len(materials)} tài liệu từ Drive; PDF có thể đọc ngay trong web.")
+    filter_col, type_col = st.columns(2)
+    scope = filter_col.selectbox(
+        "Phạm vi", [f"Gợi ý cho {level}", "Tất cả tài liệu", "Ngữ pháp", "Giáo trình", "Bài tập"],
+        key="zh_material_scope",
+    )
+    kind = type_col.selectbox("Định dạng", ["Tất cả", "PDF", "File khác"], key="zh_material_type")
+    query = st.text_input("Tìm tài liệu", placeholder="Ví dụ: HSK 4, ngữ pháp, Boya...", key="zh_material_search")
+
+    filtered = materials
+    if scope.startswith("Gợi ý"):
+        filtered = [item for item in filtered if not _material_levels(item) or level in _material_levels(item)]
+    elif scope != "Tất cả tài liệu":
+        needle = scope.casefold()
+        filtered = [item for item in filtered if needle in " ".join(item.get("path", []) + [item.get("name", "")]).casefold()]
+    if kind == "PDF":
+        filtered = [item for item in filtered if item.get("type") == "pdf"]
+    elif kind == "File khác":
+        filtered = [item for item in filtered if item.get("type") != "pdf"]
+    if query.strip():
+        needle = query.strip().casefold()
+        filtered = [item for item in filtered if needle in " / ".join(item.get("path", [])).casefold()]
+
+    st.caption(f"Tìm thấy {len(filtered)} tài liệu")
+    if not filtered:
+        st.info("Không có tài liệu khớp bộ lọc này.")
+        return
+    labels = [f"{item['name']}  ·  {' / '.join(item.get('path', [])[:-1])}" for item in filtered]
+    selected = filtered[st.selectbox("Chọn tài liệu", range(len(labels)), format_func=labels.__getitem__, key="zh_material_selected")]
+    st.markdown(f"**{selected['name']}**")
+    st.caption(" › ".join(selected.get("path", [])))
+    file_url = f"https://drive.google.com/file/d/{selected['id']}/view"
+    if selected.get("type") == "pdf":
+        components.iframe(f"https://drive.google.com/file/d/{selected['id']}/preview", height=760, scrolling=True)
+    else:
+        st.info("Định dạng này được mở bằng trình xem của Google Drive.")
+    st.link_button("Mở toàn màn hình trên Drive ↗", file_url)
 
 
 def _render_story(level):
@@ -253,15 +390,25 @@ def _render_sources(level):
     st.markdown("**Tài liệu tham khảo thêm:** sách giáo khoa, sách bài tập, tập viết và file nghe trên TeraBox.")
     st.link_button("Mở kho giáo trình HSK trên TeraBox ↗", TERABOX_URL)
     st.caption("TeraBox chưa cung cấp liên kết nhúng ổn định cho từng PDF, nên nút này được giữ làm nguồn đối chiếu.")
+    st.markdown("**Kho bổ sung:** bài tập, giáo trình Hán ngữ/Boya, ngữ pháp HSK1-HSK6 và tài liệu người mới học.")
+    st.link_button("Mở kho tài liệu tiếng Trung bổ sung ↗", EXTRA_DRIVE_URL)
 
 
 def render_chinese_training():
     st.subheader("Training tiếng Trung")
     st.caption("Học từ vựng và luyện đọc theo lộ trình HSK1-HSK6.")
     level = st.selectbox("Cấp độ", list(VOCABULARY), key="zh_level")
-    words = VOCABULARY[level]
-    flash_tab, list_tab, story_tab, grammar_tab, source_tab = st.tabs(
-        ["🃏 Flashcard", "📋 Vocabulary List", "📖 Đọc & dịch", "📕 Ngữ pháp PDF", "📚 Giáo trình HSK"]
+    cumulative = False
+    if level in _load_full_vocabulary():
+        scope = st.radio(
+            "Phạm vi từ vựng", ["Từ mới riêng cấp", "Lũy kế đến cấp này"],
+            horizontal=True, key="zh_vocab_scope",
+        )
+        cumulative = scope == "Lũy kế đến cấp này"
+    words = _get_words(level, cumulative=cumulative)
+    st.caption(f"Đang học {len(words)} từ")
+    flash_tab, list_tab, story_tab, book_tab, materials_tab, grammar_tab, source_tab = st.tabs(
+        ["🃏 Flashcard", "📋 Vocabulary List", "📖 Đọc & dịch", "📘 Sách đầy đủ", "🗂 Kho HSK1–6", "📕 Ngữ pháp PDF", "📚 Nguồn khác"]
     )
     with flash_tab:
         _render_flashcards(level, words)
@@ -269,6 +416,10 @@ def render_chinese_training():
         _render_vocab_list(words)
     with story_tab:
         _render_story(level)
+    with book_tab:
+        _render_textbook(level)
+    with materials_tab:
+        _render_material_library(level)
     with grammar_tab:
         _render_pdf_library()
     with source_tab:
