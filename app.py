@@ -31,6 +31,28 @@ PROGRAMS = {
            "sheet_xuly": "Xử lý phát sinh IE"},
 }
 
+TRAINING_ALLOWED_EMAILS = {
+    "tt.minanh01@gmail.com",
+    "anhttm@ctv.hocmai.vn",
+}
+
+
+def _current_user():
+    """Return verified OIDC user claims, or an empty dict when logged out."""
+    user = getattr(st, "user", None)
+    if user is None:
+        return {}
+    try:
+        return user.to_dict()
+    except (AttributeError, TypeError):
+        return dict(user) if user else {}
+
+
+def _can_view_training():
+    user = _current_user()
+    email = str(user.get("email", "")).strip().casefold()
+    return bool(user.get("is_logged_in")) and email in TRAINING_ALLOWED_EMAILS
+
 # 13 cột đầu của cả 2 sheet lịch GV theo cùng thứ tự (chỉ khác nhãn cột).
 GV_COLS = ["Quốc tịch", "Mã GV", "Giáo viên", "Trình độ giảng dạy",
            "Khung giờ 1", "Khung giờ 2"] + DAYS
@@ -813,10 +835,13 @@ def render_teacher_schedule(sessions: pd.DataFrame):
 
 st.title("📚 Tra cứu thông tin")
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
-                                              "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên",
-                                              "⚠️ Cảnh báo phát sinh", "🔗 Phát sinh liên tiếp",
-                                              "🇬🇧 Training tiếng Anh", "🇨🇳 Training tiếng Trung"])
+base_tabs = ["🔍 Tìm GV rảnh / Cover", "👤 Tra cứu theo tên GV",
+             "🏫 Tra cứu Lớp học", "🎓 Tra cứu Học viên",
+             "⚠️ Cảnh báo phát sinh", "🔗 Phát sinh liên tiếp"]
+training_tabs = ["🇬🇧 Training tiếng Anh", "🇨🇳 Training tiếng Trung"] if _can_view_training() else []
+all_tabs = st.tabs(base_tabs + training_tabs)
+tab1, tab2, tab3, tab4, tab5, tab6 = all_tabs[:6]
+tab7, tab8 = all_tabs[6:] if training_tabs else (None, None)
 
 # ── Tab 1: Tìm GV rảnh / Tìm GV Cover ────────────────────────────────────────
 with tab1:
@@ -1406,14 +1431,25 @@ with tab6:
                 st.dataframe(streak_inc, use_container_width=True, hide_index=True)
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
-with tab7:
-    render_english_training()
-
-with tab8:
-    render_chinese_training()
+if _can_view_training() and tab7 is not None and tab8 is not None:
+    with tab7:
+        render_english_training()
+    with tab8:
+        render_chinese_training()
 
 with st.sidebar:
     st.markdown("### ⚙️ Cài đặt")
+    user = _current_user()
+    if user.get("is_logged_in"):
+        st.caption(f"Đã đăng nhập: {user.get('email', '')}")
+        if _can_view_training():
+            st.success("Đã mở quyền Training")
+        else:
+            st.info("Tài khoản này không có quyền xem Training.")
+        st.button("Đăng xuất", on_click=st.logout, use_container_width=True)
+    else:
+        st.caption("Đăng nhập bằng tài khoản được cấp quyền để mở hai mục Training.")
+        st.button("Đăng nhập Google", on_click=st.login, use_container_width=True)
     if st.button("🔄 Làm mới dữ liệu"):
         st.cache_data.clear()
         st.success("Đã xóa cache, dữ liệu sẽ được tải lại.")
