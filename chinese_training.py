@@ -64,6 +64,76 @@ PDF_LIBRARY = {
     },
 }
 
+CLASSIFIER_GROUPS = [
+    ("👤", "Người", "个 · 位 · 名", "gè · wèi · míng", "个 dùng chung; 位 lịch sự; 名 dùng trong danh sách/chính thức", "一个学生 · 一位老师 · 三名医生"),
+    ("📚", "Sách & tác phẩm", "本 · 册 · 部", "běn · cè · bù", "本 cho sách; 册 nhấn từng tập; 部 cho tác phẩm/phim", "一本书 · 两册词典 · 一部电影"),
+    ("📄", "Mặt phẳng", "张 · 面 · 幅", "zhāng · miàn · fú", "Liên tưởng vật có thể trải ra như một mặt phẳng", "一张纸 · 两面镜子 · 一幅画"),
+    ("🛣️", "Dài & mềm", "条 · 根 · 道", "tiáo · gēn · dào", "条 như một dải; 根 như một que/thân; 道 như một đường", "一条路 · 两根筷子 · 一道门"),
+    ("🐾", "Động vật", "只 · 匹 · 头", "zhī · pǐ · tóu", "只 dùng rộng; 匹 cho ngựa; 头 cho gia súc lớn", "一只猫 · 两匹马 · 三头牛"),
+    ("🚗", "Phương tiện", "辆 · 列 · 架", "liàng · liè · jià", "辆 xe bánh lốp; 列 đoàn tàu; 架 máy bay/máy móc", "一辆车 · 一列火车 · 两架飞机"),
+    ("🔁", "Lần & lượt", "次 · 遍 · 趟", "cì · biàn · tàng", "次 đếm lần; 遍 nhấn trọn quá trình; 趟 nhấn chuyến đi", "一次机会 · 读两遍 · 去一趟北京"),
+    ("👟", "Cặp & bộ", "双 · 对 · 套", "shuāng · duì · tào", "双 hai món giống nhau; 对 một đôi; 套 một bộ hoàn chỉnh", "一双鞋 · 一对夫妻 · 一套衣服"),
+]
+
+CLASSIFIER_QUIZ = [
+    ("___ 老师 (một giáo viên - cách nói lịch sự)", "位", ["个", "位", "本"]),
+    ("读两 ___ (đọc trọn vẹn hai lượt)", "遍", ["次", "遍", "趟"]),
+    ("一 ___ 火车 (một đoàn tàu)", "列", ["辆", "列", "架"]),
+    ("三 ___ 牛 (ba con bò)", "头", ["只", "匹", "头"]),
+    ("一 ___ 纸 (một tờ giấy)", "张", ["张", "条", "本"]),
+]
+
+MATERIAL_LESSON_TEMPLATES = {
+    "grammar": {
+        "icon": "🧩", "label": "Ngữ pháp",
+        "branches": ["Công thức", "Ngữ cảnh dùng", "Ví dụ đúng", "Lỗi thường gặp"],
+        "steps": ["Đọc công thức và xác định vị trí từng thành phần", "So sánh câu đúng với một lỗi dễ mắc", "Tự đặt 3 câu: khẳng định, phủ định, nghi vấn"],
+        "tips": ["Tô cùng màu cho các thành phần có cùng chức năng", "Đổi chủ ngữ/thời gian nhưng giữ nguyên khung câu", "Không học công thức mà thiếu ngữ cảnh"],
+    },
+    "textbook": {
+        "icon": "📘", "label": "Giáo trình",
+        "branches": ["Từ mới", "Hội thoại", "Điểm ngữ pháp", "Bài tập ứng dụng"],
+        "steps": ["Xem trước từ mới trong 5 phút", "Đọc/nghe hội thoại hai lượt", "Tóm tắt bài bằng 3 câu của chính bạn"],
+        "tips": ["Học theo một bài, không đọc lướt cả quyển", "Che bản dịch khi đọc lượt hai", "Đánh dấu từ cần chuyển sang flashcard"],
+    },
+    "exercise": {
+        "icon": "✍️", "label": "Bài tập",
+        "branches": ["Nhận dạng dạng bài", "Làm không xem đáp án", "Đối chiếu", "Sổ lỗi sai"],
+        "steps": ["Đặt đồng hồ và tự làm một lượt", "Ghi lý do cho từng câu sai", "Làm lại câu sai sau 24 giờ"],
+        "tips": ["Không chỉ chép đáp án đúng", "Gắn mỗi lỗi với một quy tắc", "Ôn lại theo chu kỳ 1-3-7 ngày"],
+    },
+    "vocabulary": {
+        "icon": "🃏", "label": "Từ vựng",
+        "branches": ["Hán tự", "Pinyin", "Nghĩa", "Câu ngữ cảnh"],
+        "steps": ["Nhìn Hán tự và tự đọc trước", "Nhớ từ theo cụm, không nhớ từ đơn", "Viết một câu liên hệ bản thân"],
+        "tips": ["Gom từ theo chủ đề", "Ôn hai chiều Hán-Việt và Việt-Hán", "Đọc thành tiếng để nhớ cả âm"],
+    },
+    "pronunciation": {
+        "icon": "🎧", "label": "Phiên âm & nghe",
+        "branches": ["Thanh mẫu", "Vận mẫu", "Thanh điệu", "Nhại âm"],
+        "steps": ["Nghe một câu không nhìn chữ", "Nghe lại và đánh dấu thanh điệu", "Nhại sát tốc độ, thu âm và so sánh"],
+        "tips": ["Luyện cặp âm dễ nhầm", "Giữ đường nét của thanh điệu trong cả câu", "Mỗi lượt chỉ sửa một lỗi phát âm"],
+    },
+    "radical": {
+        "icon": "🀄", "label": "Bộ thủ & chữ Hán",
+        "branches": ["Hình dạng", "Nghĩa gốc", "Vị trí trong chữ", "Họ từ liên quan"],
+        "steps": ["Nhìn bộ và đoán trường nghĩa", "Tách chữ thành các thành phần", "Viết theo đúng thứ tự nét"],
+        "tips": ["Gắn bộ thủ với một hình ảnh", "Học theo họ chữ có chung bộ", "Ưu tiên bộ xuất hiện trong từ đang học"],
+    },
+    "exam": {
+        "icon": "⏱️", "label": "Đề luyện HSK",
+        "branches": ["Canh thời gian", "Làm đề", "Phân loại lỗi", "Ôn điểm yếu"],
+        "steps": ["Làm trong điều kiện giống thi thật", "Chấm điểm theo từng kỹ năng", "Lập danh sách 5 lỗi cần sửa"],
+        "tips": ["Không dừng quá lâu ở một câu", "Phân biệt thiếu kiến thức và thiếu thời gian", "Làm lại đề sau một tuần"],
+    },
+    "reference": {
+        "icon": "🗂️", "label": "Tài liệu tham khảo",
+        "branches": ["Mục tiêu", "Ý chính", "Ví dụ", "Ứng dụng"],
+        "steps": ["Chọn một phần nhỏ cần học", "Ghi lại 3 ý quan trọng", "Áp dụng ngay bằng một ví dụ của bạn"],
+        "tips": ["Không đọc liên tục mà không ghi chú", "Biến tiêu đề thành câu hỏi", "Kết thúc bằng phần tự nhớ lại"],
+    },
+}
+
 
 VOCABULARY = {
     "HSK1": [
@@ -299,9 +369,19 @@ def _render_textbook(level):
         st.link_button("Mở giáo trình trên TeraBox ↗", TERABOX_URL)
         return
     st.markdown(f"### Sách giáo khoa {level}")
-    st.caption(f"Bản đầy đủ {book['pages']} trang. Có thể đọc ngay trong web hoặc mở toàn màn hình.")
+    st.caption(f"Bản đầy đủ {book['pages']} trang. Bài học trực quan được ưu tiên; sách gốc dùng để đối chiếu.")
     preview_url = f"https://drive.google.com/file/d/{book['id']}/preview"
-    components.iframe(preview_url, height=760, scrolling=True)
+    mode = st.radio(
+        "Cách học", ["🧠 Sơ đồ bài học", "📄 Sách gốc"], horizontal=True,
+        key=f"textbook_mode_{level}",
+    )
+    if mode.startswith("🧠"):
+        _render_material_smart_lesson({
+            "id": book["id"], "name": f"Sách giáo khoa chuẩn {level}",
+            "path": ["Giáo trình", level, f"Sách giáo khoa chuẩn {level}"], "type": "pdf",
+        }, level)
+    else:
+        components.iframe(preview_url, height=760, scrolling=True)
     st.link_button("Mở sách toàn màn hình ↗", f"https://drive.google.com/file/d/{book['id']}/view")
 
 
@@ -311,6 +391,122 @@ def _material_levels(item):
     for start, end in re.findall(r"(?:HSK\s*)?([1-6])\s*[-–]\s*([1-6])", text):
         found.update(str(number) for number in range(int(start), int(end) + 1))
     return {f"HSK{value}" for value in found}
+
+
+def _render_classifier_lesson():
+    st.markdown("## 168 lượng từ - học theo hình ảnh")
+    st.caption("Chọn lượng từ bằng hình dáng và ngữ cảnh, thay vì học thuộc một danh sách dài.")
+    st.markdown(
+        """
+        <div style="padding:22px;border-radius:18px;background:linear-gradient(135deg,#fff7ed,#f5f3ff);border:1px solid #eadcff">
+          <div style="text-align:center;font-size:26px;font-weight:800;color:#5b21b6">DANH TỪ</div>
+          <div style="text-align:center;color:#7c3aed;font-size:22px;margin:4px">↓ nhìn hình dáng / chức năng ↓</div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;text-align:center">
+            <div style="padding:12px;background:#fff;border-radius:12px">👤 Người</div>
+            <div style="padding:12px;background:#fff;border-radius:12px">📄 Mặt phẳng</div>
+            <div style="padding:12px;background:#fff;border-radius:12px">🛣️ Dài & mềm</div>
+            <div style="padding:12px;background:#fff;border-radius:12px">🔁 Lần & lượt</div>
+          </div>
+          <div style="text-align:center;font-size:22px;margin:10px">↓</div>
+          <div style="text-align:center;font-size:23px;font-weight:750;color:#9a3412">Số + LƯỢNG TỪ + Danh từ</div>
+          <div style="text-align:center;margin-top:5px">三 + 本 + 书 &nbsp;→&nbsp; 三本书 · ba quyển sách</div>
+        </div>
+        """, unsafe_allow_html=True,
+    )
+
+    st.markdown("### Bản đồ ghi nhớ")
+    for start in range(0, len(CLASSIFIER_GROUPS), 2):
+        columns = st.columns(2)
+        for column, group in zip(columns, CLASSIFIER_GROUPS[start:start + 2]):
+            icon, title, words, pinyin, tip, example = group
+            with column:
+                st.markdown(
+                    f"<div style='min-height:185px;padding:16px;border:1px solid #e5e7eb;border-radius:16px;margin-bottom:10px'>"
+                    f"<div style='font-size:22px;font-weight:750'>{icon} {title}</div>"
+                    f"<div style='font-size:25px;color:#7c3aed;font-weight:800;margin-top:6px'>{words}</div>"
+                    f"<div style='color:#6b7280'>{pinyin}</div><hr style='border:none;border-top:1px solid #eee'>"
+                    f"<div>💡 {tip}</div><div style='margin-top:8px;color:#9a3412'>{example}</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+    st.markdown("### 3 mẹo dùng đúng")
+    tip1, tip2, tip3 = st.columns(3)
+    tip1.info("**1. Nhìn hình**\n\nVật mỏng/phẳng thường nghĩ đến 张; vật dài như dải thường nghĩ đến 条.")
+    tip2.info("**2. Nhìn hành động**\n\n次 chỉ số lần; 遍 là làm hết từ đầu đến cuối; 趟 là một chuyến đi-về.")
+    tip3.info("**3. Nhìn sắc thái**\n\n个 an toàn và phổ thông; 位 thể hiện sự tôn trọng khi nói về người.")
+    st.warning("**Mẹo từ tài liệu:** lượng từ lặp lại diễn tả hành động nối tiếp: 一遍一遍地读 = đọc hết lượt này đến lượt khác.")
+
+    st.markdown("### Tự kiểm tra trong 60 giây")
+    with st.form("classifier_quiz"):
+        answers = [st.radio(question, options, horizontal=True, key=f"classifier_q_{index}") for index, (question, _, options) in enumerate(CLASSIFIER_QUIZ)]
+        submitted = st.form_submit_button("Chấm điểm", use_container_width=True)
+    if submitted:
+        score = sum(answer == correct for answer, (_, correct, _) in zip(answers, CLASSIFIER_QUIZ))
+        st.success(f"Bạn đúng {score}/{len(CLASSIFIER_QUIZ)} câu.")
+        if score < len(CLASSIFIER_QUIZ):
+            corrections = [f"{index + 1}. **{correct}**" for index, (answer, (_, correct, _)) in enumerate(zip(answers, CLASSIFIER_QUIZ)) if answer != correct]
+            st.markdown("Câu cần xem lại: " + " · ".join(corrections))
+
+
+def _material_lesson_type(item):
+    text = " ".join(item.get("path", []) + [item.get("name", "")]).casefold()
+    if any(word in text for word in ["ngữ pháp", "ngu phap", "sửa lỗi", "sua loi"]):
+        return "grammar"
+    if any(word in text for word in ["bài tập", "bai tap", "-bt", "đáp án", "dap an", "sắp xếp câu"]):
+        return "exercise"
+    if any(word in text for word in ["mp3", "audio", "phiên âm", ".jpg"]):
+        return "pronunciation"
+    if any(word in text for word in ["bộ thủ", "bo thu", "hán tự", "han tu", "tập viết"]):
+        return "radical"
+    if any(word in text for word in ["từ vựng", "tu vung", "đàm thoại", "dam thoai"]):
+        return "vocabulary"
+    if re.search(r"h1\d{4}", text) or "tổng hợp hsk1" in text:
+        return "exam"
+    if any(word in text for word in ["giáo trình", "giao trinh", "boya", "sách giáo khoa"]):
+        return "textbook"
+    return "reference"
+
+
+def _render_material_smart_lesson(item, level):
+    lesson_type = _material_lesson_type(item)
+    template = MATERIAL_LESSON_TEMPLATES[lesson_type]
+    detected_levels = sorted(_material_levels(item))
+    level_label = ", ".join(detected_levels) if detected_levels else f"Có thể dùng bổ trợ cho {level}"
+    title = item.get("name", "Tài liệu")
+
+    st.markdown(f"## {template['icon']} {title.rsplit('.', 1)[0]}")
+    st.caption(f"Dạng học: {template['label']} · Cấp độ: {level_label}")
+    branch_html = "".join(
+        f"<div style='padding:13px 8px;background:#fff;border:1px solid #e9d5ff;border-radius:12px;text-align:center;font-weight:650'>{branch}</div>"
+        for branch in template["branches"]
+    )
+    st.markdown(
+        f"<div style='padding:20px;border-radius:18px;background:linear-gradient(135deg,#faf5ff,#eff6ff);border:1px solid #ddd6fe'>"
+        f"<div style='text-align:center;font-size:24px;font-weight:800;color:#6d28d9'>{template['label'].upper()}</div>"
+        f"<div style='text-align:center;color:#8b5cf6;font-size:20px;margin:5px'>↓ học theo 4 nhánh ↓</div>"
+        f"<div style='display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:9px'>{branch_html}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### Lộ trình học tài liệu này")
+    cols = st.columns(3)
+    for index, (column, step) in enumerate(zip(cols, template["steps"]), 1):
+        column.markdown(
+            f"<div style='min-height:130px;padding:15px;border-radius:14px;border:1px solid #e5e7eb'>"
+            f"<div style='font-size:23px;font-weight:800;color:#7c3aed'>0{index}</div><div>{step}</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Mẹo ghi nhớ & sử dụng")
+    for tip in template["tips"]:
+        st.markdown(f"- 💡 {tip}")
+
+    with st.expander("📝 Phiếu học nhanh", expanded=True):
+        st.text_area("Ba ý chính", placeholder="1. ...\n2. ...\n3. ...", key=f"notes_key_{item['id']}", height=100)
+        left, right = st.columns(2)
+        left.text_input("Một ví dụ tự đặt", key=f"example_key_{item['id']}")
+        right.select_slider("Mức độ đã hiểu", ["Chưa rõ", "Nhận biết", "Hiểu", "Dùng được"], key=f"mastery_key_{item['id']}")
+        st.checkbox("Tôi có thể giải thích lại mà không nhìn tài liệu", key=f"recall_key_{item['id']}")
 
 
 def _render_material_library(level):
@@ -348,10 +544,21 @@ def _render_material_library(level):
     st.markdown(f"**{selected['name']}**")
     st.caption(" › ".join(selected.get("path", [])))
     file_url = f"https://drive.google.com/file/d/{selected['id']}/view"
-    if selected.get("type") == "pdf":
-        components.iframe(f"https://drive.google.com/file/d/{selected['id']}/preview", height=760, scrolling=True)
+    is_classifier_lesson = "168 luong tu" in selected["name"].casefold()
+    display_mode = st.radio(
+        "Cách học", ["🧠 Bài học trực quan", "📄 Tài liệu gốc"], horizontal=True,
+        key=f"material_display_{selected['id']}",
+    )
+    if display_mode.startswith("🧠"):
+        if is_classifier_lesson:
+            _render_classifier_lesson()
+        else:
+            _render_material_smart_lesson(selected, level)
     else:
-        st.info("Định dạng này được mở bằng trình xem của Google Drive.")
+        if selected.get("type") == "pdf":
+            components.iframe(f"https://drive.google.com/file/d/{selected['id']}/preview", height=760, scrolling=True)
+        else:
+            st.info("Định dạng này được mở bằng trình xem của Google Drive.")
     st.link_button("Mở toàn màn hình trên Drive ↗", file_url)
 
 
@@ -384,12 +591,21 @@ def _render_pdf_library():
         f"<div>{material['summary']}</div></div>", unsafe_allow_html=True,
     )
 
-    st.markdown("**Cách học nhanh:**")
-    for index, step in enumerate(material["focus"], 1):
-        st.markdown(f"{index}. {step}")
-
     preview_url = f"https://drive.google.com/file/d/{material['file_id']}/preview"
-    components.iframe(preview_url, height=720, scrolling=True)
+    mode = st.radio(
+        "Cách học", ["🧠 Sơ đồ bài học", "📄 PDF đối chiếu"], horizontal=True,
+        key=f"grammar_mode_{material['file_id']}",
+    )
+    if mode.startswith("🧠"):
+        _render_material_smart_lesson({
+            "id": material["file_id"], "name": topic,
+            "path": ["Thư viện ngữ pháp", material["level"], topic], "type": "pdf",
+        }, material["level"].split("-")[0])
+        st.markdown("### Trọng tâm riêng của tài liệu")
+        for index, step in enumerate(material["focus"], 1):
+            st.markdown(f"- **{index}.** {step}")
+    else:
+        components.iframe(preview_url, height=720, scrolling=True)
     st.link_button("Mở toàn màn hình ↗", f"https://drive.google.com/file/d/{material['file_id']}/view")
 
 
