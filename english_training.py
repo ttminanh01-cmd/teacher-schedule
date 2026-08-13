@@ -9,6 +9,7 @@ import streamlit.components.v1 as components
 CATALOG_PATH = Path(__file__).with_name("course_catalog_raw.json")
 EXTENDED_VOCAB_PATH = Path(__file__).with_name("english_vocab_extended.json")
 LANGUAGE_RESOURCES_PATH = Path(__file__).with_name("language_resources.json")
+VSTEP_DRIVE_FOLDER = "https://drive.google.com/drive/folders/1Gev0rkSGNqk22xZaOEuUQbSNYTzfgFGo?usp=sharing"
 
 WORKPLACE_PATH = {
     "Pre-A1 · Khởi động": {
@@ -329,6 +330,17 @@ VSTEP_DAILY_TOPICS = [
 ]
 
 VSTEP_DAY_SKILLS = ["Tổng hợp", "Grammar", "Reading", "Listening", "Writing", "Speaking", "Review"]
+
+VSTEP_WEEK_MATERIALS = {
+    1: ("Grammar for VSTEP", "Ôn các thì, cấu trúc câu và ghi lỗi ngữ pháp thường gặp."),
+    2: ("1000 từ vựng tiếng Anh theo chủ đề", "Chọn từ đúng chủ đề đang học; ưu tiên cụm từ và câu ví dụ."),
+    3: ("Tài liệu Speaking VSTEP", "Luyện Part 1 và xây khung trả lời tự nhiên, không học thuộc cả đoạn."),
+    4: ("Bộ đề VSTEP 1", "Làm Writing Task 1 và Speaking Part 2; đối chiếu bài mẫu sau khi tự làm."),
+    5: ("Bộ đề VSTEP 2", "Làm Writing Task 2 và Speaking Part 3; phân tích cách triển khai ý."),
+    6: ("Bộ đề VSTEP 3", "Làm Reading và Listening đúng thời gian; ghi bằng chứng cho câu sai."),
+    7: ("Bộ đề VSTEP 4", "Thi thử đủ bốn kỹ năng và lập bảng lỗi theo nguyên nhân."),
+    8: ("Bộ đề VSTEP 5", "Tổng duyệt như thi thật; chỉ xem đáp án sau khi hoàn thành toàn bộ."),
+}
 
 
 def _build_vstep_days():
@@ -653,6 +665,7 @@ def render_vstep_b1_path():
     with st.expander("Nguồn chính thức"):
         st.markdown("- [Định dạng đề thi VSTEP.3-5 – ULIS, ĐHQGHN](https://vstep.vnu.edu.vn/files/uploads/2020/12/Dinh-dang-VSTEP.3-5.pdf)")
         st.markdown("- [Bảng điểm và cấp độ VSTEP.3-5 – ULIS, ĐHQGHN](https://vstep.vnu.edu.vn/scores-levels/)")
+        st.markdown(f"- [Kho tài liệu VSTEP cá nhân dùng để luyện đề]({VSTEP_DRIVE_FOLDER})")
 
 
 def _change_vstep_day(delta):
@@ -700,6 +713,12 @@ def _render_vstep_daily_path():
         for index, task in enumerate(lesson["tasks"])
     ]
     st.info(f"**Bài thực hành:** {lesson['practice']}")
+    material_name, material_use = VSTEP_WEEK_MATERIALS[lesson["week"]]
+    with st.expander(f"📚 Tài liệu sát đề tuần này · {material_name}", expanded=selected_day % 7 == 1):
+        st.write(material_use)
+        if lesson["week"] >= 4:
+            st.caption(f"Trong bộ ‘VSTEP 5 bộ đề B1–B2’, dùng đề số {lesson['week'] - 3}. Chỉ xem đáp án/bài mẫu sau khi đã bấm giờ làm xong.")
+        st.link_button("Mở kho tài liệu VSTEP của bạn ↗", VSTEP_DRIVE_FOLDER)
 
     if lesson["skill"] == "Listening":
         _render_vstep_objective_test("listening", VSTEP_LISTENING_TEST, key_suffix=f"day_{selected_day}")
