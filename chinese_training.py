@@ -75,6 +75,8 @@ PDF_LIBRARY = {
 GRAMMAR_LESSONS = {
     "Tổng hợp ngữ pháp": {
         "formula": "Thời gian + Chủ ngữ + Trạng ngữ + Động từ + Tân ngữ",
+        "formula_pinyin": "Shíjiān + zhǔyǔ + zhuàngyǔ + dòngcí + bīnyǔ",
+        "formula_meaning": "Khi nào + ai + trong hoàn cảnh nào + làm gì + với cái gì/ai",
         "use": "Khung câu nền tảng để sắp xếp thành phần; từ chỉ thời gian thường đứng đầu câu hoặc sau chủ ngữ.",
         "branches": [
             ("Trật tự câu", "Ai · khi nào · ở đâu · làm gì", "我今天在公司学习。", "Wǒ jīntiān zài gōngsī xuéxí.", "Hôm nay tôi học ở công ty."),
@@ -83,8 +85,19 @@ GRAMMAR_LESSONS = {
             ("Trợ từ", "了: thay đổi/hoàn thành · 过: trải nghiệm · 着: trạng thái", "我学过汉语。", "Wǒ xuéguo Hànyǔ.", "Tôi từng học tiếng Trung."),
         ],
         "mistakes": ["Không đảo từ để hỏi lên đầu câu như tiếng Việt/Anh.", "Không dùng 不 cho một hành động đã không xảy ra trong quá khứ; thường dùng 没(有)."],
+        "key_terms": [
+            ("不", "bù", "phủ định cho hiện tại/thói quen"),
+            ("没", "méi", "phủ định cho việc đã không xảy ra trong quá khứ"),
+            ("了", "le", "đánh dấu sự thay đổi hoặc hành động đã hoàn thành"),
+            ("过", "guò", "đã từng trải nghiệm việc này"),
+            ("着", "zhe", "hành động/trạng thái đang tiếp diễn"),
+            ("吗", "ma", "trợ từ tạo câu hỏi có/không"),
+            ("呢", "ne", "trợ từ hỏi lại hoặc hỏi tiếp diễn"),
+        ],
         "quiz": {
             "question": "Chọn câu đúng cho ‘Hôm qua tôi không đi làm’",
+            "question_pinyin": "Zuótiān wǒ méi shàngbān.",
+            "question_meaning": "Hôm qua tôi không đi làm.",
             "answer": "我昨天没上班。",
             "options": [
                 ("我昨天不上班。", "Wǒ zuótiān bù shàngbān."),
@@ -95,6 +108,8 @@ GRAMMAR_LESSONS = {
     },
     "Câu chữ 被": {
         "formula": "Chủ thể chịu tác động + 被 + tác nhân + động từ + kết quả/bổ ngữ",
+        "formula_pinyin": "Zhǔtǐ + bèi + zuòzhě + dòngcí + jiéguǒ/bǔyǔ",
+        "formula_meaning": "Đối tượng bị tác động + bị/được + người gây ra + hành động + kết quả",
         "use": "Dùng khi muốn nhấn mạnh đối tượng bị tác động hoặc kết quả của hành động; tác nhân có thể được lược bỏ.",
         "branches": [
             ("Đối tượng", "Đứng trước 被", "我的手机被他拿走了。", "Wǒ de shǒujī bèi tā názǒu le.", "Điện thoại của tôi bị anh ấy cầm đi."),
@@ -113,6 +128,8 @@ GRAMMAR_LESSONS = {
     },
     "Cấu trúc 是...的": {
         "formula": "Chủ ngữ + 是 + thành phần cần nhấn mạnh + động từ + 的",
+        "formula_pinyin": "Zhǔyǔ + shì + qiángdiào chéngfèn + dòngcí + de",
+        "formula_meaning": "Ai/cái gì + chính là + thời gian/nơi chốn/cách thức/người + hành động + trợ từ nhấn mạnh",
         "use": "Nhấn mạnh thời gian, địa điểm, cách thức hoặc người thực hiện của một việc đã xảy ra.",
         "branches": [
             ("Thời gian", "是 + thời gian + V + 的", "我是昨天到的。", "Wǒ shì zuótiān dào de.", "Tôi đến hôm qua."),
@@ -120,7 +137,7 @@ GRAMMAR_LESSONS = {
             ("Cách thức", "是 + bằng cách nào + V + 的", "他是坐地铁来的。", "Tā shì zuò dìtiě lái de.", "Anh ấy đến bằng tàu điện ngầm."),
             ("Chủ thể", "是 + người + V + 的", "这封邮件是经理写的。", "Zhè fēng yóujiàn shì jīnglǐ xiě de.", "Email này do quản lý viết."),
         ],
-        "mistakes": ["Không dùng để kể một hành động chưa xảy ra.", "Trong câu phủ định, đặt 不 sau 是: 不是...的."],
+        "mistakes": ["Không dùng để kể một hành động chưa xảy ra.", "Trong câu phủ định dùng 不是……的 · bú shì... de · không phải là/chính là…"],
         "quiz": {
             "question": "Điền từ: 我 ___ 坐飞机来的。",
             "question_pinyin": "Wǒ ___ zuò fēijī lái de.",
@@ -131,6 +148,8 @@ GRAMMAR_LESSONS = {
     },
     "Động từ ly hợp": {
         "formula": "Động từ + (了/过/số lượng/thời lượng) + tân tố",
+        "formula_pinyin": "Dòngcí + (le/guo/shùliàng/shíliàng) + bīnyǔ",
+        "formula_meaning": "Phần động từ + trợ từ/số lần/thời lượng + phần tân ngữ",
         "use": "Một số động từ hai âm tiết thực chất là động từ + tân ngữ, nên phải tách khi thêm lượng, thời gian hoặc trợ từ.",
         "branches": [
             ("Trợ từ", "V + 了/过 + O", "我已经吃了饭。", "Wǒ yǐjīng chī le fàn.", "Tôi ăn cơm rồi."),
@@ -141,6 +160,8 @@ GRAMMAR_LESSONS = {
         "mistakes": ["Không nói 见面了两次; nói 见了两次面.", "Không thêm tân ngữ lần hai sau động từ ly hợp; dùng 跟/和 + người + 见面."],
         "quiz": {
             "question": "Chọn câu đúng cho ‘Tôi ngủ tám tiếng’",
+            "question_pinyin": "Wǒ shuì le bā ge xiǎoshí jiào.",
+            "question_meaning": "Tôi đã ngủ tám tiếng.",
             "answer": "我睡了八个小时觉。",
             "options": [
                 ("我睡觉了八个小时。", "Wǒ shuìjiào le bā ge xiǎoshí."),
@@ -149,6 +170,102 @@ GRAMMAR_LESSONS = {
             ],
         },
     },
+}
+
+HANZI_LESSONS = {
+    "Học 50 bộ thủ chữ Hán": {
+        "center": "BỘ THỦ · 部首",
+        "center_pinyin": "bùshǒu",
+        "center_meaning": "thành phần gợi nhóm nghĩa và giúp tra chữ",
+        "branches": [
+            ("Người", "亻", "rén", "người", "你 nǐ — bạn · 他 tā — anh ấy · 住 zhù — sống"),
+            ("Nước", "氵", "shuǐ", "nước/chất lỏng", "河 hé — sông · 海 hǎi — biển · 洗 xǐ — rửa"),
+            ("Miệng", "口", "kǒu", "miệng/lời nói", "吃 chī — ăn · 喝 hē — uống · 唱 chàng — hát"),
+            ("Tâm", "忄/心", "xīn", "tình cảm/tâm lý", "忙 máng — bận · 快 kuài — vui/nhanh · 想 xiǎng — nghĩ"),
+            ("Tay", "扌", "shǒu", "động tác bằng tay", "打 dǎ — đánh/gọi · 找 zhǎo — tìm · 拿 ná — cầm"),
+            ("Cây", "木", "mù", "cây/gỗ", "林 lín — rừng · 杯 bēi — cốc · 桌 zhuō — bàn"),
+            ("Lửa", "火/灬", "huǒ", "lửa/nhiệt", "热 rè — nóng · 照 zhào — chiếu · 灯 dēng — đèn"),
+            ("Lời nói", "讠", "yán", "nói/ngôn ngữ", "说 shuō — nói · 话 huà — lời nói · 请 qǐng — mời"),
+        ],
+        "tips": ["Bộ thủ gợi nhóm nghĩa, không luôn cho biết toàn bộ nghĩa của chữ.", "Đọc cả chữ bằng pinyin của chữ; không đọc chữ theo tên bộ thủ.", "Mỗi lần học một bộ, tìm thêm ba chữ có cùng bộ."],
+    },
+    "Tập viết các nét cơ bản": {
+        "center": "NÉT CƠ BẢN · 基本笔画",
+        "center_pinyin": "jīběn bǐhuà",
+        "center_meaning": "các nét cấu tạo nên chữ Hán",
+        "branches": [
+            ("Ngang", "一", "héng", "nét ngang", "三 sān — ba · 王 wáng — vua/họ Vương"),
+            ("Sổ", "丨", "shù", "nét dọc", "十 shí — mười · 中 zhōng — giữa"),
+            ("Phẩy", "丿", "piě", "phẩy trái", "人 rén — người · 八 bā — tám"),
+            ("Mác", "㇏", "nà", "mác phải", "大 dà — lớn · 天 tiān — trời/ngày"),
+            ("Chấm", "丶", "diǎn", "nét chấm", "六 liù — sáu · 文 wén — văn"),
+            ("Hất", "㇀", "tí", "nét hất", "打 dǎ — đánh/gọi · 冰 bīng — băng"),
+        ],
+        "tips": ["Viết từ trên xuống dưới, trái sang phải.", "Ngang trước sổ sau; phẩy trước mác sau.", "Khung ngoài thường viết trước, đóng khung sau cùng."],
+    },
+    "Vở kẻ ô luyện viết chữ Hán": {
+        "center": "Ô CHỮ ĐIỀN · 田字格",
+        "center_pinyin": "tiánzìgé",
+        "center_meaning": "ô vuông chia bốn giúp căn vị trí và tỷ lệ chữ",
+        "branches": [
+            ("Trái–phải", "你", "nǐ", "bạn", "亻 hẹp hơn 尔; giữ hai phần cân bằng"),
+            ("Trên–dưới", "学", "xué", "học", "phần trên gọn; 子 nằm giữa phía dưới"),
+            ("Bao quanh", "国", "guó", "nước/quốc gia", "viết khung ngoài trước, 玉 bên trong, đóng đáy cuối"),
+            ("Độc thể", "人", "rén", "người", "hai nét gặp nhau gần tâm ô; mác dài hơn phẩy"),
+        ],
+        "tips": ["Quan sát tâm ô và đường giữa trước khi đặt bút.", "Viết một chữ chậm và đúng tốt hơn chép nhanh nhiều lần.", "Sau mỗi dòng, khoanh chữ cân đối nhất để làm mẫu cho dòng tiếp theo."],
+    },
+}
+
+HSK_GRAMMAR_COURSE = {
+    "HSK1": [
+        ("Câu 是", "A + 是 + B", "A + shì + B", "A là B", "我是老师。", "Wǒ shì lǎoshī.", "Tôi là giáo viên."),
+        ("Câu hỏi 吗", "Câu trần thuật + 吗？", "Jùzi + ma?", "…phải không?", "你是学生吗？", "Nǐ shì xuésheng ma?", "Bạn là học sinh phải không?"),
+        ("Phủ định 不", "Chủ ngữ + 不 + động từ/tính từ", "Zhǔyǔ + bù + dòngcí/xíngróngcí", "không làm/không…", "我不喝咖啡。", "Wǒ bù hē kāfēi.", "Tôi không uống cà phê."),
+        ("Sở hữu với 的", "Người/vật + 的 + danh từ", "Rén/wù + de + míngcí", "danh từ của ai/cái gì", "这是我的书。", "Zhè shì wǒ de shū.", "Đây là sách của tôi."),
+        ("Có với 有", "Chủ ngữ + 有 + tân ngữ", "Zhǔyǔ + yǒu + bīnyǔ", "ai/nơi nào có gì", "我家有三个人。", "Wǒ jiā yǒu sān ge rén.", "Nhà tôi có ba người."),
+        ("Từ để hỏi", "Ai/cái gì/ở đâu đặt đúng vị trí câu trả lời", "Shéi/shénme/nǎr", "谁 ai · 什么 gì · 哪儿 đâu", "你去哪儿？", "Nǐ qù nǎr?", "Bạn đi đâu?"),
+    ],
+    "HSK2": [
+        ("Đã hoàn thành với 了", "Động từ + 了 + tân ngữ", "Dòngcí + le + bīnyǔ", "hành động đã hoàn thành", "我买了三本书。", "Wǒ mǎi le sān běn shū.", "Tôi đã mua ba quyển sách."),
+        ("Đang diễn ra 在/正在", "Chủ ngữ + 正在 + động từ + 呢", "Zhǔyǔ + zhèngzài + dòngcí + ne", "đang làm gì", "他正在看书呢。", "Tā zhèngzài kànshū ne.", "Anh ấy đang đọc sách."),
+        ("Kinh nghiệm với 过", "Động từ + 过 + tân ngữ", "Dòngcí + guo + bīnyǔ", "đã từng làm", "我去过北京。", "Wǒ qùguo Běijīng.", "Tôi từng đến Bắc Kinh."),
+        ("So sánh với 比", "A + 比 + B + tính từ", "A + bǐ + B + xíngróngcí", "A … hơn B", "今天比昨天冷。", "Jīntiān bǐ zuótiān lěng.", "Hôm nay lạnh hơn hôm qua."),
+        ("Vì… nên…", "因为…，所以…", "Yīnwèi..., suǒyǐ...", "vì… nên…", "因为下雨，所以我没去。", "Yīnwèi xiàyǔ, suǒyǐ wǒ méi qù.", "Vì mưa nên tôi không đi."),
+        ("Bổ ngữ trạng thái 得", "Động từ + 得 + tính từ", "Dòngcí + de + xíngróngcí", "làm như thế nào", "她汉语说得很好。", "Tā Hànyǔ shuō de hěn hǎo.", "Cô ấy nói tiếng Trung rất tốt."),
+    ],
+    "HSK3": [
+        ("Câu 把", "Chủ ngữ + 把 + tân ngữ + động từ + kết quả", "Zhǔyǔ + bǎ + bīnyǔ + dòngcí + jiéguǒ", "xử lý/làm thay đổi một vật xác định", "请把门关上。", "Qǐng bǎ mén guānshang.", "Vui lòng đóng cửa lại."),
+        ("Cấu trúc 是…的", "Chủ ngữ + 是 + phần nhấn mạnh + động từ + 的", "Zhǔyǔ + shì + qiángdiào + dòngcí + de", "nhấn mạnh chi tiết việc đã xảy ra", "我是昨天来的。", "Wǒ shì zuótiān lái de.", "Tôi đến hôm qua."),
+        ("Càng… càng…", "越 A 越 B", "Yuè A yuè B", "càng A càng B", "天气越来越冷。", "Tiānqì yuèláiyuè lěng.", "Thời tiết ngày càng lạnh."),
+        ("Vừa… vừa…", "一边 A，一边 B", "Yìbiān A, yìbiān B", "hai hành động đồng thời", "他一边吃饭，一边看电视。", "Tā yìbiān chīfàn, yìbiān kàn diànshì.", "Anh ấy vừa ăn vừa xem TV."),
+        ("Bổ ngữ kết quả", "Động từ + 完/到/懂/好", "Dòngcí + wán/dào/dǒng/hǎo", "kết quả của hành động", "我听懂了。", "Wǒ tīngdǒng le.", "Tôi đã nghe hiểu."),
+        ("Nếu… thì…", "如果…，就…", "Rúguǒ..., jiù...", "nếu… thì…", "如果有时间，我就去。", "Rúguǒ yǒu shíjiān, wǒ jiù qù.", "Nếu có thời gian tôi sẽ đi."),
+    ],
+    "HSK4": [
+        ("Câu bị động 被", "Chủ thể + 被 + tác nhân + động từ + kết quả", "Zhǔtǐ + bèi + zuòzhě + dòngcí + jiéguǒ", "bị/được tác động", "会议被取消了。", "Huìyì bèi qǔxiāo le.", "Cuộc họp đã bị hủy."),
+        ("Không những… mà còn…", "不但…，而且…", "Búdàn..., érqiě...", "bổ sung hai đặc điểm tăng tiến", "他不但会说汉语，而且会写汉字。", "Tā búdàn huì shuō Hànyǔ, érqiě huì xiě Hànzì.", "Anh ấy không chỉ nói được mà còn viết được tiếng Trung."),
+        ("Chỉ cần… thì…", "只要…，就…", "Zhǐyào..., jiù...", "điều kiện đủ", "只要坚持，就会进步。", "Zhǐyào jiānchí, jiù huì jìnbù.", "Chỉ cần kiên trì thì sẽ tiến bộ."),
+        ("Dù… vẫn…", "虽然…，但是/可是…", "Suīrán..., dànshì/kěshì...", "tương phản nhượng bộ", "虽然很累，但是他还在工作。", "Suīrán hěn lèi, dànshì tā hái zài gōngzuò.", "Dù rất mệt nhưng anh ấy vẫn làm việc."),
+        ("Bổ ngữ xu hướng", "Động từ + 来/去 · 上/下/进/出/回/过/起", "Dòngcí + lái/qù...", "hướng di chuyển", "请进来坐吧。", "Qǐng jìnlái zuò ba.", "Mời vào trong ngồi."),
+        ("Ngoài… còn…", "除了 A 以外，还/也 B", "Chúle A yǐwài, hái/yě B", "ngoài A còn B", "除了汉语以外，她还学日语。", "Chúle Hànyǔ yǐwài, tā hái xué Rìyǔ.", "Ngoài tiếng Trung cô ấy còn học tiếng Nhật."),
+    ],
+    "HSK5": [
+        ("Thay vì… chi bằng…", "与其 A，不如 B", "Yǔqí A, bùrú B", "B được đánh giá tốt hơn A", "与其等别人，不如自己开始。", "Yǔqí děng biérén, bùrú zìjǐ kāishǐ.", "Thay vì đợi người khác, chi bằng tự bắt đầu."),
+        ("Ngay cả… cũng…", "连 A 都/也 B", "Lián A dōu/yě B", "nhấn mạnh trường hợp cực đoan", "这个问题连老师都不知道。", "Zhège wèntí lián lǎoshī dōu bù zhīdào.", "Câu này ngay cả giáo viên cũng không biết."),
+        ("Bất kể… đều…", "无论/不管 A，都 B", "Wúlùn/bùguǎn A, dōu B", "kết quả không đổi dù điều kiện khác", "无论多忙，他都坚持运动。", "Wúlùn duō máng, tā dōu jiānchí yùndòng.", "Dù bận thế nào anh ấy vẫn tập thể dục."),
+        ("Sở dĩ… là vì…", "之所以 A，是因为 B", "Zhīsuǒyǐ A, shì yīnwèi B", "nêu kết quả rồi giải thích nguyên nhân", "他之所以成功，是因为很努力。", "Tā zhīsuǒyǐ chénggōng, shì yīnwèi hěn nǔlì.", "Anh ấy thành công là vì rất nỗ lực."),
+        ("Không phải… mà là…", "不是 A，而是 B", "Bú shì A, ér shì B", "bác bỏ A và khẳng định B", "这不是运气，而是努力的结果。", "Zhè bú shì yùnqi, ér shì nǔlì de jiéguǒ.", "Đây không phải may mắn mà là kết quả của nỗ lực."),
+        ("Hễ… thì…", "一 A，就 B", "Yī A, jiù B", "B xảy ra ngay sau/mỗi khi A", "他一到家就给我打电话。", "Tā yí dào jiā jiù gěi wǒ dǎ diànhuà.", "Anh ấy vừa về nhà là gọi cho tôi."),
+    ],
+    "HSK6": [
+        ("Cho dù… cũng…", "即使/哪怕 A，也 B", "Jíshǐ/nǎpà A, yě B", "giả định nhượng bộ mạnh", "即使失败了，也要继续尝试。", "Jíshǐ shībài le, yě yào jìxù chángshì.", "Cho dù thất bại vẫn phải tiếp tục thử."),
+        ("Nếu không… thì…", "除非 A，否则 B", "Chúfēi A, fǒuzé B", "A là điều kiện cần để tránh B", "除非你同意，否则我们不能决定。", "Chúfēi nǐ tóngyì, fǒuzé wǒmen bùnéng juédìng.", "Trừ khi bạn đồng ý, nếu không chúng tôi không thể quyết định."),
+        ("Chưa kể…", "尚且 A，何况 B", "Shàngqiě A, hékuàng B", "A đã vậy, B càng hiển nhiên", "这么简单的问题他尚且不会，何况更难的。", "Zhème jiǎndān de wèntí tā shàngqiě bú huì, hékuàng gèng nán de.", "Câu đơn giản thế anh ấy còn không biết, huống chi câu khó hơn."),
+        ("Không đến mức…", "不至于 + động từ/tính từ", "Bú zhìyú + dòngcí/xíngróngcí", "chưa nghiêm trọng đến mức", "一次失败不至于让他放弃。", "Yí cì shībài bú zhìyú ràng tā fàngqì.", "Một lần thất bại chưa đến mức khiến anh ấy bỏ cuộc."),
+        ("Xét từ góc độ…", "从…来看/而言", "Cóng... lái kàn/éryán", "đặt phạm vi hoặc góc nhìn lập luận", "从长远来看，这个决定是正确的。", "Cóng chángyuǎn lái kàn, zhège juédìng shì zhèngquè de.", "Xét về lâu dài, quyết định này là đúng."),
+        ("Không thể không…", "不得不/不能不 + động từ", "Bùdébù/bùnéngbù + dòngcí", "bắt buộc/không thể tránh", "面对事实，我们不得不改变计划。", "Miànduì shìshí, wǒmen bùdébù gǎibiàn jìhuà.", "Trước sự thật, chúng tôi buộc phải đổi kế hoạch."),
+    ],
 }
 
 CLASSIFIER_GROUPS = [
@@ -705,6 +822,13 @@ def _render_material_smart_lesson(item, level):
         unsafe_allow_html=True,
     )
 
+    st.markdown("### Nội dung tài liệu")
+    if item.get("type") == "pdf":
+        components.iframe(f"https://drive.google.com/file/d/{item['id']}/preview", height=620, scrolling=True)
+    else:
+        st.info("Định dạng này chưa xem trực tiếp được trong trang — bấm nút bên dưới để mở trên Google Drive.")
+        st.link_button("Mở tài liệu trên Drive ↗", f"https://drive.google.com/file/d/{item['id']}/view")
+
     st.markdown("### Lộ trình học tài liệu này")
     cols = st.columns(3)
     for index, (column, step) in enumerate(zip(cols, template["steps"]), 1):
@@ -879,11 +1003,18 @@ def _render_grammar_lesson(topic):
         f"<div style='text-align:center;font-size:13px;color:#7c3aed;font-weight:700'>SƠ ĐỒ TƯ DUY</div>"
         f"<div style='text-align:center;font-size:24px;font-weight:850;color:#4c1d95;margin:4px 0'>{html.escape(topic)}</div>"
         f"<div style='text-align:center;background:#7c3aed;color:white;border-radius:12px;padding:10px;margin:12px auto;max-width:720px'>"
-        f"{html.escape(lesson['formula'])}</div>"
+        f"<b>{html.escape(lesson['formula'])}</b><br>"
+        f"<span style='font-size:14px'>{html.escape(lesson['formula_pinyin'])}</span><br>"
+        f"<span style='font-size:13px;opacity:.9'>{html.escape(lesson['formula_meaning'])}</span></div>"
         f"<div style='display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:10px'>{cards}</div></div>",
         unsafe_allow_html=True,
     )
     st.info(f"**Khi dùng:** {lesson['use']}")
+
+    st.markdown("#### Đọc công thức trước khi học")
+    st.markdown(f"**Công thức:** {lesson['formula']}  \n**Pinyin:** *{lesson['formula_pinyin']}*  \n**Hiểu đơn giản:** {lesson['formula_meaning']}")
+    if topic == "Cấu trúc 是...的":
+        st.success("**是 · shì · là/chính là** dùng để đưa phần cần nhấn mạnh vào sau nó. **的 · de · trợ từ nhấn mạnh** thường đặt cuối cấu trúc.")
 
     st.markdown("#### Nội dung và ví dụ")
     for title, rule, example, pinyin, meaning in lesson["branches"]:
@@ -912,9 +1043,121 @@ def _render_grammar_lesson(topic):
     st.text_area("Tự đặt 2 câu với cấu trúc này", key=f"grammar_practice_{topic}", height=100)
 
 
+def _render_hanzi_lesson(topic):
+    lesson = HANZI_LESSONS[topic]
+    cards = "".join(
+        f"<div style='padding:12px;background:white;border:1px solid #bfdbfe;border-radius:13px;text-align:center'>"
+        f"<b style='font-size:23px;color:#1d4ed8'>{html.escape(symbol)}</b><br>"
+        f"<b>{html.escape(title)}</b><br><i>{html.escape(pinyin)}</i><br>"
+        f"<span style='font-size:13px'>{html.escape(meaning)}</span></div>"
+        for title, symbol, pinyin, meaning, _ in lesson["branches"]
+    )
+    st.markdown(
+        f"<div style='padding:20px;border-radius:18px;background:linear-gradient(135deg,#eff6ff,#faf5ff);border:1px solid #c4b5fd'>"
+        f"<div style='text-align:center;font-size:13px;color:#6d28d9;font-weight:800'>SƠ ĐỒ TƯ DUY TÓM TẮT</div>"
+        f"<div style='text-align:center;font-size:25px;font-weight:850;color:#4c1d95;margin:5px'>{html.escape(lesson['center'])}</div>"
+        f"<div style='text-align:center'><i>{html.escape(lesson['center_pinyin'])}</i> · {html.escape(lesson['center_meaning'])}</div>"
+        f"<div style='display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:9px;margin-top:14px'>{cards}</div></div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("### Nội dung bài học")
+    for title, symbol, pinyin, meaning, examples in lesson["branches"]:
+        with st.expander(f"{symbol} · {title} · {pinyin} · {meaning}", expanded=True):
+            st.markdown(f"## {symbol}")
+            st.markdown(f"**Pinyin/tên nét:** *{pinyin}*  \n**Nghĩa/chức năng:** {meaning}")
+            st.info(f"**Ví dụ có pinyin và nghĩa:** {examples}")
+    st.markdown("### Quy tắc cần nhớ")
+    for tip in lesson["tips"]:
+        st.markdown(f"- 💡 {tip}")
+    st.text_area("Ghi lại 3 chữ đã học (chữ · pinyin · nghĩa)", key=f"hanzi_notes_{topic}", height=100)
+
+
+def _render_hsk_grammar_course():
+    st.markdown("## Lộ trình ngữ pháp HSK1–6")
+    st.caption("Chọn cấp độ và từng bài. Mỗi bài đều có sơ đồ tư duy, công thức, pinyin, nghĩa Việt và ví dụ ngay trên web.")
+
+    level = st.segmented_control(
+        "Cấp độ", list(HSK_GRAMMAR_COURSE), default="HSK1", key="zh_grammar_level"
+    ) or "HSK1"
+    lessons = HSK_GRAMMAR_COURSE[level]
+
+    mindmap_cards = "".join(
+        f"<div style='padding:11px;background:white;border:1px solid #c4b5fd;border-radius:12px'>"
+        f"<b style='color:#6d28d9'>{index:02d}. {html.escape(title)}</b>"
+        f"<div style='font-size:13px;margin-top:5px'>{html.escape(formula)}</div>"
+        f"<i style='font-size:12px;color:#64748b'>{html.escape(formula_pinyin)}</i></div>"
+        for index, (title, formula, formula_pinyin, *_rest) in enumerate(lessons, 1)
+    )
+    st.markdown(
+        f"<div style='padding:20px;border-radius:18px;background:linear-gradient(135deg,#faf5ff,#eff6ff);border:1px solid #ddd6fe'>"
+        f"<div style='text-align:center;color:#7c3aed;font-weight:800'>SƠ ĐỒ TƯ DUY · {level}</div>"
+        f"<div style='text-align:center;font-size:24px;font-weight:850;color:#4c1d95;margin:5px 0 14px'>"
+        f"6 cấu trúc trọng tâm cần nắm</div>"
+        f"<div style='display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:10px'>{mindmap_cards}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    lesson_titles = [item[0] for item in lessons]
+    lesson_title = st.selectbox("Chọn bài học", lesson_titles, key=f"zh_grammar_lesson_{level}")
+    lesson_index = lesson_titles.index(lesson_title)
+    title, formula, formula_pinyin, formula_meaning, example, example_pinyin, example_meaning = lessons[lesson_index]
+
+    st.markdown(f"### Bài {lesson_index + 1}/{len(lessons)} · {title}")
+    left, right = st.columns(2)
+    with left:
+        st.info(f"**Công thức**  \n{formula}  \n\n*{formula_pinyin}*")
+    with right:
+        st.success(f"**Hiểu đơn giản**  \n{formula_meaning}")
+
+    st.markdown("#### Ví dụ có pinyin và nghĩa")
+    st.markdown(f"## {example}")
+    st.markdown(f"*{example_pinyin}*")
+    st.success(example_meaning)
+
+    with st.expander("Cách nhận diện và sử dụng", expanded=True):
+        st.markdown(
+            f"1. Tìm dấu hiệu chính trong công thức: **{formula}**.  \n"
+            "2. Xác định chủ ngữ, hành động và phần được nhấn mạnh.  \n"
+            "3. Đọc ví dụ theo pinyin, sau đó che pinyin và đọc lại chữ Hán.  \n"
+            "4. Đổi chủ ngữ hoặc nội dung nhưng giữ nguyên khung câu."
+        )
+    st.warning("Lỗi cần tránh: không dịch từng chữ một; hãy kiểm tra đúng vị trí của từ ngữ pháp và ngữ cảnh của cả câu.")
+    st.text_area(
+        "Tự đặt 2 câu (ghi chữ Hán · pinyin · nghĩa Việt)",
+        key=f"zh_hsk_grammar_practice_{level}_{lesson_index}", height=110,
+    )
+
+    previous_col, progress_col, next_col = st.columns([1, 2, 1])
+    with previous_col:
+        if st.button("← Bài trước", disabled=lesson_index == 0, key=f"zh_grammar_prev_{level}"):
+            st.session_state[f"zh_grammar_lesson_{level}"] = lesson_titles[lesson_index - 1]
+            st.rerun()
+    with progress_col:
+        st.progress((lesson_index + 1) / len(lessons), text=f"{level}: bài {lesson_index + 1}/{len(lessons)}")
+    with next_col:
+        if st.button("Bài tiếp →", disabled=lesson_index == len(lessons) - 1, key=f"zh_grammar_next_{level}"):
+            st.session_state[f"zh_grammar_lesson_{level}"] = lesson_titles[lesson_index + 1]
+            st.rerun()
+
+    with st.expander("Nguồn chuẩn dùng để xây dựng lộ trình"):
+        st.markdown(
+            "- [Chuẩn năng lực tiếng Trung trong giáo dục tiếng Trung quốc tế (Bộ Giáo dục Trung Quốc)]"
+            f"({CHINESE_STANDARD_URL})\n"
+            "- [Đề cương HSK chính thức](https://download.chinesetest.cn/newhsk-site/Syllabus/H1_DG.pdf)"
+        )
+
+
 def _render_pdf_library():
-    st.markdown("### Thư viện ngữ pháp")
+    st.markdown("### Ngữ pháp & chữ Hán")
     st.caption("Học nội dung và sơ đồ tư duy ngay trong ứng dụng; Drive chỉ còn là tài liệu đối chiếu.")
+    course_tab, library_tab = st.tabs(["📚 Ngữ pháp HSK1–6", "🧩 Chuyên đề & chữ Hán"])
+    with course_tab:
+        _render_hsk_grammar_course()
+    with library_tab:
+        _render_pdf_library_topics()
+
+
+def _render_pdf_library_topics():
     topic = st.selectbox("Chọn chủ đề", list(PDF_LIBRARY), key="zh_pdf_topic")
     material = PDF_LIBRARY[topic]
 
@@ -928,6 +1171,8 @@ def _render_pdf_library():
 
     if topic in GRAMMAR_LESSONS:
         _render_grammar_lesson(topic)
+    elif topic in HANZI_LESSONS:
+        _render_hanzi_lesson(topic)
     else:
         _render_material_smart_lesson({
             "id": material["file_id"], "name": topic,
@@ -1002,7 +1247,7 @@ def render_chinese_training(progress=None):
     st.caption(f"Đang học {len(words)} từ")
     views = [
         "🃏 Flashcard", "🔁 Ôn ngắt quãng", "📋 Vocabulary List", "📖 Đọc & dịch", "📘 Sách đầy đủ",
-        "🗂 Kho HSK1–6", "🌐 Kho mở rộng", "📕 Ngữ pháp PDF", "📚 Nguồn khác",
+        "🗂 Kho HSK1–6", "🌐 Kho mở rộng", "📕 Ngữ pháp", "📚 Nguồn khác",
     ]
     view = st.radio(
         "Chế độ học", views, horizontal=True, key="zh_training_view",
