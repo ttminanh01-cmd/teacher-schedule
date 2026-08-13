@@ -317,6 +317,51 @@ VSTEP_8_WEEK_PLAN = [
     ("Tuần 8", "Ổn định phong độ", ["Làm 1 đề cuối tuần ở đầu tuần", "Ôn sổ lỗi và cụm diễn đạt", "Luyện chiến thuật bỏ qua–quay lại", "Hai ngày cuối giảm tải và ngủ đủ"]),
 ]
 
+VSTEP_DAILY_TOPICS = [
+    ["Chẩn đoán 4 kỹ năng", "Thì hiện tại & quá khứ", "Đọc ý chính", "Nghe thông báo ngắn", "Email giới thiệu", "Speaking Part 1", "Ôn tuần & mini-test"],
+    ["Nghe giờ–địa điểm", "Scan tên và số liệu", "Từ vựng giáo dục", "Email hỏi thông tin", "Nghe hướng dẫn", "Nói về công việc", "Mini-test tuần 2"],
+    ["Từ vựng trong ngữ cảnh", "Đại từ tham chiếu", "Nghe mục đích người nói", "Mệnh đề quan hệ", "Đọc suy luận", "Speaking Part 1 bấm giờ", "Mini-test tuần 3"],
+    ["Cấu trúc email 120 từ", "Email yêu cầu", "Email phàn nàn", "Speaking Part 2: chọn giải pháp", "Bác bỏ hai phương án", "Reading 40 câu bấm giờ", "Viết lại & sửa lỗi"],
+    ["Cấu trúc essay 250 từ", "Viết mở bài", "Đoạn thân bài PEEL", "Nghe hội thoại dài", "Speaking Part 3 theo PREP", "Viết essay đầu tiên", "Chấm và viết lại"],
+    ["Từ nối & liên kết", "Essay opinion", "Reading 60 phút", "Listening 35 câu", "Nói liền mạch 3 phút", "Mô phỏng Writing", "Phân tích lỗi tuần 6"],
+    ["Mock test 1: Listening", "Mock test 1: Reading", "Mock test 1: Writing", "Mock test 1: Speaking", "Vá kỹ năng yếu nhất", "Mock test 2 rút gọn", "So sánh hai lần thi"],
+    ["Ôn sổ lỗi", "Ôn cụm diễn đạt", "Đề tổng duyệt", "Sửa đề tổng duyệt", "Chiến thuật phòng thi", "Ôn nhẹ & Speaking", "Day 56: sẵn sàng thi"],
+]
+
+VSTEP_DAY_SKILLS = ["Tổng hợp", "Grammar", "Reading", "Listening", "Writing", "Speaking", "Review"]
+
+
+def _build_vstep_days():
+    days = []
+    for week_index, topics in enumerate(VSTEP_DAILY_TOPICS, 1):
+        for day_in_week, topic in enumerate(topics, 1):
+            day_number = (week_index - 1) * 7 + day_in_week
+            skill = VSTEP_DAY_SKILLS[day_in_week - 1]
+            tasks = [
+                f"Học trọng tâm: {topic}",
+                f"Luyện {30 if week_index < 3 else 40 if week_index < 6 else 50} phút có bấm giờ",
+                "Ghi ít nhất 3 lỗi/cụm mới vào sổ ôn tập",
+            ]
+            if skill == "Listening":
+                practice = "Làm bài nghe 5 câu bên dưới: lượt 1 bắt ý chính, lượt 2 tìm bằng chứng."
+            elif skill == "Reading":
+                practice = "Làm bài đọc 5 câu bên dưới và gạch câu chứa bằng chứng cho từng đáp án."
+            elif skill == "Writing":
+                practice = "Viết theo đề bên dưới; dành 5 phút lập dàn ý và 5 phút cuối để soát lỗi."
+            elif skill == "Speaking":
+                practice = "Chuẩn bị 1 phút, nói 2–3 phút theo đề bên dưới và nghe lại bản ghi âm."
+            elif skill == "Grammar":
+                practice = "Ôn cấu trúc trong tab Ngữ pháp B1, sau đó tự viết 8 câu liên quan chủ đề hôm nay."
+            elif skill == "Review":
+                practice = "Làm lại các câu sai trong tuần mà không xem đáp án; chỉ kết thúc khi giải thích được lỗi."
+            else:
+                practice = "Làm mini-test mỗi kỹ năng 10–15 phút và ghi điểm ban đầu vào bảng theo dõi."
+            days.append({"day": day_number, "week": week_index, "skill": skill, "topic": topic, "tasks": tasks, "practice": practice})
+    return days
+
+
+VSTEP_56_DAYS = _build_vstep_days()
+
 VSTEP_PRACTICE = {
     "🎧 Listening": {
         "strategy": ["Đọc câu hỏi trước khi nghe", "Gạch từ phân biệt các lựa chọn", "Không dừng lại ở một câu đã lỡ", "Lượt nghe sau tập trung vào bằng chứng"],
@@ -544,9 +589,12 @@ def render_english_training():
 def render_vstep_b1_path():
     st.markdown("### Lộ trình ôn VSTEP B1 · 8 tuần")
     st.caption("Mục tiêu bậc 3: 4.0–5.5/10 · Khuyến nghị học 7–10 giờ/tuần")
-    tab_format, tab_plan, tab_practice, tab_progress = st.tabs([
-        "🧭 Cấu trúc đề", "📅 Lộ trình 8 tuần", "🧪 Luyện theo kỹ năng", "📊 Theo dõi tiến độ",
+    tab_daily, tab_format, tab_plan, tab_practice, tab_progress = st.tabs([
+        "▶️ Học Day 1–56", "🧭 Cấu trúc đề", "📅 Tổng quan 8 tuần", "🧪 Luyện theo kỹ năng", "📊 Theo dõi tiến độ",
     ])
+
+    with tab_daily:
+        _render_vstep_daily_path()
 
     with tab_format:
         st.info("Mục tiêu an toàn nên đặt từ 5.0 thay vì chỉ chạm ngưỡng 4.0, để có khoảng đệm khi một kỹ năng làm chưa tốt.")
@@ -607,7 +655,76 @@ def render_vstep_b1_path():
         st.markdown("- [Bảng điểm và cấp độ VSTEP.3-5 – ULIS, ĐHQGHN](https://vstep.vnu.edu.vn/scores-levels/)")
 
 
-def _render_vstep_objective_test(kind, test):
+def _change_vstep_day(delta):
+    current = st.session_state.get("vstep_current_day", 1)
+    st.session_state["vstep_current_day"] = max(1, min(56, current + delta))
+
+
+def _complete_and_next_vstep_day():
+    current = st.session_state.get("vstep_current_day", 1)
+    st.session_state[f"vstep_day_complete_{current}"] = True
+    st.session_state["vstep_current_day"] = min(56, current + 1)
+
+
+def _render_vstep_daily_path():
+    completed_days = sum(bool(st.session_state.get(f"vstep_day_complete_{day}")) for day in range(1, 57))
+    st.progress(completed_days / 56, text=f"Đã hoàn thành {completed_days}/56 ngày")
+
+    week_filter = st.selectbox("Chọn tuần", range(1, 9), format_func=lambda value: f"Tuần {value}", key="vstep_daily_week")
+    week_days = VSTEP_56_DAYS[(week_filter - 1) * 7:week_filter * 7]
+    st.markdown("**Chọn ngày học:**")
+    day_columns = st.columns(7)
+    for column, item in zip(day_columns, week_days):
+        done = bool(st.session_state.get(f"vstep_day_complete_{item['day']}"))
+        if column.button(f"{'✅' if done else 'Day'} {item['day']}", key=f"vstep_pick_day_{item['day']}", use_container_width=True):
+            st.session_state["vstep_current_day"] = item["day"]
+            st.rerun()
+
+    if "vstep_current_day" not in st.session_state:
+        st.session_state["vstep_current_day"] = 1
+    selected_day = st.selectbox(
+        "Ngày đang học", range(1, 57),
+        format_func=lambda value: f"Day {value} · Tuần {((value - 1) // 7) + 1} · {VSTEP_56_DAYS[value - 1]['topic']}",
+        key="vstep_current_day",
+    )
+    lesson = VSTEP_56_DAYS[selected_day - 1]
+    st.markdown(
+        f"<div style='padding:18px;border-radius:16px;background:linear-gradient(135deg,#eff6ff,#ecfeff);border:1px solid #bfdbfe'>"
+        f"<div style='font-size:13px;color:#2563eb;font-weight:800'>TUẦN {lesson['week']} · DAY {lesson['day']} · {lesson['skill'].upper()}</div>"
+        f"<div style='font-size:25px;font-weight:850;margin-top:5px'>{html.escape(lesson['topic'])}</div></div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("#### Việc cần hoàn thành hôm nay")
+    task_results = [
+        st.checkbox(task, key=f"vstep_day_{selected_day}_task_{index}")
+        for index, task in enumerate(lesson["tasks"])
+    ]
+    st.info(f"**Bài thực hành:** {lesson['practice']}")
+
+    if lesson["skill"] == "Listening":
+        _render_vstep_objective_test("listening", VSTEP_LISTENING_TEST, key_suffix=f"day_{selected_day}")
+    elif lesson["skill"] == "Reading":
+        _render_vstep_objective_test("reading", VSTEP_READING_TEST, key_suffix=f"day_{selected_day}")
+    elif lesson["skill"] == "Writing":
+        _render_vstep_writing_test(key_suffix=f"day_{selected_day}")
+    elif lesson["skill"] == "Speaking":
+        _render_vstep_speaking_test(key_suffix=f"day_{selected_day}")
+    else:
+        st.text_area("Bài làm / sổ lỗi hôm nay", key=f"vstep_daily_notes_{selected_day}", height=150)
+
+    previous, finish, following = st.columns([1, 2, 1])
+    previous.button("← Day trước", disabled=selected_day == 1, on_click=_change_vstep_day, args=(-1,), use_container_width=True)
+    finish.button(
+        "✅ Hoàn thành & sang Day tiếp theo" if selected_day < 56 else "🏁 Hoàn thành lộ trình",
+        on_click=_complete_and_next_vstep_day, use_container_width=True,
+        type="primary", disabled=not all(task_results),
+    )
+    following.button("Day tiếp →", disabled=selected_day == 56, on_click=_change_vstep_day, args=(1,), use_container_width=True)
+    if not all(task_results):
+        st.caption("Hoàn thành ba mục checklist để mở nút chuyển sang ngày tiếp theo.")
+
+
+def _render_vstep_objective_test(kind, test, key_suffix="skill"):
     st.markdown(f"#### Bài luyện {'Listening' if kind == 'listening' else 'Reading'} B1 · 5 câu")
     if kind == "listening":
         safe_script = html.escape(test["script"], quote=True)
@@ -626,9 +743,9 @@ def _render_vstep_objective_test(kind, test):
         for paragraph in test["passage"]:
             st.markdown(paragraph)
 
-    with st.form(f"vstep_{kind}_test"):
+    with st.form(f"vstep_{kind}_test_{key_suffix}"):
         answers = [
-            st.radio(f"{index}. {question}", options, index=None, key=f"vstep_{kind}_q_{index}")
+            st.radio(f"{index}. {question}", options, index=None, key=f"vstep_{kind}_{key_suffix}_q_{index}")
             for index, (question, options, _, _) in enumerate(test["questions"], 1)
         ]
         submitted = st.form_submit_button("Chấm bài và xem giải thích")
@@ -643,10 +760,10 @@ def _render_vstep_objective_test(kind, test):
                 st.markdown(f"{icon} **Câu {index}: {options[correct]}** — {explanation}")
 
 
-def _render_vstep_writing_test():
+def _render_vstep_writing_test(key_suffix="skill"):
     st.markdown("#### Writing Task 1 · Email khoảng 120 từ · 20 phút")
     st.info("A friend will visit your city. Write an email suggesting transport, accommodation and two places to visit. Ask for one piece of information about the trip.")
-    answer = st.text_area("Viết bài tại đây", key="vstep_writing_task_1", height=260)
+    answer = st.text_area("Viết bài tại đây", key=f"vstep_writing_task_1_{key_suffix}", height=260)
     word_count = len(answer.split())
     st.caption(f"Số từ hiện tại: {word_count} · Mục tiêu: khoảng 120 từ")
     checks = [
@@ -657,17 +774,17 @@ def _render_vstep_writing_test():
     ]
     st.markdown("**Tự kiểm theo tiêu chí:**")
     for index, (label, help_text) in enumerate(checks):
-        st.checkbox(label, help=help_text, key=f"vstep_writing_check_{index}")
+        st.checkbox(label, help=help_text, key=f"vstep_writing_check_{key_suffix}_{index}")
     with st.expander("Bài mẫu B1 và nhận xét"):
         st.text(VSTEP_WRITING_SAMPLE)
         st.success("Bài mẫu trả lời đủ yêu cầu, tổ chức theo đoạn và dùng từ nối đơn giản. Hãy đối chiếu cấu trúc, không chép nguyên văn.")
 
 
-def _render_vstep_speaking_test():
+def _render_vstep_speaking_test(key_suffix="skill"):
     st.markdown("#### Speaking Part 2 · Thảo luận giải pháp")
     st.info("Your class wants a weekend activity. Choose the best option: **a picnic, a museum visit, or volunteer work**. Explain your choice and reject the other two options.")
     st.markdown("**Khung trả lời 2–3 phút:** lựa chọn → 2 lý do → ví dụ → hạn chế của phương án 2 → hạn chế của phương án 3 → kết luận.")
-    st.text_area("Dàn ý nhanh trong 1 phút", key="vstep_speaking_outline", height=120)
+    st.text_area("Dàn ý nhanh trong 1 phút", key=f"vstep_speaking_outline_{key_suffix}", height=120)
     components.html(
         """<!doctype html><html><head><style>body{margin:0;font-family:Arial}.row{display:flex;gap:8px;align-items:center}button{padding:9px 14px;border:0;border-radius:9px;background:#ede9fe;color:#5b21b6;font-weight:700}#time{font-size:22px;font-weight:800}</style></head><body><div class='row'><button id='start'>⏱ Bắt đầu 3 phút</button><button id='reset'>Làm lại</button><span id='time'>03:00</span></div><script>let left=180,timer=null;const out=document.getElementById('time');function draw(){out.textContent=String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0')}document.getElementById('start').onclick=()=>{if(timer)return;timer=setInterval(()=>{if(left>0){left--;draw()}else{clearInterval(timer);timer=null;out.textContent='HẾT GIỜ'}},1000)};document.getElementById('reset').onclick=()=>{clearInterval(timer);timer=null;left=180;draw()};</script></body></html>""",
         height=50,
