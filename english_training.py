@@ -8,6 +8,7 @@ import streamlit.components.v1 as components
 
 CATALOG_PATH = Path(__file__).with_name("course_catalog_raw.json")
 EXTENDED_VOCAB_PATH = Path(__file__).with_name("english_vocab_extended.json")
+LANGUAGE_RESOURCES_PATH = Path(__file__).with_name("language_resources.json")
 
 WORKPLACE_PATH = {
     "Pre-A1 · Khởi động": {
@@ -56,6 +57,8 @@ WORKPLACE_PATH = {
 
 ENGLISH_SOURCES = {
     "Khung CEFR": "https://www.coe.int/en/web/common-european-framework-reference-languages",
+    "CEFR Companion Volume 2020": "https://rm.coe.int/common-european-framework-of-reference-for-languages-learning-teaching/16809ea0d4",
+    "British Council - Reading by CEFR level": "https://learnenglish.britishcouncil.org/free-resources/reading",
     "Business English - British Council": "https://learnenglish.britishcouncil.org/business-english",
     "English for emails": "https://learnenglish.britishcouncil.org/business/english-emails",
     "Thời lượng tham khảo": "https://support.cambridgeenglish.org/hc/en-gb/articles/202838506-Guided-learning-hours",
@@ -127,6 +130,175 @@ GRAMMAR_MAPS = {
     ],
 }
 
+READING_PASSAGES = {
+    "Pre-A1 · Khởi động": {
+        "title": "My first day",
+        "type": "Thẻ giới thiệu cá nhân",
+        "paragraphs": [
+            "Hello. My name is Mai. I am new here. I work in the sales team. My manager is Mr Long. My desk is near the window. I start work at eight o'clock. My email is mai@sunrise.example.",
+        ],
+        "translations": [
+            "Xin chào. Tôi tên là Mai. Tôi là người mới ở đây. Tôi làm trong nhóm kinh doanh. Quản lý của tôi là anh Long. Bàn làm việc của tôi ở gần cửa sổ. Tôi bắt đầu làm việc lúc tám giờ. Email của tôi là mai@sunrise.example.",
+        ],
+        "vocab": [("new", "mới"), ("sales team", "nhóm kinh doanh"), ("near", "gần")],
+        "questions": [("Mai làm ở bộ phận nào?", ["Sales", "Finance", "IT"], 0), ("Cô ấy bắt đầu làm lúc mấy giờ?", ["7 giờ", "8 giờ", "9 giờ"], 1)],
+        "task": "Điền tên, bộ phận, quản lý và giờ bắt đầu làm việc của Mai.",
+    },
+    "A1 · Nền tảng": {
+        "title": "A change to Monday's meeting",
+        "type": "Email công việc ngắn",
+        "paragraphs": [
+            "Hi everyone, our Monday meeting is now at 10:30, not 9:00. We will meet in Room 4 on the second floor. Please bring your weekly task list. Lan will show us the new work schedule, and I will answer questions. The meeting will finish at 11:15. Please tell me today if you cannot come. Thanks, Minh.",
+        ],
+        "translations": [
+            "Chào mọi người, cuộc họp thứ Hai của chúng ta được chuyển sang 10 giờ 30, không phải 9 giờ. Chúng ta sẽ họp tại Phòng 4 ở tầng hai. Vui lòng mang theo danh sách công việc hằng tuần. Lan sẽ giới thiệu lịch làm việc mới và tôi sẽ trả lời câu hỏi. Cuộc họp sẽ kết thúc lúc 11 giờ 15. Hãy báo cho tôi trong hôm nay nếu bạn không thể tham dự. Cảm ơn, Minh.",
+        ],
+        "vocab": [("bring", "mang theo"), ("work schedule", "lịch làm việc"), ("finish", "kết thúc")],
+        "questions": [("Cuộc họp bắt đầu lúc nào?", ["9:00", "10:30", "11:15"], 1), ("Mọi người cần mang theo gì?", ["Máy tính", "Báo cáo tháng", "Danh sách công việc tuần"], 2)],
+        "task": "Tìm bốn chi tiết: ngày, giờ, địa điểm và vật cần mang theo.",
+    },
+    "A2 · Giao tiếp chủ động": {
+        "title": "A delivery problem",
+        "type": "Email cập nhật và đề xuất giải pháp",
+        "paragraphs": [
+            "Dear Ms Brown, I am writing about your order of twenty office chairs. The delivery was planned for Tuesday, but our driver had a problem with the van. We can deliver fifteen chairs on Wednesday morning and the other five on Friday afternoon.",
+            "I am sorry for the delay. If this plan is not convenient, we can send all twenty chairs together on Friday. Please reply before 3 p.m. today and tell me which option you prefer. Kind regards, Nam.",
+        ],
+        "translations": [
+            "Kính gửi bà Brown, tôi viết thư về đơn hàng hai mươi chiếc ghế văn phòng của bà. Việc giao hàng được dự kiến vào thứ Ba, nhưng tài xế của chúng tôi gặp vấn đề với xe tải. Chúng tôi có thể giao mười lăm chiếc vào sáng thứ Tư và năm chiếc còn lại vào chiều thứ Sáu.",
+            "Tôi xin lỗi vì sự chậm trễ. Nếu phương án này không thuận tiện, chúng tôi có thể giao cả hai mươi chiếc cùng lúc vào thứ Sáu. Vui lòng phản hồi trước 3 giờ chiều hôm nay và cho tôi biết bà muốn chọn phương án nào. Trân trọng, Nam.",
+        ],
+        "vocab": [("delivery", "việc giao hàng"), ("delay", "sự chậm trễ"), ("convenient", "thuận tiện"), ("prefer", "thích/chọn hơn")],
+        "questions": [("Vì sao giao hàng bị chậm?", ["Thiếu ghế", "Xe gặp sự cố", "Khách đổi địa chỉ"], 1), ("Khách phải phản hồi khi nào?", ["Trước 3 giờ hôm nay", "Sáng thứ Tư", "Chiều thứ Sáu"], 0)],
+        "task": "Tóm tắt vấn đề và hai phương án giao hàng bằng 3–4 câu tiếng Việt.",
+    },
+    "B1 · Làm việc độc lập": {
+        "title": "A small change that saved time",
+        "type": "Bản cập nhật dự án",
+        "paragraphs": [
+            "Our support team used to hold a one-hour meeting every morning. Although the meeting helped people share information, it also interrupted the busiest part of the day. Last month, the team tested a different system. Everyone posted a short written update before 9 a.m., and the team only met when an issue needed discussion.",
+            "After four weeks, the number of unresolved customer requests fell by 18 per cent. Staff also reported that they had more time for focused work. However, two new employees said they sometimes missed useful background information. The manager has therefore decided to keep the written updates and add a short question-and-answer meeting every Friday.",
+        ],
+        "translations": [
+            "Trước đây, nhóm hỗ trợ của chúng tôi họp một giờ vào mỗi buổi sáng. Mặc dù cuộc họp giúp mọi người chia sẻ thông tin, nó cũng làm gián đoạn khoảng thời gian bận rộn nhất trong ngày. Tháng trước, nhóm thử một hệ thống khác. Mọi người đăng một bản cập nhật ngắn trước 9 giờ và nhóm chỉ họp khi có vấn đề cần thảo luận.",
+            "Sau bốn tuần, số yêu cầu của khách hàng chưa được giải quyết giảm 18 phần trăm. Nhân viên cũng cho biết họ có thêm thời gian làm việc tập trung. Tuy nhiên, hai nhân viên mới nói rằng đôi khi họ bỏ lỡ thông tin nền hữu ích. Vì vậy, quản lý quyết định giữ các bản cập nhật bằng văn bản và bổ sung một cuộc họp hỏi đáp ngắn vào mỗi thứ Sáu.",
+        ],
+        "vocab": [("interrupt", "làm gián đoạn"), ("unresolved", "chưa được giải quyết"), ("focused work", "công việc cần tập trung"), ("background information", "thông tin nền")],
+        "questions": [("Hệ thống mới thay cuộc họp sáng bằng gì?", ["Cuộc gọi khách hàng", "Bản cập nhật viết", "Báo cáo tháng"], 1), ("Vì sao vẫn cần buổi hỏi đáp thứ Sáu?", ["Nhân viên mới thiếu bối cảnh", "Khách hàng yêu cầu", "Quản lý muốn họp lâu hơn"], 0)],
+        "task": "Viết 3 câu: thay đổi là gì, kết quả ra sao và điểm hạn chế nào còn tồn tại.",
+    },
+    "B2 · Chuyên nghiệp": {
+        "title": "Should the company adopt a four-day week?",
+        "type": "Tóm tắt đề xuất có nhiều quan điểm",
+        "paragraphs": [
+            "A six-month trial of a four-day working week has produced encouraging but mixed results. Output remained stable in most departments, while reported stress fell and sick leave decreased. Recruitment also became easier because the shorter week attracted experienced candidates. These findings suggest that performance does not always depend on the number of hours spent at a desk.",
+            "Nevertheless, the customer service and logistics teams struggled to maintain coverage. Some employees worked longer days, which created new childcare difficulties. Managers also warned that the trial took place during a relatively quiet period. The proposal should therefore not be presented as a universal solution. A more practical next step would be to let each department choose between a shorter week, flexible hours or the existing schedule, then compare results over a full business cycle.",
+        ],
+        "translations": [
+            "Một thử nghiệm kéo dài sáu tháng về tuần làm việc bốn ngày đã tạo ra kết quả đáng khích lệ nhưng không hoàn toàn đồng nhất. Sản lượng vẫn ổn định ở hầu hết các phòng ban, trong khi mức căng thẳng được ghi nhận giảm và số ngày nghỉ ốm ít đi. Việc tuyển dụng cũng dễ dàng hơn vì tuần làm việc ngắn thu hút ứng viên giàu kinh nghiệm. Những phát hiện này cho thấy hiệu suất không phải lúc nào cũng phụ thuộc vào số giờ ngồi tại bàn làm việc.",
+            "Tuy vậy, các nhóm dịch vụ khách hàng và hậu cần gặp khó khăn trong việc duy trì nhân sự trực. Một số nhân viên phải làm những ngày dài hơn, tạo ra khó khăn mới về chăm sóc con cái. Quản lý cũng cảnh báo rằng thử nghiệm diễn ra trong giai đoạn tương đối ít việc. Vì thế, không nên xem đề xuất này là giải pháp áp dụng cho mọi nơi. Bước tiếp theo thực tế hơn là cho mỗi phòng ban chọn tuần làm việc ngắn, giờ linh hoạt hoặc lịch hiện tại, rồi so sánh kết quả trong một chu kỳ kinh doanh đầy đủ.",
+        ],
+        "vocab": [("coverage", "mức độ bố trí nhân sự/bao phủ"), ("mixed results", "kết quả trái chiều"), ("universal solution", "giải pháp áp dụng cho mọi trường hợp"), ("business cycle", "chu kỳ kinh doanh")],
+        "questions": [("Thái độ chung của tác giả là gì?", ["Hoàn toàn ủng hộ", "Hoàn toàn phản đối", "Thận trọng và đề nghị thử linh hoạt"], 2), ("Điều gì làm kết quả thử nghiệm chưa chắc chắn?", ["Diễn ra lúc ít việc", "Không có ứng viên", "Sản lượng giảm ở mọi bộ phận"], 0)],
+        "task": "Tách luận điểm thành ba nhóm: lợi ích, rủi ro và khuyến nghị của tác giả.",
+    },
+    "C1 · Dẫn dắt": {
+        "title": "When efficiency hides organisational risk",
+        "type": "Phân tích quản trị",
+        "paragraphs": [
+            "Efficiency programmes often reward teams for removing duplication and standardising decisions. In the short term, this can reduce costs and make performance easier to measure. Yet an organisation that optimises every process around normal conditions may also remove the spare capacity that helps it respond to disruption. What appears wasteful in a quarterly report—overlapping expertise, extra inventory or time reserved for reflection—may function as insurance when assumptions fail.",
+            "The difficulty is that resilience has an uncertain return, whereas efficiency produces immediate figures. Leaders may therefore approve cuts whose benefits are visible and postpone investment whose value becomes clear only during a crisis. This does not mean that every redundancy should be protected. It means that decisions should distinguish accidental waste from deliberate buffers and should state which risks the organisation is choosing to accept.",
+            "A balanced review would consequently measure more than unit cost. It would examine recovery time, dependency on individual suppliers, the ease with which staff can move between roles and the quality of decisions made under pressure. By treating resilience as a capability rather than an expense, leaders can pursue efficiency without quietly making the organisation more fragile.",
+        ],
+        "translations": [
+            "Các chương trình nâng cao hiệu quả thường khen thưởng những nhóm loại bỏ công việc trùng lặp và chuẩn hóa quyết định. Trong ngắn hạn, việc này có thể giảm chi phí và giúp đo lường hiệu suất dễ hơn. Tuy nhiên, một tổ chức tối ưu mọi quy trình cho điều kiện bình thường cũng có thể loại bỏ năng lực dự phòng vốn giúp ứng phó với gián đoạn. Những gì có vẻ lãng phí trong báo cáo quý—chuyên môn chồng lấn, hàng tồn kho bổ sung hoặc thời gian dành cho suy ngẫm—có thể đóng vai trò như bảo hiểm khi các giả định không còn đúng.",
+            "Khó khăn nằm ở chỗ khả năng chống chịu có lợi ích không chắc chắn, trong khi hiệu quả tạo ra con số tức thời. Vì vậy, lãnh đạo có thể phê duyệt các khoản cắt giảm với lợi ích dễ thấy và trì hoãn đầu tư chỉ bộc lộ giá trị khi khủng hoảng xảy ra. Điều này không có nghĩa mọi phần dư thừa đều cần được bảo vệ. Nó có nghĩa quyết định phải phân biệt lãng phí vô tình với vùng đệm có chủ đích và phải nêu rõ tổ chức đang lựa chọn chấp nhận rủi ro nào.",
+            "Do đó, một cuộc rà soát cân bằng sẽ đo lường nhiều hơn chi phí đơn vị. Nó sẽ xem xét thời gian phục hồi, mức phụ thuộc vào từng nhà cung cấp, khả năng nhân viên chuyển đổi vai trò và chất lượng quyết định dưới áp lực. Khi coi khả năng chống chịu là một năng lực thay vì một khoản chi, lãnh đạo có thể theo đuổi hiệu quả mà không âm thầm khiến tổ chức trở nên mong manh hơn.",
+        ],
+        "vocab": [("spare capacity", "năng lực dự phòng"), ("resilience", "khả năng chống chịu/phục hồi"), ("deliberate buffer", "vùng đệm có chủ đích"), ("fragile", "mong manh, dễ tổn thương")],
+        "questions": [("Nghịch lý trung tâm của bài là gì?", ["Hiệu quả luôn làm tăng chi phí", "Tối ưu hóa có thể làm giảm khả năng chống chịu", "Dự trữ luôn là lãng phí"], 1), ("Tác giả đề xuất đánh giá thêm yếu tố nào?", ["Chỉ chi phí đơn vị", "Số giờ họp", "Thời gian phục hồi và sự phụ thuộc"], 2)],
+        "task": "Tóm tắt lập luận trong 80–100 từ tiếng Việt, sau đó nêu một phản biện bằng tiếng Anh.",
+    },
+}
+
+ENGLISH_EXTRA_READINGS = {
+    "Pre-A1 · Khởi động": {
+        "title": "Welcome to Green Cafe", "type": "Thông báo nhân viên",
+        "paragraphs": ["Welcome to Green Cafe. Anna is your team leader. Your work starts at 7:30. Please wear a black shirt and bring your name card. The staff room is next to the kitchen. Lunch is at twelve. If you need help, ask Anna or Ben."],
+        "translations": ["Chào mừng đến Green Cafe. Anna là trưởng nhóm của bạn. Công việc bắt đầu lúc 7 giờ 30. Vui lòng mặc áo đen và mang thẻ tên. Phòng nhân viên ở cạnh bếp. Bữa trưa lúc mười hai giờ. Nếu cần giúp đỡ, hãy hỏi Anna hoặc Ben."],
+        "vocab": [("team leader", "trưởng nhóm"), ("staff room", "phòng nhân viên"), ("next to", "ở cạnh")],
+        "questions": [("Who is the team leader?", ["Anna", "Ben", "Green"], 0), ("What should the worker wear?", ["A blue coat", "A black shirt", "A white hat"], 1)],
+        "task": "Ghi lại giờ bắt đầu, trang phục và người có thể hỗ trợ.",
+    },
+    "A1 · Nền tảng": {
+        "title": "Printer instructions", "type": "Hướng dẫn ngắn",
+        "paragraphs": ["The new printer is in the copy room. First, put your paper in the top tray. Then, touch the screen and choose Copy or Print. Use the blue button to start. Please do not use the red button; it stops the machine. If there is a problem, call Tom at extension 214. The copy room closes at 6 p.m."],
+        "translations": ["Máy in mới ở phòng sao chép. Trước tiên, đặt giấy vào khay trên. Sau đó chạm màn hình và chọn Sao chép hoặc In. Dùng nút màu xanh để bắt đầu. Vui lòng không dùng nút đỏ; nó dừng máy. Nếu có vấn đề, hãy gọi Tom theo số máy lẻ 214. Phòng sao chép đóng cửa lúc 6 giờ tối."],
+        "vocab": [("top tray", "khay trên"), ("touch the screen", "chạm màn hình"), ("extension", "số máy lẻ")],
+        "questions": [("Which button starts the printer?", ["Blue", "Red", "Black"], 0), ("Who helps with a problem?", ["Anna", "Tom", "The manager"], 1)],
+        "task": "Dịch các bước theo đúng thứ tự và khoanh thông tin liên hệ hỗ trợ.",
+    },
+    "A2 · Giao tiếp chủ động": {
+        "title": "Training room confirmation", "type": "Email xác nhận",
+        "paragraphs": ["Hi Duy, I have booked the third-floor training room for Thursday from 1:30 to 4:00 p.m. It has space for thirty people, but there are only twenty-four chairs at the moment. Facilities will bring six more chairs before noon. The projector works, although you need to collect the remote control from reception. Tea and coffee will arrive at 2:30. Please send me the final participant list by Wednesday morning. Best, Hoa."],
+        "translations": ["Chào Duy, tôi đã đặt phòng đào tạo tầng ba vào thứ Năm từ 1 giờ 30 đến 4 giờ chiều. Phòng đủ chỗ cho ba mươi người nhưng hiện chỉ có hai mươi bốn ghế. Bộ phận cơ sở vật chất sẽ mang thêm sáu ghế trước buổi trưa. Máy chiếu hoạt động, tuy nhiên bạn cần lấy điều khiển tại lễ tân. Trà và cà phê sẽ đến lúc 2 giờ 30. Vui lòng gửi danh sách người tham dự cuối cùng trước sáng thứ Tư. Thân, Hoa."],
+        "vocab": [("facilities", "bộ phận cơ sở vật chất"), ("remote control", "điều khiển từ xa"), ("participant list", "danh sách người tham dự")],
+        "questions": [("Where is the remote control?", ["In the room", "At reception", "With Facilities"], 1), ("When is the list due?", ["Wednesday morning", "Thursday noon", "Thursday afternoon"], 0)],
+        "task": "Liệt kê việc Duy cần làm trước và trong buổi đào tạo.",
+    },
+    "B1 · Làm việc độc lập": {
+        "title": "Feedback on the new booking system", "type": "Báo cáo khảo sát ngắn",
+        "paragraphs": ["Three months after the new booking system was introduced, 72 per cent of employees say that reserving a meeting room is faster. Double bookings have almost disappeared, and reception receives fewer calls. However, staff in the design department report that the mobile page is difficult to use because room photographs load slowly. Several employees also want a feature that automatically releases a room when the organiser cancels a meeting. The IT team will improve mobile performance this month and test automatic cancellation with two departments before making it available to everyone."],
+        "translations": ["Ba tháng sau khi hệ thống đặt phòng mới được giới thiệu, 72% nhân viên cho rằng việc đặt phòng họp nhanh hơn. Tình trạng đặt trùng gần như biến mất và lễ tân nhận ít cuộc gọi hơn. Tuy nhiên, nhân viên phòng thiết kế cho biết trang di động khó dùng vì ảnh phòng tải chậm. Một số người cũng muốn tính năng tự giải phóng phòng khi người tổ chức hủy họp. Nhóm IT sẽ cải thiện hiệu suất di động trong tháng này và thử nghiệm chức năng hủy tự động với hai phòng ban trước khi mở cho tất cả mọi người."],
+        "vocab": [("double booking", "đặt trùng lịch"), ("release a room", "giải phóng phòng đã đặt"), ("make available", "đưa vào sử dụng")],
+        "questions": [("What problem has nearly disappeared?", ["Slow photographs", "Double bookings", "Cancelled meetings"], 1), ("What will IT test first?", ["Automatic cancellation", "A new reception desk", "More photographs"], 0)],
+        "task": "Tóm tắt thành công, vấn đề còn lại và hành động tiếp theo.",
+    },
+    "B2 · Chuyên nghiệp": {
+        "title": "Proposal to centralise purchasing", "type": "Đề xuất nội bộ",
+        "paragraphs": ["The finance team has proposed that all equipment purchases be handled by a central unit. Supporters argue that combining orders would strengthen the company's negotiating position and reduce inconsistent pricing. A single approval process could also make spending easier to track. Department managers, however, are concerned that urgent requests may be delayed and that a central team may not understand specialist requirements. The proposal therefore recommends a standard route for routine purchases and an exception process for time-sensitive or technical items. Before approving the change, the board has requested a three-month pilot involving Finance, Marketing and Engineering."],
+        "translations": ["Nhóm tài chính đề xuất để một đơn vị trung tâm xử lý toàn bộ việc mua thiết bị. Người ủng hộ cho rằng gộp đơn hàng sẽ tăng vị thế đàm phán và giảm giá không nhất quán. Một quy trình phê duyệt chung cũng giúp theo dõi chi tiêu dễ hơn. Tuy nhiên, quản lý các phòng ban lo yêu cầu khẩn cấp bị chậm và nhóm trung tâm không hiểu nhu cầu chuyên môn. Vì vậy, đề xuất đưa ra quy trình chuẩn cho mua sắm thường lệ và quy trình ngoại lệ cho mặt hàng khẩn cấp hoặc kỹ thuật. Trước khi phê duyệt, hội đồng yêu cầu thử nghiệm ba tháng với Tài chính, Marketing và Kỹ thuật."],
+        "vocab": [("centralise", "tập trung hóa"), ("negotiating position", "vị thế đàm phán"), ("exception process", "quy trình ngoại lệ")],
+        "questions": [("Why do supporters want combined orders?", ["To improve negotiation", "To hire managers", "To avoid tracking spending"], 0), ("What happens before approval?", ["A company-wide launch", "A three-department pilot", "An engineering purchase"], 1)],
+        "task": "Phân loại lợi ích, rủi ro và biện pháp giảm rủi ro của đề xuất.",
+    },
+    "C1 · Dẫn dắt": {
+        "title": "The hidden cost of constant availability", "type": "Bình luận về chính sách làm việc",
+        "paragraphs": ["Digital communication has made collaboration faster, but it has also blurred the distinction between responsiveness and permanent availability. When every message appears urgent, employees interrupt demanding work to demonstrate commitment rather than to solve genuinely time-sensitive problems. The immediate cost is fragmented attention; the longer-term cost is a culture in which careful thought seems less valuable than visible activity. A useful communication policy should therefore define response windows, escalation routes and periods in which colleagues are not expected to monitor messages. Such boundaries do not weaken collaboration. On the contrary, they make urgent channels more credible while protecting the concentration required for complex decisions."],
+        "translations": ["Giao tiếp số giúp cộng tác nhanh hơn nhưng cũng làm mờ ranh giới giữa phản hồi kịp thời và luôn luôn sẵn sàng. Khi mọi tin nhắn đều có vẻ khẩn cấp, nhân viên ngắt công việc khó để thể hiện sự tận tâm thay vì giải quyết vấn đề thật sự gấp. Chi phí tức thời là sự chú ý bị phân mảnh; chi phí dài hạn là văn hóa coi hoạt động hữu hình quan trọng hơn suy nghĩ cẩn trọng. Vì vậy, chính sách giao tiếp hữu ích cần xác định thời hạn phản hồi, tuyến xử lý khẩn và thời gian đồng nghiệp không phải theo dõi tin nhắn. Ranh giới như vậy không làm yếu hợp tác mà khiến kênh khẩn cấp đáng tin hơn và bảo vệ sự tập trung cần cho quyết định phức tạp."],
+        "vocab": [("blur the distinction", "làm mờ sự phân biệt"), ("fragmented attention", "sự chú ý bị phân mảnh"), ("escalation route", "tuyến xử lý nâng cấp/khẩn cấp")],
+        "questions": [("What contrast does the writer make?", ["Speed versus salary", "Responsiveness versus permanent availability", "Office versus remote work"], 1), ("Why define quiet periods?", ["To protect concentration", "To remove collaboration", "To delay every response"], 0)],
+        "task": "Tóm tắt lập luận, tiền đề ngầm và khuyến nghị chính sách của tác giả.",
+    },
+}
+
+GRAMMAR_CLOZE = {
+    "Pre-A1 · Khởi động": {
+        "text": "Hello, I ___ (1) Linh. I ___ (2) in the service team. My desk ___ (3) near the door.",
+        "items": [("am", ["am", "is", "are"], "Chủ ngữ I đi với am."), ("work", ["works", "work", "working"], "Hiện tại đơn với I dùng động từ nguyên mẫu."), ("is", ["am", "are", "is"], "Chủ ngữ số ít My desk đi với is.")],
+    },
+    "A1 · Nền tảng": {
+        "text": "The office ___ (1) at eight every day. Nina usually ___ (2) the first customer emails. She can ___ (3) simple requests without a manager.",
+        "items": [("opens", ["open", "opens", "opening"], "The office là chủ ngữ số ít nên động từ thêm -s."), ("answers", ["answer", "answers", "answered"], "Usually chỉ thói quen; Nina là ngôi thứ ba số ít."), ("handle", ["handles", "handled", "handle"], "Sau can dùng động từ nguyên mẫu không to.")],
+    },
+    "A2 · Giao tiếp chủ động": {
+        "text": "We ___ (1) the order yesterday, but the customer has not received it. I ___ (2) the courier this morning, and they said they ___ (3) deliver it tomorrow.",
+        "items": [("sent", ["send", "sent", "have sent"], "Yesterday yêu cầu quá khứ đơn: sent."), ("called", ["call", "called", "am calling"], "This morning ở đây là thời điểm đã kết thúc trong mạch kể quá khứ."), ("would", ["will", "would", "are"], "Trong lời nói gián tiếp sau said, will thường lùi thành would.")],
+    },
+    "B1 · Làm việc độc lập": {
+        "text": "The team ___ (1) three options so far. If the client ___ (2) the revised plan today, we ___ (3) the first phase on Monday.",
+        "items": [("has tested", ["tested", "has tested", "tests"], "So far thường đi với hiện tại hoàn thành."), ("approves", ["will approve", "approves", "approved"], "Mệnh đề if loại 1 dùng hiện tại đơn, không dùng will."), ("will start", ["start", "started", "will start"], "Mệnh đề chính của điều kiện loại 1 dùng will + V.")],
+    },
+    "B2 · Chuyên nghiệp": {
+        "text": "The proposal ___ (1) by the board last week. If the risks had been explained more clearly, managers ___ (2) fewer objections. The revised plan ___ (3) be more practical, although further testing is required.",
+        "items": [("was reviewed", ["reviewed", "was reviewed", "has reviewing"], "Nhấn đối tượng chịu tác động trong quá khứ: was + V3."), ("might have raised", ["might raise", "might have raised", "will raise"], "Giả định trái quá khứ dùng modal + have + V3 ở mệnh đề kết quả."), ("may", ["must", "may", "did"], "May thể hiện nhận định thận trọng khi chưa đủ dữ liệu." )],
+    },
+    "C1 · Dẫn dắt": {
+        "text": "Rarely ___ (1) the organisation faced such rapid change. The review recommends ___ (2) decision-making rather than merely adding controls. Had earlier warnings been considered, the disruption ___ (3) significantly reduced.",
+        "items": [("has", ["the organisation has", "has", "did the organisation"], "Sau trạng từ phủ định Rarely ở đầu câu, đảo trợ động từ trước chủ ngữ."), ("strengthening", ["strengthen", "strengthening", "to strengthening"], "Recommend có thể đi với V-ing khi nói chung về hành động."), ("could have been", ["could be", "could have been", "will have"], "Đảo ngữ Had... diễn tả điều kiện trái quá khứ; kết quả dùng could have been + V3.")],
+    },
+}
+
 
 def _drive_link(file_id, is_folder=False):
     kind = "folders" if is_folder else "file/d"
@@ -146,6 +318,13 @@ def load_extended_vocabulary():
     if not EXTENDED_VOCAB_PATH.exists():
         return {}
     return json.loads(EXTENDED_VOCAB_PATH.read_text(encoding="utf-8"))
+
+
+@st.cache_data
+def load_english_resources():
+    if not LANGUAGE_RESOURCES_PATH.exists():
+        return []
+    return json.loads(LANGUAGE_RESOURCES_PATH.read_text(encoding="utf-8")).get("Tiếng Anh", [])
 
 
 def _resource_type(name):
@@ -279,15 +458,46 @@ def render_english_training():
     st.subheader("Training tiếng Anh")
     st.caption("Lộ trình từ mất gốc đến giao tiếp, đọc và viết chuyên nghiệp trong công việc.")
     mode = st.radio(
-        "Chương trình", ["🚀 Từ mất gốc đến công sở", "⚡ Luyện tình huống", "🎓 Video IELTS tham khảo"],
+        "Chương trình", ["🚀 Từ mất gốc đến công sở", "⚡ Luyện tình huống", "🗂 Kho tiếng Anh", "🎓 Video IELTS tham khảo"],
         horizontal=True, key="english_program_mode",
     )
     if mode.startswith("🚀"):
         render_workplace_path()
     elif mode.startswith("⚡"):
         render_quick_training()
+    elif mode.startswith("🗂"):
+        render_english_resource_library()
     else:
         render_full_course()
+
+
+def render_english_resource_library():
+    resources = load_english_resources()
+    st.markdown("### Kho tài liệu tiếng Anh mở rộng")
+    st.caption(f"{len(resources)} nguồn duy nhất đã được lọc từ danh mục Drive; dùng làm nguồn bổ trợ, không thay thế lộ trình chính.")
+    tags = sorted({tag for item in resources for tag in item["tags"]})
+    levels = ["Tất cả", "Pre-A1", "A1", "A2", "B1", "B2", "C1"]
+    col1, col2 = st.columns(2)
+    level = col1.selectbox("Cấp độ", levels, key="english_resource_level")
+    tag = col2.selectbox("Kỹ năng", ["Tất cả"] + tags, key="english_resource_tag")
+    query = st.text_input("Tìm tài liệu", placeholder="Ví dụ: phát âm, IELTS, writing...", key="english_resource_query")
+    filtered = resources
+    if level != "Tất cả":
+        filtered = [item for item in filtered if not item["levels"] or level in item["levels"]]
+    if tag != "Tất cả":
+        filtered = [item for item in filtered if tag in item["tags"]]
+    if query.strip():
+        needle = query.strip().casefold()
+        filtered = [item for item in filtered if needle in item["name"].casefold()]
+    st.caption(f"Tìm thấy {len(filtered)} nguồn")
+    for item in filtered[:40]:
+        with st.expander(f"📚 {item['name']}"):
+            st.markdown(" · ".join(f"`{tag}`" for tag in item["tags"]))
+            if item["levels"]:
+                st.caption("Gợi ý cấp độ: " + ", ".join(item["levels"]))
+            st.link_button("Mở tài liệu gốc ↗", item["url"])
+    if len(filtered) > 40:
+        st.info("Đang hiển thị 40 kết quả đầu. Hãy dùng bộ lọc hoặc tìm kiếm để thu hẹp danh sách.")
 
 
 def _roadmap_card(level, data, active=False):
@@ -315,7 +525,7 @@ def render_workplace_path():
     data = WORKPLACE_PATH[selected]
     st.info(f"🎯 **Kết quả chặng:** {data['outcome']}  \n💼 **Nhiệm vụ công việc:** {data['work']}")
     view = st.radio(
-        "Cách học", ["🧭 Lộ trình", "📚 Từ vựng", "🧠 Ngữ pháp", "✍️ Luyện 4 kỹ năng", "📅 Kế hoạch tuần"],
+        "Cách học", ["🧭 Lộ trình", "📚 Từ vựng", "🧠 Ngữ pháp", "📖 Đọc & Dịch", "✍️ Luyện 4 kỹ năng", "📅 Kế hoạch tuần"],
         horizontal=True, key="workplace_view",
     )
     if view.startswith("🧭"):
@@ -324,6 +534,8 @@ def render_workplace_path():
         _render_workplace_vocab(selected, data)
     elif view.startswith("🧠"):
         _render_grammar_map(selected)
+    elif view.startswith("📖"):
+        _render_reading_translation(selected)
     elif view.startswith("✍️"):
         _render_four_skills(selected, data)
     else:
@@ -408,9 +620,11 @@ def _render_speaking_vocabulary(words, height=680):
           window.speechSynthesis.cancel();
           document.querySelectorAll('button').forEach(b => b.classList.remove('playing'));
           const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'en-US'; utterance.rate = 0.82; utterance.pitch = 1;
+          utterance.lang = 'en-US'; utterance.rate = 0.72; utterance.pitch = 1.05;
           const voices = window.speechSynthesis.getVoices();
-          const preferred = voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
+          const female = /samantha|zira|aria|jenny|ava|susan|hazel|female|woman/i;
+          const preferred = voices.find(v => v.lang.startsWith('en') && female.test(v.name))
+            || voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
           if (preferred) utterance.voice = preferred;
           button.classList.add('playing'); utterance.onend = () => button.classList.remove('playing');
           utterance.onerror = () => button.classList.remove('playing'); window.speechSynthesis.speak(utterance);
@@ -443,6 +657,100 @@ def _render_grammar_map(level):
             st.success(f"Ví dụ: {example}")
             st.warning(f"Lỗi cần tránh: {mistake}")
             st.text_input("Tự đặt một câu", key=f"grammar_example_{level}_{name}")
+    _render_grammar_cloze(level)
+
+
+def _render_grammar_cloze(level):
+    exercise = GRAMMAR_CLOZE[level]
+    st.markdown("### Bài tập điền đoạn văn · dạng TOEIC")
+    st.caption("Đọc toàn đoạn trước, xác định thời gian–chủ ngữ–quan hệ giữa các câu rồi mới chọn đáp án.")
+    st.markdown(
+        f"<div style='font-size:18px;line-height:1.8;padding:17px 19px;background:#fffbeb;"
+        f"border:1px solid #fde68a;border-radius:13px'>{html.escape(exercise['text'])}</div>",
+        unsafe_allow_html=True,
+    )
+    with st.form(f"grammar_cloze_form_{level}"):
+        answers = [
+            st.radio(f"Ô ({index})", options, index=None, horizontal=True, key=f"grammar_cloze_{level}_{index}")
+            for index, (_, options, _) in enumerate(exercise["items"], 1)
+        ]
+        submitted = st.form_submit_button("Chấm và xem giải thích")
+    if submitted:
+        if any(answer is None for answer in answers):
+            st.warning("Bạn hãy điền đủ tất cả chỗ trống.")
+            return
+        score = sum(choice == answer for choice, (answer, _, _) in zip(answers, exercise["items"]))
+        st.success(f"Kết quả: {score}/{len(exercise['items'])} câu đúng.")
+        completed = exercise["text"]
+        for index, (answer, _, _) in enumerate(exercise["items"], 1):
+            completed = completed.replace(f"___ ({index})", f"**{answer}**")
+        st.markdown("**Đoạn hoàn chỉnh:**")
+        st.markdown(completed)
+        for index, (choice, (answer, _, explanation)) in enumerate(zip(answers, exercise["items"]), 1):
+            icon = "✅" if choice == answer else "❌"
+            st.markdown(f"{icon} **Ô {index}: {answer}** — {explanation}")
+
+
+def _render_reading_translation(level):
+    lessons = [READING_PASSAGES[level], ENGLISH_EXTRA_READINGS[level]]
+    selected_index = st.selectbox(
+        "Chọn bài đọc", range(len(lessons)),
+        format_func=lambda index: f"Bài {index + 1} · {lessons[index]['type']} · {lessons[index]['title']}",
+        key=f"english_reading_lesson_{level}",
+    )
+    lesson = lessons[selected_index]
+    lesson_key = f"{level}_{selected_index}"
+    word_count = sum(len(paragraph.split()) for paragraph in lesson["paragraphs"])
+    st.markdown(f"### {lesson['title']}")
+    st.caption(f"Bài {selected_index + 1}/2 · {lesson['type']} · {level} · {word_count} từ · Theo mô tả năng lực CEFR")
+
+    full_text = " ".join(lesson["paragraphs"])
+    safe_text = html.escape(full_text, quote=True)
+    components.html(
+        f"""<!doctype html><html><head><style>
+        body{{margin:0;font-family:Arial,sans-serif}}button{{border:0;border-radius:10px;padding:9px 15px;
+        background:#dbeafe;color:#1e40af;font-weight:700;cursor:pointer}}button.playing{{background:#2563eb;color:white}}
+        </style></head><body><button id="read" data-text="{safe_text}">🔊 Giọng nữ · đọc chậm</button><script>
+        const button=document.getElementById('read');button.onclick=()=>{{speechSynthesis.cancel();
+        const u=new SpeechSynthesisUtterance(button.dataset.text);u.lang='en-US';u.rate={0.62 if level.startswith(('Pre-A1', 'A1')) else 0.68 if level.startswith('A2') else 0.75};u.pitch=1.05;
+        const voices=speechSynthesis.getVoices();const female=/samantha|zira|aria|jenny|ava|susan|hazel|female|woman/i;
+        const preferred=voices.find(v=>v.lang.startsWith('en')&&female.test(v.name))||voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang.startsWith('en'));if(preferred)u.voice=preferred;
+        button.classList.add('playing');u.onend=()=>button.classList.remove('playing');u.onerror=()=>button.classList.remove('playing');speechSynthesis.speak(u);}};
+        </script></body></html>""", height=48,
+    )
+
+    show_translation = st.toggle("Hiện bản dịch sau từng đoạn", value=False, key=f"reading_translation_{lesson_key}")
+    for index, (paragraph, translation) in enumerate(zip(lesson["paragraphs"], lesson["translations"]), 1):
+        st.markdown(f"**Đoạn {index}**")
+        st.markdown(
+            f"<div style='font-size:18px;line-height:1.75;padding:16px 18px;background:#f8fafc;"
+            f"border-left:5px solid #2563eb;border-radius:12px'>{html.escape(paragraph)}</div>",
+            unsafe_allow_html=True,
+        )
+        if show_translation:
+            st.info(translation)
+
+    st.markdown("#### Từ khóa trong ngữ cảnh")
+    columns = st.columns(2)
+    for index, (word, meaning) in enumerate(lesson["vocab"]):
+        columns[index % 2].markdown(f"- **{word}** — {meaning}")
+
+    st.markdown("#### Đọc hiểu")
+    answers = []
+    for index, (question, options, _) in enumerate(lesson["questions"]):
+        answers.append(st.radio(question, options, index=None, key=f"reading_question_{lesson_key}_{index}"))
+    if st.button("Chấm phần đọc hiểu", key=f"reading_check_{lesson_key}"):
+        if any(answer is None for answer in answers):
+            st.warning("Bạn hãy trả lời đủ câu hỏi trước khi chấm.")
+        else:
+            score = sum(answer == options[correct] for answer, (_, options, correct) in zip(answers, lesson["questions"]))
+            st.success(f"Bạn đúng {score}/{len(lesson['questions'])} câu.")
+
+    st.markdown("#### Thực hành dịch")
+    st.caption(lesson["task"])
+    st.text_area("Bản dịch/tóm tắt của bạn", key=f"reading_work_{lesson_key}", height=150)
+    with st.expander("Gợi ý quy trình dịch"):
+        st.markdown("1. Đọc toàn đoạn để xác định mục đích.  \n2. Gạch chủ ngữ, động từ chính và từ nối.  \n3. Dịch theo ý của cả câu, tránh ghép nghĩa từng từ.  \n4. Bật bản dịch mẫu để đối chiếu sau khi đã tự làm.")
 
 
 def _render_four_skills(level, data):
