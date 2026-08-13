@@ -474,6 +474,33 @@ VSTEP_WRITING_SAMPLE = "Dear Alex,\n\nI'm delighted that you're coming to visit 
 
 VSTEP_SPEAKING_SAMPLE = "I would choose volunteer work. First, it gives the whole class a clear purpose and allows us to help the local community. For example, we could clean a park or collect books for children. It is also inexpensive, so everyone can join. A picnic would be relaxing, but bad weather could ruin it and some students might not enjoy outdoor activities. A museum visit would be educational; however, tickets and transport may cost more. For these reasons, volunteer work is the most practical and meaningful option."
 
+VSTEP_PRACTICE_SETS = {
+    "listening": [
+        VSTEP_LISTENING_TEST,
+        {"script": "Attention passengers. The ten fifteen train to Brighton will leave from platform six instead of platform four. The train is delayed by approximately twenty minutes because of a technical problem. Passengers for Eastbourne should still use platform two. The cafe near platform five is closed today, but drinks and snacks are available from the shop beside the main entrance.",
+         "questions": [("Which train is delayed?", ["Brighton", "Eastbourne", "London"], 0, "The announcement identifies the Brighton train."), ("Where will it leave from?", ["Platform 2", "Platform 4", "Platform 6"], 2, "It has moved from platform four to platform six."), ("How long is the delay?", ["10 minutes", "20 minutes", "50 minutes"], 1, "The delay is approximately twenty minutes."), ("Why is it delayed?", ["Bad weather", "A technical problem", "Staff illness"], 1, "A technical problem caused the delay."), ("Where can passengers buy drinks?", ["At the cafe", "Beside the main entrance", "On platform two"], 1, "The shop beside the main entrance is open.")]},
+        {"script": "Hello Ms Tran, this is David from City Dental Clinic. I am calling about your appointment on Friday at two o'clock. Dr Lee will be attending a conference, so we need to move your appointment. We can see you at four thirty on Friday or at nine o'clock on Monday morning. Please call us before five today to confirm which time you prefer. Our telephone number is 0186 440 725.",
+         "questions": [("Who is calling?", ["A conference organiser", "A clinic employee", "A patient"], 1, "David says he is calling from City Dental Clinic."), ("What was the original appointment time?", ["Friday at 2:00", "Friday at 4:30", "Monday at 9:00"], 0, "The original appointment was Friday at two."), ("Why must it change?", ["The clinic is closed", "The patient is away", "The doctor has a conference"], 2, "Dr Lee will attend a conference."), ("How many new times are offered?", ["One", "Two", "Three"], 1, "Friday 4:30 and Monday 9:00 are offered."), ("When should Ms Tran reply?", ["Before five today", "On Friday", "On Monday"], 0, "She is asked to call before five today.")]},
+    ],
+    "reading": [
+        VSTEP_READING_TEST,
+        {"title": "A workplace mentoring programme", "passage": ["A software company introduced a mentoring programme after a staff survey showed that new employees often felt uncertain during their first months. Each new employee was matched with an experienced colleague from a different team. The mentors did not evaluate performance; instead, they answered practical questions and helped newcomers understand how the company worked.", "After six months, new employees reported greater confidence and managers noticed that routine questions reached them less often. However, some mentors found it difficult to arrange meetings during busy periods. The company now gives mentors two hours of protected time each month and offers a short training session on giving useful feedback.", "The programme will continue for another year. Rather than expanding it immediately, the company plans to compare employee retention and satisfaction with figures from previous years."],
+         "questions": [("Why was the programme introduced?", ["Managers requested promotion", "New staff lacked confidence", "The company hired fewer people"], 1, "The staff survey revealed uncertainty among new employees."), ("What did mentors NOT do?", ["Answer practical questions", "Explain company practices", "Evaluate performance"], 2, "The passage explicitly says mentors did not evaluate performance."), ("What benefit did managers notice?", ["They received fewer routine questions", "Meetings became longer", "Training costs disappeared"], 0, "Routine questions reached managers less often."), ("What problem did mentors experience?", ["Insufficient knowledge", "Difficulty scheduling meetings", "Negative evaluations"], 1, "Busy periods made meetings hard to arrange."), ("Why will the company wait before expanding?", ["To compare longer-term results", "To replace all mentors", "To reduce satisfaction"], 0, "It plans to compare retention and satisfaction figures.")]},
+        {"title": "Repairing rather than replacing", "passage": ["Many household appliances are thrown away because a single part has failed. Repair cafes aim to change this pattern. At these community events, volunteers with practical skills help visitors examine broken items such as lamps, fans and small kitchen machines. Visitors remain involved in the repair, so they learn how the product works rather than simply receiving a free service.", "Not every item can be saved. Replacement parts may be unavailable, and some electrical repairs are unsafe without specialist equipment. Even so, organisers argue that an unsuccessful repair can still teach people why products fail and what to consider when buying a replacement.", "Several local councils now provide venues for repair cafes because the events reduce waste and encourage neighbours to share knowledge. Critics point out that volunteer events cannot replace professional repair businesses. Organisers agree, saying their goal is to make repair a normal first choice, not to compete with trained technicians."],
+         "questions": [("What happens at a repair cafe?", ["Visitors buy new products", "Volunteers help examine broken items", "Factories sell spare parts"], 1, "Volunteers help visitors inspect and repair items."), ("Why do visitors stay involved?", ["To learn how products work", "To pay the volunteers", "To receive qualifications"], 0, "Participation helps them learn."), ("Why can some items not be repaired?", ["Events are too popular", "Parts or equipment may be unavailable", "Councils forbid repairs"], 1, "The second paragraph gives both reasons."), ("Why do councils support the events?", ["They create professional jobs", "They reduce waste and share knowledge", "They increase appliance sales"], 1, "These are the benefits named in paragraph three."), ("What is the organisers' goal?", ["Replace professional businesses", "Make repair the first option", "Offer every repair free"], 1, "They want repair to become a normal first choice.")]},
+    ],
+    "writing": [
+        ("Task 1 · Course information", "You want to join an evening English course. Write an email asking about the timetable, class size, fees and learning materials.", "120 từ · 20 phút"),
+        ("Task 1 · Complaint", "You stayed at a hotel and experienced two problems. Write to the manager describing the problems and stating what action you expect.", "120 từ · 20 phút"),
+        ("Task 2 · Online learning", "Some people believe online learning is more effective than classroom learning. Discuss both views and give your opinion.", "250 từ · 40 phút"),
+    ],
+    "speaking": [
+        ("Part 1 · Free time", "What do you usually do in your free time? Why? Do you prefer spending it alone or with friends?", "Trả lời 3 câu · 2 phút"),
+        ("Part 2 · Travel", "Choose the best way for a class trip: coach, train or private cars. Explain your choice and reject the other options.", "Chuẩn bị 1 phút · nói 2–3 phút"),
+        ("Part 3 · Exercise", "Develop the topic: Regular exercise is important. Discuss health, stress, social connection and your own idea.", "Chuẩn bị 1 phút · nói 3 phút"),
+    ],
+}
+
 
 def _drive_link(file_id, is_folder=False):
     kind = "folders" if is_folder else "file/d"
@@ -686,14 +713,7 @@ def render_vstep_b1_path():
         st.markdown("#### Chiến thuật")
         for item in content["strategy"]:
             st.markdown(f"- {item}")
-        if selected_skill.startswith("🎧"):
-            _render_vstep_objective_test("listening", VSTEP_LISTENING_TEST)
-        elif selected_skill.startswith("📖"):
-            _render_vstep_objective_test("reading", VSTEP_READING_TEST)
-        elif selected_skill.startswith("✍️"):
-            _render_vstep_writing_test()
-        else:
-            _render_vstep_speaking_test()
+        _render_vstep_skill_practice(selected_skill)
 
     with tab_progress:
         st.markdown("#### Chẩn đoán nhanh hiện tại")
@@ -727,6 +747,31 @@ def _complete_and_next_vstep_day():
     current = st.session_state.get("vstep_current_day", 1)
     st.session_state[f"vstep_day_complete_{current}"] = True
     st.session_state["vstep_current_day"] = min(56, current + 1)
+
+
+def _change_practice_set(skill, delta):
+    key = f"vstep_{skill}_set_index"
+    count = len(VSTEP_PRACTICE_SETS[skill])
+    st.session_state[key] = (st.session_state.get(key, 0) + delta) % count
+
+
+def _render_vstep_skill_practice(selected_skill):
+    skill = "listening" if selected_skill.startswith("🎧") else "reading" if selected_skill.startswith("📖") else "writing" if selected_skill.startswith("✍️") else "speaking"
+    sets = VSTEP_PRACTICE_SETS[skill]
+    key = f"vstep_{skill}_set_index"
+    index = st.session_state.get(key, 0) % len(sets)
+    previous, label, following = st.columns([1, 2, 1])
+    previous.button("← Bài trước", on_click=_change_practice_set, args=(skill, -1), key=f"vstep_{skill}_previous", use_container_width=True)
+    label.markdown(f"<div style='text-align:center;font-weight:800;padding:9px'>Bài {index + 1}/{len(sets)}</div>", unsafe_allow_html=True)
+    following.button("Bài tiếp →", on_click=_change_practice_set, args=(skill, 1), key=f"vstep_{skill}_next", use_container_width=True)
+    if skill in ("listening", "reading"):
+        _render_vstep_objective_test(skill, sets[index], key_suffix=f"skill_{index}")
+    elif skill == "writing":
+        title, prompt, timing = sets[index]
+        _render_vstep_writing_test(key_suffix=f"skill_{index}", title=title, prompt=prompt, timing=timing)
+    else:
+        title, prompt, timing = sets[index]
+        _render_vstep_speaking_test(key_suffix=f"skill_{index}", title=title, prompt=prompt, timing=timing)
 
 
 def _render_vstep_daily_path():
@@ -785,14 +830,28 @@ def _render_vstep_daily_path():
         elif lesson["week"] >= 4:
             st.warning("Làm bài trực tiếp phía dưới trước khi mở bài mẫu/đáp án. Không cần rời khỏi website.")
 
+    set_index = (selected_day - 1) % 3
     if lesson["skill"] == "Listening":
-        _render_vstep_objective_test("listening", VSTEP_LISTENING_TEST, key_suffix=f"day_{selected_day}")
+        _render_vstep_objective_test("listening", VSTEP_PRACTICE_SETS["listening"][set_index], key_suffix=f"day_{selected_day}")
     elif lesson["skill"] == "Reading":
-        _render_vstep_objective_test("reading", VSTEP_READING_TEST, key_suffix=f"day_{selected_day}")
+        _render_vstep_objective_test("reading", VSTEP_PRACTICE_SETS["reading"][set_index], key_suffix=f"day_{selected_day}")
     elif lesson["skill"] == "Writing":
-        _render_vstep_writing_test(key_suffix=f"day_{selected_day}")
+        title, prompt, timing = VSTEP_PRACTICE_SETS["writing"][set_index]
+        _render_vstep_writing_test(key_suffix=f"day_{selected_day}", title=title, prompt=prompt, timing=timing)
     elif lesson["skill"] == "Speaking":
-        _render_vstep_speaking_test(key_suffix=f"day_{selected_day}")
+        title, prompt, timing = VSTEP_PRACTICE_SETS["speaking"][set_index]
+        _render_vstep_speaking_test(key_suffix=f"day_{selected_day}", title=title, prompt=prompt, timing=timing)
+    elif lesson["skill"] == "Grammar":
+        _render_grammar_cloze("B1 · Làm việc độc lập", key_suffix=f"day_{selected_day}")
+    elif lesson["skill"] == "Tổng hợp":
+        st.markdown("#### Mini-test chẩn đoán hôm nay")
+        _render_vstep_objective_test("reading", VSTEP_PRACTICE_SETS["reading"][set_index], key_suffix=f"diagnostic_{selected_day}")
+        title, prompt, timing = VSTEP_PRACTICE_SETS["speaking"][set_index]
+        _render_vstep_speaking_test(key_suffix=f"diagnostic_{selected_day}", title=title, prompt=prompt, timing=timing)
+    elif lesson["skill"] == "Review":
+        st.markdown("#### Bài ôn cuối tuần")
+        _render_grammar_cloze("B1 · Làm việc độc lập", key_suffix=f"review_{selected_day}")
+        st.text_area("Viết lại 3 câu từng làm sai và giải thích quy tắc", key=f"vstep_review_errors_{selected_day}", height=130)
     else:
         st.text_area("Bài làm / sổ lỗi hôm nay", key=f"vstep_daily_notes_{selected_day}", height=150)
 
@@ -844,12 +903,13 @@ def _render_vstep_objective_test(kind, test, key_suffix="skill"):
                 st.markdown(f"{icon} **Câu {index}: {options[correct]}** — {explanation}")
 
 
-def _render_vstep_writing_test(key_suffix="skill"):
-    st.markdown("#### Writing Task 1 · Email khoảng 120 từ · 20 phút")
-    st.info("A friend will visit your city. Write an email suggesting transport, accommodation and two places to visit. Ask for one piece of information about the trip.")
+def _render_vstep_writing_test(key_suffix="skill", title="Task 1 · Visit your city", prompt=None, timing="120 từ · 20 phút"):
+    prompt = prompt or "A friend will visit your city. Write an email suggesting transport, accommodation and two places to visit. Ask for one piece of information about the trip."
+    st.markdown(f"#### Writing {title}")
+    st.info(prompt)
     answer = st.text_area("Viết bài tại đây", key=f"vstep_writing_task_1_{key_suffix}", height=260)
     word_count = len(answer.split())
-    st.caption(f"Số từ hiện tại: {word_count} · Mục tiêu: khoảng 120 từ")
+    st.caption(f"Số từ hiện tại: {word_count} · Mục tiêu: {timing}")
     checks = [
         ("Có lời chào và câu kết phù hợp", "Dear/Hi… và Best wishes/Regards"),
         ("Đủ 4 ý nội dung", "transport · accommodation · two places · one question"),
@@ -859,14 +919,19 @@ def _render_vstep_writing_test(key_suffix="skill"):
     st.markdown("**Tự kiểm theo tiêu chí:**")
     for index, (label, help_text) in enumerate(checks):
         st.checkbox(label, help=help_text, key=f"vstep_writing_check_{key_suffix}_{index}")
-    with st.expander("Bài mẫu B1 và nhận xét"):
-        st.text(VSTEP_WRITING_SAMPLE)
-        st.success("Bài mẫu trả lời đủ yêu cầu, tổ chức theo đoạn và dùng từ nối đơn giản. Hãy đối chiếu cấu trúc, không chép nguyên văn.")
+    with st.expander("Gợi ý cấu trúc / bài mẫu"):
+        if title.startswith("Task 1"):
+            st.text(VSTEP_WRITING_SAMPLE)
+            st.success("Bài mẫu trả lời đủ yêu cầu, tổ chức theo đoạn và dùng từ nối đơn giản. Hãy đối chiếu cấu trúc, không chép nguyên văn.")
+        else:
+            st.markdown("**Introduction:** paraphrase đề + nêu quan điểm.  \n**Body 1:** quan điểm/lợi ích thứ nhất + giải thích + ví dụ.  \n**Body 2:** quan điểm/hạn chế còn lại + giải thích + ví dụ.  \n**Conclusion:** tóm tắt và khẳng định lại quan điểm.")
 
 
-def _render_vstep_speaking_test(key_suffix="skill"):
-    st.markdown("#### Speaking Part 2 · Thảo luận giải pháp")
-    st.info("Your class wants a weekend activity. Choose the best option: **a picnic, a museum visit, or volunteer work**. Explain your choice and reject the other two options.")
+def _render_vstep_speaking_test(key_suffix="skill", title="Part 2 · Thảo luận giải pháp", prompt=None, timing="Chuẩn bị 1 phút · nói 2–3 phút"):
+    prompt = prompt or "Your class wants a weekend activity. Choose the best option: a picnic, a museum visit, or volunteer work. Explain your choice and reject the other two options."
+    st.markdown(f"#### Speaking {title}")
+    st.info(prompt)
+    st.caption(timing)
     st.markdown("**Khung trả lời 2–3 phút:** lựa chọn → 2 lý do → ví dụ → hạn chế của phương án 2 → hạn chế của phương án 3 → kết luận.")
     st.text_area("Dàn ý nhanh trong 1 phút", key=f"vstep_speaking_outline_{key_suffix}", height=120)
     components.html(
@@ -874,9 +939,12 @@ def _render_vstep_speaking_test(key_suffix="skill"):
         height=50,
     )
     st.caption("Bấm giờ rồi nói thành tiếng hoặc ghi âm bằng điện thoại để nghe lại.")
-    with st.expander("Bài nói mẫu B1 và cách triển khai"):
-        st.write(VSTEP_SPEAKING_SAMPLE)
-        st.success("Mẫu chọn rõ một phương án, nêu hai lợi ích, bác bỏ cả hai lựa chọn còn lại và kết luận nhất quán.")
+    with st.expander("Gợi ý triển khai / bài mẫu"):
+        if title.startswith("Part 2"):
+            st.write(VSTEP_SPEAKING_SAMPLE)
+            st.success("Mẫu chọn rõ một phương án, nêu hai lợi ích, bác bỏ cả hai lựa chọn còn lại và kết luận nhất quán.")
+        else:
+            st.markdown("Dùng khung **Answer/Point → Reason → Example → Closing point**. Mỗi ý nên có ít nhất một lý do hoặc ví dụ cụ thể.")
 
 
 def render_english_resource_library():
@@ -1068,7 +1136,7 @@ def _render_grammar_map(level):
     _render_grammar_cloze(level)
 
 
-def _render_grammar_cloze(level):
+def _render_grammar_cloze(level, key_suffix="lesson"):
     exercise = GRAMMAR_CLOZE[level]
     st.markdown("### Bài tập điền đoạn văn · dạng TOEIC")
     st.caption("Đọc toàn đoạn trước, xác định thời gian–chủ ngữ–quan hệ giữa các câu rồi mới chọn đáp án.")
@@ -1077,9 +1145,9 @@ def _render_grammar_cloze(level):
         f"border:1px solid #fde68a;border-radius:13px'>{html.escape(exercise['text'])}</div>",
         unsafe_allow_html=True,
     )
-    with st.form(f"grammar_cloze_form_{level}"):
+    with st.form(f"grammar_cloze_form_{level}_{key_suffix}"):
         answers = [
-            st.radio(f"Ô ({index})", options, index=None, horizontal=True, key=f"grammar_cloze_{level}_{index}")
+            st.radio(f"Ô ({index})", options, index=None, horizontal=True, key=f"grammar_cloze_{level}_{key_suffix}_{index}")
             for index, (_, options, _) in enumerate(exercise["items"], 1)
         ]
         submitted = st.form_submit_button("Chấm và xem giải thích")
