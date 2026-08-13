@@ -342,6 +342,56 @@ VSTEP_WEEK_MATERIALS = {
     8: ("Bộ đề VSTEP 5", "Tổng duyệt như thi thật; chỉ xem đáp án sau khi hoàn thành toàn bộ."),
 }
 
+VSTEP_EMBEDDED_MATERIALS = {
+    1: {
+        "title": "Ngữ pháp nền B1",
+        "sections": [
+            ("Thì trong bài thi", "Present simple cho sự thật/thói quen; past simple cho sự việc đã kết thúc; present perfect cho trải nghiệm hoặc kết quả còn liên quan hiện tại."),
+            ("Câu điều kiện loại 1", "If + present simple, will/can + V. Không dùng will trong mệnh đề if."),
+            ("Mệnh đề quan hệ", "who cho người; which cho vật; that có thể thay who/which trong mệnh đề xác định."),
+            ("Bị động", "be + past participle; chia động từ be theo đúng thì và dùng khi hành động/kết quả quan trọng hơn người thực hiện."),
+        ],
+    },
+    2: {
+        "title": "Từ vựng theo chủ đề B1",
+        "sections": [
+            ("Education", "assignment · attend · improve · qualification · practical experience"),
+            ("Work", "apply for · colleague · deadline · responsibility · working conditions"),
+            ("Environment", "public transport · reduce waste · protect resources · pollution · sustainable"),
+            ("Health & lifestyle", "balanced diet · regular exercise · mental health · prevent · recover"),
+        ],
+    },
+    3: {
+        "title": "Speaking VSTEP Part 1–3",
+        "sections": [
+            ("Part 1 · Social interaction", "Answer → Reason → Example. Trả lời trực tiếp, sau đó thêm lý do và một chi tiết cá nhân."),
+            ("Part 2 · Solution discussion", "Choose one option → give two reasons → reject option 2 → reject option 3 → conclude."),
+            ("Part 3 · Topic development", "Point → Reason → Example → Point. Phát triển 2–3 ý và chuẩn bị câu hỏi mở rộng."),
+            ("Cụm cứu nguy", "In my opinion… · The main reason is… · For example… · Compared with… · To sum up…"),
+        ],
+    },
+    4: {
+        "title": "Bộ đề 1 · Email & chọn giải pháp",
+        "sections": [("Writing Task 1", "Email cho bạn sắp đến thành phố: phương tiện, nơi ở, hai địa điểm và một câu hỏi."), ("Speaking Part 2", "Chọn hoạt động cuối tuần: picnic, bảo tàng hoặc tình nguyện; bác bỏ hai lựa chọn còn lại."), ("Mục tiêu", "Viết khoảng 120 từ trong 20 phút; nói 2–3 phút sau 1 phút chuẩn bị.")],
+    },
+    5: {
+        "title": "Bộ đề 2 · Essay & phát triển chủ đề",
+        "sections": [("Writing Task 2", "Some people think university students should have part-time jobs. Discuss the benefits and drawbacks and give your opinion."), ("Speaking Part 3", "Topic: The benefits of learning a foreign language—work, travel, knowledge and your own idea."), ("Mục tiêu", "Essay khoảng 250 từ; mỗi đoạn thân bài có câu chủ đề, giải thích và ví dụ.")],
+    },
+    6: {
+        "title": "Bộ đề 3 · Reading & Listening bấm giờ",
+        "sections": [("Reading", "4 passages/40 questions/60 minutes: main idea, detail, inference, attitude and vocabulary in context."), ("Listening", "3 parts/35 questions/~40 minutes: short exchanges, conversations and talks."), ("Mục tiêu", "Ghi bằng chứng cho từng câu sai và phân biệt lỗi nghe/đọc với lỗi quản lý thời gian.")],
+    },
+    7: {
+        "title": "Bộ đề 4 · Mock test đủ kỹ năng",
+        "sections": [("Buổi 1", "Listening + Reading đúng thời gian, không dừng đồng hồ."), ("Buổi 2", "Writing 60 phút: Task 1 tối đa 20 phút, Task 2 khoảng 40 phút."), ("Buổi 3", "Speaking 12 phút; ghi âm và tự chấm độ trôi chảy, từ vựng, ngữ pháp, phát âm.")],
+    },
+    8: {
+        "title": "Bộ đề 5 · Tổng duyệt",
+        "sections": [("Thi như thật", "Làm đủ 4 kỹ năng trong điều kiện ít gián đoạn nhất có thể."), ("Chữa đề", "Chỉ xem đáp án sau khi hoàn thành; viết lý do cho mọi câu sai."), ("Chốt chiến thuật", "Xác định thứ tự làm, mốc thời gian, mẫu dàn ý và cách xử lý khi bỏ lỡ một câu nghe.")],
+    },
+}
+
 
 def _build_vstep_days():
     days = []
@@ -716,9 +766,24 @@ def _render_vstep_daily_path():
     material_name, material_use = VSTEP_WEEK_MATERIALS[lesson["week"]]
     with st.expander(f"📚 Tài liệu sát đề tuần này · {material_name}", expanded=selected_day % 7 == 1):
         st.write(material_use)
-        if lesson["week"] >= 4:
-            st.caption(f"Trong bộ ‘VSTEP 5 bộ đề B1–B2’, dùng đề số {lesson['week'] - 3}. Chỉ xem đáp án/bài mẫu sau khi đã bấm giờ làm xong.")
-        st.link_button("Mở kho tài liệu VSTEP của bạn ↗", VSTEP_DRIVE_FOLDER)
+        embedded = VSTEP_EMBEDDED_MATERIALS[lesson["week"]]
+        st.markdown(f"#### {embedded['title']}")
+        for heading, body in embedded["sections"]:
+            st.markdown(f"**{heading}**  \n{body}")
+        if lesson["week"] == 1 and lesson["skill"] == "Grammar":
+            st.markdown("**Kiểm tra nhanh:** If the weather ___ good tomorrow, we will go out.")
+            grammar_answer = st.radio("Chọn đáp án", ["is", "will be", "was"], index=None, key=f"vstep_embedded_grammar_{selected_day}")
+            if grammar_answer:
+                if grammar_answer == "is":
+                    st.success("Đúng. Điều kiện loại 1 dùng hiện tại đơn trong mệnh đề if.")
+                else:
+                    st.error("Đáp án là ‘is’: If + present simple, will + V.")
+        elif lesson["week"] == 2:
+            st.text_input("Viết một câu dùng ít nhất 2 cụm từ phía trên", key=f"vstep_embedded_vocab_{selected_day}")
+        elif lesson["week"] == 3:
+            st.text_area("Soạn câu trả lời theo khung phù hợp", key=f"vstep_embedded_speaking_{selected_day}", height=100)
+        elif lesson["week"] >= 4:
+            st.warning("Làm bài trực tiếp phía dưới trước khi mở bài mẫu/đáp án. Không cần rời khỏi website.")
 
     if lesson["skill"] == "Listening":
         _render_vstep_objective_test("listening", VSTEP_LISTENING_TEST, key_suffix=f"day_{selected_day}")
