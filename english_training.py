@@ -336,6 +336,37 @@ VSTEP_PRACTICE = {
     },
 }
 
+VSTEP_LISTENING_TEST = {
+    "script": "Good morning, everyone. This is a reminder about Saturday's community clean-up. We will meet outside the public library at eight thirty, not at the town hall as stated in the first email. Gloves and rubbish bags will be provided, but please bring your own water and wear comfortable shoes. The activity should finish by eleven thirty. If heavy rain is expected, we will post a cancellation notice on the community website by seven o'clock that morning. Volunteers under sixteen must come with an adult.",
+    "questions": [
+        ("Where will the volunteers meet?", ["At the town hall", "Outside the public library", "On the community website"], 1, "The speaker corrects the first email and says they will meet outside the public library."),
+        ("What should volunteers bring?", ["Gloves", "Rubbish bags", "Water"], 2, "Gloves and bags are provided; volunteers need to bring their own water."),
+        ("When should the activity end?", ["7:00", "8:30", "11:30"], 2, "The announcement says the activity should finish by eleven thirty."),
+        ("How will people learn about a cancellation?", ["Through the website", "By telephone", "At the library"], 0, "A notice will be posted on the community website."),
+        ("Who must be accompanied by an adult?", ["New volunteers", "People under sixteen", "Library staff"], 1, "The final sentence states that volunteers under sixteen must come with an adult."),
+    ],
+}
+
+VSTEP_READING_TEST = {
+    "title": "Why a local library changed its opening hours",
+    "passage": [
+        "Last year, Westbridge Library noticed that fewer people were visiting on weekday mornings, while demand for evening study space had increased. Many local residents worked until five or six o'clock, and college students often needed a quiet place after their classes. The library therefore tested a new timetable for three months: it opened two hours later on Tuesdays and Thursdays but remained open until nine in the evening.",
+        "The trial attracted 38 per cent more evening visitors without reducing the total number of weekly visits. Nevertheless, some retired residents objected because they had previously attended a Tuesday morning reading group. In response, the library moved that group to Wednesday and asked a nearby community centre to host an additional monthly session.",
+        "Following the trial, the library made the later hours permanent. Its manager stressed that the decision was not simply about attracting larger numbers. The aim was to make limited staff time match the periods when the building was most useful. The library will review attendance again after six months and may extend the timetable to another weekday if sufficient demand exists.",
+    ],
+    "questions": [
+        ("Why was the new timetable tested?", ["Morning visits were increasing", "More people needed evening access", "The library had hired more staff"], 1, "The first paragraph identifies increasing demand for evening study space."),
+        ("What happened during the trial?", ["Weekly visits declined", "Evening attendance rose", "The reading group ended"], 1, "Evening visitors increased by 38%, while total weekly visits did not fall."),
+        ("The word ‘objected’ is closest in meaning to…", ["disagreed", "forgot", "participated"], 0, "The retired residents opposed the change because it affected their group."),
+        ("How did the library respond to retired residents?", ["It reopened every Tuesday morning", "It moved their group and added a monthly session", "It gave them access to staff offices"], 1, "Both actions are stated in the second paragraph."),
+        ("What is the manager's main point?", ["Visitor numbers are the only measure", "Staff should work fewer hours", "Opening hours should match actual community need"], 2, "The manager focuses on using limited staff time when the building is most useful."),
+    ],
+}
+
+VSTEP_WRITING_SAMPLE = "Dear Alex,\n\nI'm delighted that you're coming to visit my city next month. The easiest way to get around is by bus because it is inexpensive and most tourist attractions are near a bus stop. I suggest staying at the Riverside Hotel. It is reasonably priced and only a ten-minute walk from the city centre.\n\nYou should definitely visit the History Museum, where you can learn about the region, and the night market, which is famous for local food. Bring comfortable shoes because we will do quite a lot of walking. Please send me your arrival time when you book your ticket.\n\nBest wishes,\nMinh"
+
+VSTEP_SPEAKING_SAMPLE = "I would choose volunteer work. First, it gives the whole class a clear purpose and allows us to help the local community. For example, we could clean a park or collect books for children. It is also inexpensive, so everyone can join. A picnic would be relaxing, but bad weather could ruin it and some students might not enjoy outdoor activities. A museum visit would be educational; however, tickets and transport may cost more. For these reasons, volunteer work is the most practical and meaningful option."
+
 
 def _drive_link(file_id, is_folder=False):
     kind = "folders" if is_folder else "file/d"
@@ -545,10 +576,14 @@ def render_vstep_b1_path():
         st.markdown("#### Chiến thuật")
         for item in content["strategy"]:
             st.markdown(f"- {item}")
-        st.info(f"**Bài luyện hôm nay:** {content['task']}")
-        st.text_area("Bài làm / ghi chú bằng chứng", key=f"vstep_practice_answer_{selected_skill}", height=180)
-        st.checkbox("Đã làm có bấm giờ", key=f"vstep_timed_{selected_skill}")
-        st.checkbox("Đã ghi lại lỗi sai và cách sửa", key=f"vstep_reviewed_{selected_skill}")
+        if selected_skill.startswith("🎧"):
+            _render_vstep_objective_test("listening", VSTEP_LISTENING_TEST)
+        elif selected_skill.startswith("📖"):
+            _render_vstep_objective_test("reading", VSTEP_READING_TEST)
+        elif selected_skill.startswith("✍️"):
+            _render_vstep_writing_test()
+        else:
+            _render_vstep_speaking_test()
 
     with tab_progress:
         st.markdown("#### Chẩn đoán nhanh hiện tại")
@@ -570,6 +605,77 @@ def render_vstep_b1_path():
     with st.expander("Nguồn chính thức"):
         st.markdown("- [Định dạng đề thi VSTEP.3-5 – ULIS, ĐHQGHN](https://vstep.vnu.edu.vn/files/uploads/2020/12/Dinh-dang-VSTEP.3-5.pdf)")
         st.markdown("- [Bảng điểm và cấp độ VSTEP.3-5 – ULIS, ĐHQGHN](https://vstep.vnu.edu.vn/scores-levels/)")
+
+
+def _render_vstep_objective_test(kind, test):
+    st.markdown(f"#### Bài luyện {'Listening' if kind == 'listening' else 'Reading'} B1 · 5 câu")
+    if kind == "listening":
+        safe_script = html.escape(test["script"], quote=True)
+        components.html(
+            f"""<!doctype html><html><head><style>body{{margin:0;font-family:Arial}}button{{padding:10px 16px;border:0;border-radius:10px;background:#dbeafe;color:#1d4ed8;font-weight:700;cursor:pointer}}</style></head>
+            <body><button id="play" data-text="{safe_script}">🔊 Phát bài nghe · giọng nữ chậm</button><script>
+            document.getElementById('play').onclick=()=>{{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(document.getElementById('play').dataset.text);u.lang='en-US';u.rate=.76;u.pitch=1.05;
+            const vs=speechSynthesis.getVoices(),f=/samantha|zira|aria|jenny|ava|susan|hazel|female|woman/i,p=vs.find(v=>v.lang.startsWith('en')&&f.test(v.name))||vs.find(v=>v.lang.startsWith('en'));if(p)u.voice=p;speechSynthesis.speak(u);}};</script></body></html>""",
+            height=50,
+        )
+        st.caption("Nghe tối đa 2 lượt trước khi mở transcript.")
+        with st.expander("Transcript · chỉ mở sau khi làm"):
+            st.write(test["script"])
+    else:
+        st.markdown(f"**{test['title']}**")
+        for paragraph in test["passage"]:
+            st.markdown(paragraph)
+
+    with st.form(f"vstep_{kind}_test"):
+        answers = [
+            st.radio(f"{index}. {question}", options, index=None, key=f"vstep_{kind}_q_{index}")
+            for index, (question, options, _, _) in enumerate(test["questions"], 1)
+        ]
+        submitted = st.form_submit_button("Chấm bài và xem giải thích")
+    if submitted:
+        if any(answer is None for answer in answers):
+            st.warning("Bạn cần trả lời đủ 5 câu trước khi chấm.")
+        else:
+            score = sum(answer == options[correct] for answer, (_, options, correct, _) in zip(answers, test["questions"]))
+            st.success(f"Kết quả: {score}/5 câu đúng.")
+            for index, (choice, (_, options, correct, explanation)) in enumerate(zip(answers, test["questions"]), 1):
+                icon = "✅" if choice == options[correct] else "❌"
+                st.markdown(f"{icon} **Câu {index}: {options[correct]}** — {explanation}")
+
+
+def _render_vstep_writing_test():
+    st.markdown("#### Writing Task 1 · Email khoảng 120 từ · 20 phút")
+    st.info("A friend will visit your city. Write an email suggesting transport, accommodation and two places to visit. Ask for one piece of information about the trip.")
+    answer = st.text_area("Viết bài tại đây", key="vstep_writing_task_1", height=260)
+    word_count = len(answer.split())
+    st.caption(f"Số từ hiện tại: {word_count} · Mục tiêu: khoảng 120 từ")
+    checks = [
+        ("Có lời chào và câu kết phù hợp", "Dear/Hi… và Best wishes/Regards"),
+        ("Đủ 4 ý nội dung", "transport · accommodation · two places · one question"),
+        ("Có lý do hoặc ví dụ", "Không chỉ liệt kê; giải thích vì sao đề xuất phù hợp"),
+        ("Đã kiểm tra ngôn ngữ", "thì, chia động từ, số nhiều, chính tả và dấu câu"),
+    ]
+    st.markdown("**Tự kiểm theo tiêu chí:**")
+    for index, (label, help_text) in enumerate(checks):
+        st.checkbox(label, help=help_text, key=f"vstep_writing_check_{index}")
+    with st.expander("Bài mẫu B1 và nhận xét"):
+        st.text(VSTEP_WRITING_SAMPLE)
+        st.success("Bài mẫu trả lời đủ yêu cầu, tổ chức theo đoạn và dùng từ nối đơn giản. Hãy đối chiếu cấu trúc, không chép nguyên văn.")
+
+
+def _render_vstep_speaking_test():
+    st.markdown("#### Speaking Part 2 · Thảo luận giải pháp")
+    st.info("Your class wants a weekend activity. Choose the best option: **a picnic, a museum visit, or volunteer work**. Explain your choice and reject the other two options.")
+    st.markdown("**Khung trả lời 2–3 phút:** lựa chọn → 2 lý do → ví dụ → hạn chế của phương án 2 → hạn chế của phương án 3 → kết luận.")
+    st.text_area("Dàn ý nhanh trong 1 phút", key="vstep_speaking_outline", height=120)
+    components.html(
+        """<!doctype html><html><head><style>body{margin:0;font-family:Arial}.row{display:flex;gap:8px;align-items:center}button{padding:9px 14px;border:0;border-radius:9px;background:#ede9fe;color:#5b21b6;font-weight:700}#time{font-size:22px;font-weight:800}</style></head><body><div class='row'><button id='start'>⏱ Bắt đầu 3 phút</button><button id='reset'>Làm lại</button><span id='time'>03:00</span></div><script>let left=180,timer=null;const out=document.getElementById('time');function draw(){out.textContent=String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0')}document.getElementById('start').onclick=()=>{if(timer)return;timer=setInterval(()=>{if(left>0){left--;draw()}else{clearInterval(timer);timer=null;out.textContent='HẾT GIỜ'}},1000)};document.getElementById('reset').onclick=()=>{clearInterval(timer);timer=null;left=180;draw()};</script></body></html>""",
+        height=50,
+    )
+    st.caption("Bấm giờ rồi nói thành tiếng hoặc ghi âm bằng điện thoại để nghe lại.")
+    with st.expander("Bài nói mẫu B1 và cách triển khai"):
+        st.write(VSTEP_SPEAKING_SAMPLE)
+        st.success("Mẫu chọn rõ một phương án, nêu hai lợi ích, bác bỏ cả hai lựa chọn còn lại và kết luận nhất quán.")
 
 
 def render_english_resource_library():
