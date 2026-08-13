@@ -50,6 +50,10 @@ def _current_user():
         return dict(user) if user else {}
 
 
+def _current_email():
+    return str(_current_user().get("email", "")).strip().casefold()
+
+
 def _can_view_training():
     user = _current_user()
     email = str(user.get("email", "")).strip().casefold()
@@ -141,6 +145,129 @@ def revoke_training_access(email):
             load_training_access.clear()
             return True, f"Đã thu hồi quyền của {email}."
     return False, "Không tìm thấy email trong danh sách cấp thêm."
+
+
+# ===== TIẾN ĐỘ HỌC (spaced repetition + lịch sử quiz) =====
+# Sổ nhật ký dạng "chỉ thêm dòng" (append-only): mỗi lần ôn 1 từ hoặc nộp 1
+# quiz ghi thêm 1 dòng, không sửa dòng cũ — tránh phải dò-và-cập-nhật đúng ô
+# (chậm và dễ đụng độ khi nhiều người dùng cùng lúc). Trạng thái "hiện tại"
+# của 1 mục = dòng có Thời gian mới nhất của mục đó.
+TRAINING_PROGRESS_SHEET = "Training Progress"
+PROGRESS_COLS = ["Thời gian", "Email", "Ngôn ngữ", "Loại", "Mã mục", "Kết quả", "Box", "Ngày ôn tiếp theo"]
+# Số ngày chờ trước khi ôn lại, theo box kiểu Leitner (đúng liên tục thì box tăng, giãn cách xa dần).
+BOX_INTERVAL_DAYS = {1: 1, 2: 2, 3: 4, 4: 7, 5: 15}
+MAX_BOX = 5
+
+
+def _training_progress_worksheet():
+    spreadsheet = get_gc().open_by_key(SPREADSHEET_ID)
+    try:
+        return spreadsheet.worksheet(TRAINING_PROGRESS_SHEET)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=TRAINING_PROGRESS_SHEET, rows=3000, cols=len(PROGRESS_COLS))
+        ws.append_row(PROGRESS_COLS)
+        return ws
+
+
+@st.cache_data(ttl=60)
+def load_training_progress(email: str) -> pd.DataFrame:
+    """Toàn bộ lịch sử ôn tập/quiz của 1 người dùng. Cache ngắn (60s) vì
+    người dùng tự ghi liên tục trong lúc học, không cần dữ liệu mới tuyệt đối."""
+    email = email.strip().casefold()
+    try:
+        rows = _training_progress_worksheet().get_all_values()
+    except gspread.exceptions.GSpreadException:
+        return pd.DataFrame(columns=PROGRESS_COLS)
+    if len(rows) < 2:
+        return pd.DataFrame(columns=PROGRESS_COLS)
+    df = pd.DataFrame(_pad_rows(rows[1:], len(PROGRESS_COLS)), columns=PROGRESS_COLS)
+    return df[df["Email"].str.strip().str.casefold() == email].reset_index(drop=True)
+
+
+def vocab_progress_map(df_progress: pd.DataFrame, ngon_ngu: str) -> dict:
+    """{Mã mục: {'box', 'next_review' (date|None), 'last_result'}} — trạng
+    thái ôn tập mới nhất của mỗi từ, suy ra từ dòng có Thời gian mới nhất."""
+    sub = df_progress[(df_progress["Ngôn ngữ"] == ngon_ngu) & (df_progress["Loại"] == "vocab")]
+    if sub.empty:
+        return {}
+    sub = sub.sort_values("Thời gian")
+    state = {}
+    for _, row in sub.iterrows():
+        try:
+            box = int(row["Box"])
+        except ValueError:
+            box = 1
+        state[row["Mã mục"]] = {
+            "box": box,
+            "next_review": _parse_ddmmyyyy(row["Ngày ôn tiếp theo"]),
+            "last_result": row["Kết quả"],
+        }
+    return state
+
+
+def record_vocab_review(email: str, ngon_ngu: str, ma_muc: str, correct: bool, current_box: int) -> int:
+    """Ghi 1 lần ôn từ vựng (đúng/sai), tính box mới kiểu Leitner, trả về box mới."""
+    new_box = min(current_box + 1, MAX_BOX) if correct else 1
+    next_review = date.today() + timedelta(days=BOX_INTERVAL_DAYS[new_box])
+    _training_progress_worksheet().append_row([
+        datetime.now().isoformat(timespec="seconds"), email.strip().casefold(), ngon_ngu, "vocab", ma_muc,
+        "correct" if correct else "incorrect", new_box, next_review.strftime("%d/%m/%Y"),
+    ])
+    load_training_progress.clear()
+    return new_box
+
+
+def record_quiz_result(email: str, ngon_ngu: str, ma_muc: str, score: int, total: int):
+    """Ghi 1 lần nộp quiz kèm điểm số, để xem lại lịch sử/xu hướng sau này."""
+    _training_progress_worksheet().append_row([
+        datetime.now().isoformat(timespec="seconds"), email.strip().casefold(), ngon_ngu, "quiz", ma_muc,
+        f"{score}/{total}", "", "",
+    ])
+    load_training_progress.clear()
+
+
+def quiz_history(df_progress: pd.DataFrame, ngon_ngu: str, ma_muc: str) -> pd.DataFrame:
+    """Lịch sử các lần làm 1 quiz cụ thể, mới nhất trước."""
+    sub = df_progress[
+        (df_progress["Ngôn ngữ"] == ngon_ngu) & (df_progress["Loại"] == "quiz") & (df_progress["Mã mục"] == ma_muc)
+    ]
+    return sub.sort_values("Thời gian", ascending=False)[["Thời gian", "Kết quả"]].reset_index(drop=True)
+
+
+def all_quiz_history(df_progress: pd.DataFrame, ngon_ngu: str, limit: int = 15) -> pd.DataFrame:
+    """Các lần làm quiz gần nhất của 1 ngôn ngữ, không giới hạn theo bài cụ thể."""
+    sub = df_progress[(df_progress["Ngôn ngữ"] == ngon_ngu) & (df_progress["Loại"] == "quiz")]
+    return sub.sort_values("Thời gian", ascending=False)[["Thời gian", "Mã mục", "Kết quả"]].head(limit).reset_index(drop=True)
+
+
+class TrainingProgress:
+    """API tiến độ học truyền xuống render_english_training/render_chinese_training,
+    để 2 module đó không phải import ngược lại app.py (tránh import vòng)."""
+
+    def __init__(self, email: str, df: pd.DataFrame):
+        self.email = email
+        self._df = df
+
+    def vocab_state(self, ngon_ngu: str) -> dict:
+        return vocab_progress_map(self._df, ngon_ngu)
+
+    def review_word(self, ngon_ngu: str, ma_muc: str, correct: bool, current_box: int) -> int:
+        return record_vocab_review(self.email, ngon_ngu, ma_muc, correct, current_box)
+
+    def submit_quiz(self, ngon_ngu: str, ma_muc: str, score: int, total: int):
+        record_quiz_result(self.email, ngon_ngu, ma_muc, score, total)
+
+    def quiz_log(self, ngon_ngu: str, ma_muc: str) -> pd.DataFrame:
+        return quiz_history(self._df, ngon_ngu, ma_muc)
+
+    def recent_quizzes(self, ngon_ngu: str, limit: int = 15) -> pd.DataFrame:
+        return all_quiz_history(self._df, ngon_ngu, limit)
+
+
+def _training_progress_api() -> "TrainingProgress":
+    email = _current_email()
+    df = load_training_progress(email) if email else pd.DataFrame(columns=PROGRESS_COLS)
+    return TrainingProgress(email, df)
 
 
 def _pad_rows(rows, width):
@@ -1493,10 +1620,11 @@ with tab6:
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 if _can_view_training() and tab7 is not None and tab8 is not None:
+    _progress = _training_progress_api()
     with tab7:
-        render_english_training()
+        render_english_training(_progress)
     with tab8:
-        render_chinese_training()
+        render_chinese_training(_progress)
 
 with st.sidebar:
     st.markdown("### ⚙️ Cài đặt")

@@ -8,7 +8,10 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from language_widgets import tts_speak_fn, render_resource_results
+from language_widgets import (
+    tts_speak_fn, render_resource_results, set_progress_api, render_vocab_review, record_quiz_if_progress,
+    render_progress_summary,
+)
 
 
 TERABOX_URL = "https://1024terabox.com/s/1blLvuQOMDPTNE-DLJu73YQ"
@@ -80,7 +83,15 @@ GRAMMAR_LESSONS = {
             ("Trợ từ", "了: thay đổi/hoàn thành · 过: trải nghiệm · 着: trạng thái", "我学过汉语。", "Wǒ xuéguo Hànyǔ.", "Tôi từng học tiếng Trung."),
         ],
         "mistakes": ["Không đảo từ để hỏi lên đầu câu như tiếng Việt/Anh.", "Không dùng 不 cho một hành động đã không xảy ra trong quá khứ; thường dùng 没(有)."],
-        "quiz": ("Chọn câu đúng cho ‘Hôm qua tôi không đi làm’", "我昨天没上班。", ["我昨天不上班。", "我昨天没上班。", "没我昨天上班。"]),
+        "quiz": {
+            "question": "Chọn câu đúng cho ‘Hôm qua tôi không đi làm’",
+            "answer": "我昨天没上班。",
+            "options": [
+                ("我昨天不上班。", "Wǒ zuótiān bù shàngbān."),
+                ("我昨天没上班。", "Wǒ zuótiān méi shàngbān."),
+                ("没我昨天上班。", "Méi wǒ zuótiān shàngbān."),
+            ],
+        },
     },
     "Câu chữ 被": {
         "formula": "Chủ thể chịu tác động + 被 + tác nhân + động từ + kết quả/bổ ngữ",
@@ -92,7 +103,13 @@ GRAMMAR_LESSONS = {
             ("Ngữ cảnh", "Hay dùng khi có thay đổi hoặc ảnh hưởng", "会议被取消了。", "Huìyì bèi qǔxiāo le.", "Cuộc họp đã bị hủy."),
         ],
         "mistakes": ["Không nói câu thiếu kết quả như 我的手机被他拿; nên nói 拿走了.", "Không dùng 被 chỉ để dịch máy móc mọi câu bị động tiếng Việt."],
-        "quiz": ("Điền từ: 会议 ___ 取消了。", "被", ["把", "被", "在"]),
+        "quiz": {
+            "question": "Điền từ: 会议 ___ 取消了。",
+            "question_pinyin": "Huìyì ___ qǔxiāo le.",
+            "question_meaning": "Cuộc họp đã bị hủy.",
+            "answer": "被",
+            "options": [("把", "bǎ"), ("被", "bèi"), ("在", "zài")],
+        },
     },
     "Cấu trúc 是...的": {
         "formula": "Chủ ngữ + 是 + thành phần cần nhấn mạnh + động từ + 的",
@@ -104,7 +121,13 @@ GRAMMAR_LESSONS = {
             ("Chủ thể", "是 + người + V + 的", "这封邮件是经理写的。", "Zhè fēng yóujiàn shì jīnglǐ xiě de.", "Email này do quản lý viết."),
         ],
         "mistakes": ["Không dùng để kể một hành động chưa xảy ra.", "Trong câu phủ định, đặt 不 sau 是: 不是...的."],
-        "quiz": ("Điền từ: 我 ___ 坐飞机来的。", "是", ["把", "是", "被"]),
+        "quiz": {
+            "question": "Điền từ: 我 ___ 坐飞机来的。",
+            "question_pinyin": "Wǒ ___ zuò fēijī lái de.",
+            "question_meaning": "Tôi đến bằng máy bay.",
+            "answer": "是",
+            "options": [("把", "bǎ"), ("是", "shì"), ("被", "bèi")],
+        },
     },
     "Động từ ly hợp": {
         "formula": "Động từ + (了/过/số lượng/thời lượng) + tân tố",
@@ -116,7 +139,15 @@ GRAMMAR_LESSONS = {
             ("Định ngữ", "V + người sở hữu + O", "我帮了他的忙。", "Wǒ bāng le tā de máng.", "Tôi đã giúp anh ấy."),
         ],
         "mistakes": ["Không nói 见面了两次; nói 见了两次面.", "Không thêm tân ngữ lần hai sau động từ ly hợp; dùng 跟/和 + người + 见面."],
-        "quiz": ("Chọn câu đúng cho ‘Tôi ngủ tám tiếng’", "我睡了八个小时觉。", ["我睡觉了八个小时。", "我睡了八个小时觉。", "我八个小时了睡觉。"]),
+        "quiz": {
+            "question": "Chọn câu đúng cho ‘Tôi ngủ tám tiếng’",
+            "answer": "我睡了八个小时觉。",
+            "options": [
+                ("我睡觉了八个小时。", "Wǒ shuìjiào le bā ge xiǎoshí."),
+                ("我睡了八个小时觉。", "Wǒ shuì le bā ge xiǎoshí jiào."),
+                ("我八个小时了睡觉。", "Wǒ bā ge xiǎoshí le shuìjiào."),
+            ],
+        },
     },
 }
 
@@ -628,6 +659,7 @@ def _render_classifier_lesson():
     if submitted:
         score = sum(answer == correct for answer, (_, correct, _) in zip(answers, CLASSIFIER_QUIZ))
         st.success(f"Bạn đúng {score}/{len(CLASSIFIER_QUIZ)} câu.")
+        record_quiz_if_progress("zh", "classifier_quiz", score, len(CLASSIFIER_QUIZ))
         if score < len(CLASSIFIER_QUIZ):
             corrections = [f"{index + 1}. **{correct}**" for index, (answer, (_, correct, _)) in enumerate(zip(answers, CLASSIFIER_QUIZ)) if answer != correct]
             st.markdown("Câu cần xem lại: " + " · ".join(corrections))
@@ -820,6 +852,7 @@ def _render_story(level):
             else:
                 score = sum(answer == options[correct] for answer, (_, options, correct) in zip(answers, story["questions"]))
                 st.success(f"Bạn đúng {score}/{len(story['questions'])} câu.")
+                record_quiz_if_progress("zh", f"reading_{lesson_key}", score, len(story["questions"]))
     else:
         st.text_area("Ý chính, nhân vật và kết quả của bài", key=f"zh_reading_comprehension_{lesson_key}", height=100)
 
@@ -863,14 +896,19 @@ def _render_grammar_lesson(topic):
     for mistake in lesson["mistakes"]:
         st.warning(mistake)
 
-    question, answer, options = lesson["quiz"]
+    quiz = lesson["quiz"]
     st.markdown("#### Kiểm tra nhanh")
-    choice = st.radio(question, options, index=None, key=f"grammar_quiz_{topic}")
+    if quiz.get("question_pinyin"):
+        st.caption(f"{quiz['question_pinyin']} · {quiz['question_meaning']}")
+    choice = st.radio(
+        quiz["question"], quiz["options"], index=None, format_func=lambda opt: f"{opt[0]}  ·  {opt[1]}",
+        key=f"grammar_quiz_{topic}",
+    )
     if choice:
-        if choice == answer:
+        if choice[0] == quiz["answer"]:
             st.success("Chính xác! Bạn đã nhận diện đúng cấu trúc.")
         else:
-            st.error(f"Chưa đúng. Đáp án là: {answer}")
+            st.error(f"Chưa đúng. Đáp án là: {quiz['answer']}")
     st.text_area("Tự đặt 2 câu với cấu trúc này", key=f"grammar_practice_{topic}", height=100)
 
 
@@ -930,9 +968,28 @@ def _render_extended_sources(level):
     )
 
 
-def render_chinese_training():
+def _render_zh_vocab_review(level, words):
+    def word_id(word):
+        return word[0]
+
+    def render_front(word):
+        st.markdown(f"### {word[0]}  ·  _{word[1]}_")
+
+    def render_back(word):
+        st.markdown(f"**Nghĩa:** {word[2]}")
+        st.markdown(f"**Ví dụ:** {word[3]}")
+        if len(word) > 5 and word[5]:
+            st.caption(word[5])
+        st.caption(word[4])
+
+    render_vocab_review("zh", words, word_id, render_front, render_back, namespace=f"zh_review_{level}")
+
+
+def render_chinese_training(progress=None):
+    set_progress_api(progress)
     st.subheader("Training tiếng Trung")
     st.caption("Học từ vựng và luyện đọc theo lộ trình HSK1-HSK6.")
+    render_progress_summary("zh")
     level = st.selectbox("Cấp độ", HSK_LEVELS, key="zh_level")
     cumulative = False
     if level in _vocab_levels():
@@ -943,7 +1000,10 @@ def render_chinese_training():
         cumulative = scope == "Lũy kế đến cấp này"
     words = _get_words(level, cumulative=cumulative)
     st.caption(f"Đang học {len(words)} từ")
-    views = ["🃏 Flashcard", "📋 Vocabulary List", "📖 Đọc & dịch", "📘 Sách đầy đủ", "🗂 Kho HSK1–6", "🌐 Kho mở rộng", "📕 Ngữ pháp PDF", "📚 Nguồn khác"]
+    views = [
+        "🃏 Flashcard", "🔁 Ôn ngắt quãng", "📋 Vocabulary List", "📖 Đọc & dịch", "📘 Sách đầy đủ",
+        "🗂 Kho HSK1–6", "🌐 Kho mở rộng", "📕 Ngữ pháp PDF", "📚 Nguồn khác",
+    ]
     view = st.radio(
         "Chế độ học", views, horizontal=True, key="zh_training_view",
         help="Chỉ tải chế độ đang chọn để web phản hồi nhanh hơn.",
@@ -951,16 +1011,18 @@ def render_chinese_training():
     if view == views[0]:
         _render_flashcards(level, words)
     elif view == views[1]:
-        _render_vocab_list(words)
+        _render_zh_vocab_review(level, words)
     elif view == views[2]:
-        _render_story(level)
+        _render_vocab_list(words)
     elif view == views[3]:
-        _render_textbook(level)
+        _render_story(level)
     elif view == views[4]:
-        _render_material_library(level)
+        _render_textbook(level)
     elif view == views[5]:
-        _render_extended_sources(level)
+        _render_material_library(level)
     elif view == views[6]:
+        _render_extended_sources(level)
+    elif view == views[7]:
         _render_pdf_library()
     else:
         _render_sources(level)

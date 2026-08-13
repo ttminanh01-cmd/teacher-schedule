@@ -5,7 +5,10 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from language_widgets import tts_speak_fn, render_resource_results
+from language_widgets import (
+    tts_speak_fn, render_resource_results, set_progress_api, render_vocab_review, record_quiz_if_progress,
+    render_progress_summary,
+)
 
 
 CATALOG_PATH = Path(__file__).with_name("course_catalog_raw.json")
@@ -658,9 +661,11 @@ LESSONS = {
 }
 
 
-def render_english_training():
+def render_english_training(progress=None):
+    set_progress_api(progress)
     st.subheader("Training tiếng Anh")
     st.caption("Lộ trình từ mất gốc đến giao tiếp, đọc và viết chuyên nghiệp trong công việc.")
+    render_progress_summary("en")
     mode = st.radio(
         "Chương trình", ["🚀 Từ mất gốc đến công sở", "🎯 Ôn VSTEP B1", "⚡ Luyện tình huống", "🗂 Kho tiếng Anh", "🎓 Video IELTS tham khảo"],
         horizontal=True, key="english_program_mode",
@@ -900,6 +905,7 @@ def _render_vstep_objective_test(kind, test, key_suffix="skill"):
         else:
             score = sum(answer == options[correct] for answer, (_, options, correct, _) in zip(answers, test["questions"]))
             st.success(f"Kết quả: {score}/5 câu đúng.")
+            record_quiz_if_progress("en", f"vstep_{kind}_{key_suffix}", score, 5)
             for index, (choice, (_, options, correct, explanation)) in enumerate(zip(answers, test["questions"]), 1):
                 icon = "✅" if choice == options[correct] else "❌"
                 st.markdown(f"{icon} **Câu {index}: {options[correct]}** — {explanation}")
@@ -994,13 +1000,16 @@ def render_workplace_path():
     data = WORKPLACE_PATH[selected]
     st.info(f"🎯 **Kết quả chặng:** {data['outcome']}  \n💼 **Nhiệm vụ công việc:** {data['work']}")
     view = st.radio(
-        "Cách học", ["🧭 Lộ trình", "📚 Từ vựng", "🧠 Ngữ pháp", "📖 Đọc & Dịch", "✍️ Luyện 4 kỹ năng", "📅 Kế hoạch tuần"],
+        "Cách học",
+        ["🧭 Lộ trình", "📚 Từ vựng", "🔁 Ôn ngắt quãng", "🧠 Ngữ pháp", "📖 Đọc & Dịch", "✍️ Luyện 4 kỹ năng", "📅 Kế hoạch tuần"],
         horizontal=True, key="workplace_view",
     )
     if view.startswith("🧭"):
         _render_workplace_map(selected, data)
     elif view.startswith("📚"):
         _render_workplace_vocab(selected, data)
+    elif view.startswith("🔁"):
+        _render_workplace_vocab_review(selected)
     elif view.startswith("🧠"):
         _render_grammar_map(selected)
     elif view.startswith("📖"):
@@ -1059,6 +1068,23 @@ def _render_workplace_vocab(level, data):
     for phrase, _ in data["phrases"]:
         st.text_input(f"Tự đặt câu với “{phrase}”", key=f"phrase_practice_{level}_{phrase}")
     st.warning("Mẹo: bấm 🔊 Từ, nghe và nhại ba lần; sau đó bấm 🔊 Ví dụ rồi tự tạo một câu liên quan trực tiếp tới công việc của bạn.")
+
+
+def _render_workplace_vocab_review(level):
+    words = list(WORKPLACE_VOCAB[level])
+    words.extend((item["word"], item["ipa"], item["meaning"], item["example"]) for item in load_extended_vocabulary().get(level, []))
+
+    def word_id(word):
+        return word[0]
+
+    def render_front(word):
+        st.markdown(f"### {word[0]}  ·  _{word[1]}_")
+
+    def render_back(word):
+        st.markdown(f"**Nghĩa:** {word[2]}")
+        st.markdown(f"**Ví dụ:** {word[3]}")
+
+    render_vocab_review("en", words, word_id, render_front, render_back, namespace=f"en_review_{level}")
 
 
 def _render_speaking_vocabulary(words, height=680):
@@ -1138,6 +1164,7 @@ def _render_grammar_cloze(level, key_suffix="lesson"):
             return
         score = sum(choice == answer for choice, (answer, _, _) in zip(answers, exercise["items"]))
         st.success(f"Kết quả: {score}/{len(exercise['items'])} câu đúng.")
+        record_quiz_if_progress("en", f"grammar_cloze_{level}_{key_suffix}", score, len(exercise["items"]))
         completed = exercise["text"]
         for index, (answer, _, _) in enumerate(exercise["items"], 1):
             completed = completed.replace(f"___ ({index})", f"**{answer}**")
@@ -1200,6 +1227,7 @@ def _render_reading_translation(level):
         else:
             score = sum(answer == options[correct] for answer, (_, options, correct) in zip(answers, lesson["questions"]))
             st.success(f"Bạn đúng {score}/{len(lesson['questions'])} câu.")
+            record_quiz_if_progress("en", f"reading_{lesson_key}", score, len(lesson["questions"]))
 
     st.markdown("#### Thực hành dịch")
     st.caption(lesson["task"])
@@ -1270,6 +1298,7 @@ def render_quick_training():
                 st.session_state[f"english_score_{lesson_key}"] = score
                 message = "Xuất sắc!" if score == len(lesson["quiz"]) else "Kết quả"
                 st.success(f"{message} Bạn đúng {score}/{len(lesson['quiz'])} câu.")
+                record_quiz_if_progress("en", f"quick_{lesson_key}", score, len(lesson["quiz"]))
         score = st.session_state.get(f"english_score_{lesson_key}")
         if score is not None:
             st.progress(score / len(lesson["quiz"]), text=f"Kết quả gần nhất: {score}/{len(lesson['quiz'])}")
