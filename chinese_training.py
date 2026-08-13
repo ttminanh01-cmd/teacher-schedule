@@ -268,6 +268,46 @@ HSK_GRAMMAR_COURSE = {
     ],
 }
 
+# Từ/cụm ngữ pháp trung tâm luôn được đọc trước khi học công thức.
+HSK_GRAMMAR_KEY_TERMS = {
+    "Câu 是": ("是", "shì", "là"),
+    "Câu hỏi 吗": ("吗", "ma", "không?/phải không?"),
+    "Phủ định 不": ("不", "bù", "không"),
+    "Sở hữu với 的": ("的", "de", "của; trợ từ bổ nghĩa"),
+    "Có với 有": ("有", "yǒu", "có"),
+    "Từ để hỏi": ("谁 / 什么 / 哪儿", "shéi / shénme / nǎr", "ai / cái gì / ở đâu"),
+    "Đã hoàn thành với 了": ("了", "le", "đã; hoàn thành hoặc thay đổi"),
+    "Đang diễn ra 在/正在": ("在 / 正在", "zài / zhèngzài", "đang"),
+    "Kinh nghiệm với 过": ("过", "guo", "đã từng"),
+    "So sánh với 比": ("比", "bǐ", "so với; hơn"),
+    "Vì… nên…": ("因为…所以…", "yīnwèi… suǒyǐ…", "vì… nên…"),
+    "Bổ ngữ trạng thái 得": ("得", "de", "đến mức; một cách"),
+    "Câu 把": ("把", "bǎ", "đưa tân ngữ lên trước để xử lý"),
+    "Cấu trúc 是…的": ("是…的", "shì… de", "chính là…; nhấn mạnh việc đã xảy ra"),
+    "Càng… càng…": ("越…越…", "yuè… yuè…", "càng… càng…"),
+    "Vừa… vừa…": ("一边…一边…", "yìbiān… yìbiān…", "vừa… vừa…"),
+    "Bổ ngữ kết quả": ("完 / 到 / 懂 / 好", "wán / dào / dǒng / hǎo", "xong / đạt / hiểu / ổn thỏa"),
+    "Nếu… thì…": ("如果…就…", "rúguǒ… jiù…", "nếu… thì…"),
+    "Câu bị động 被": ("被", "bèi", "bị; được"),
+    "Không những… mà còn…": ("不但…而且…", "búdàn… érqiě…", "không những… mà còn…"),
+    "Chỉ cần… thì…": ("只要…就…", "zhǐyào… jiù…", "chỉ cần… thì…"),
+    "Dù… vẫn…": ("虽然…但是…", "suīrán… dànshì…", "tuy… nhưng…"),
+    "Bổ ngữ xu hướng": ("来 / 去", "lái / qù", "lại đây / đi khỏi"),
+    "Ngoài… còn…": ("除了…以外…", "chúle… yǐwài…", "ngoài… ra…"),
+    "Thay vì… chi bằng…": ("与其…不如…", "yǔqí… bùrú…", "thay vì… chi bằng…"),
+    "Ngay cả… cũng…": ("连…都…", "lián… dōu…", "ngay cả… cũng…"),
+    "Bất kể… đều…": ("无论…都…", "wúlùn… dōu…", "bất kể… đều…"),
+    "Sở dĩ… là vì…": ("之所以…是因为…", "zhīsuǒyǐ… shì yīnwèi…", "sở dĩ… là vì…"),
+    "Không phải… mà là…": ("不是…而是…", "bú shì… ér shì…", "không phải… mà là…"),
+    "Hễ… thì…": ("一…就…", "yī… jiù…", "hễ/vừa… thì…"),
+    "Cho dù… cũng…": ("即使…也…", "jíshǐ… yě…", "cho dù… cũng…"),
+    "Nếu không… thì…": ("除非…否则…", "chúfēi… fǒuzé…", "trừ khi… nếu không thì…"),
+    "Chưa kể…": ("尚且…何况…", "shàngqiě… hékuàng…", "đã… huống chi…"),
+    "Không đến mức…": ("不至于", "bú zhìyú", "không đến mức…"),
+    "Xét từ góc độ…": ("从…来看", "cóng… lái kàn", "xét từ… mà nhìn"),
+    "Không thể không…": ("不得不", "bùdébù", "buộc phải; không thể không"),
+}
+
 CLASSIFIER_GROUPS = [
     ("👤", "Người", "个 · 位 · 名", "gè · wèi · míng", "个 dùng chung; 位 lịch sự; 名 dùng trong danh sách/chính thức", "一个学生 · 一位老师 · 三名医生"),
     ("📚", "Sách & tác phẩm", "本 · 册 · 部", "běn · cè · bù", "本 cho sách; 册 nhấn từng tập; 部 cho tác phẩm/phim", "一本书 · 两册词典 · 一部电影"),
@@ -1084,6 +1124,10 @@ def _render_hsk_grammar_course():
     mindmap_cards = "".join(
         f"<div style='padding:11px;background:white;border:1px solid #c4b5fd;border-radius:12px'>"
         f"<b style='color:#6d28d9'>{index:02d}. {html.escape(title)}</b>"
+        f"<div style='color:#dc2626;font-size:13px;margin-top:4px'>"
+        f"{html.escape(HSK_GRAMMAR_KEY_TERMS[title][0])} · "
+        f"<i>{html.escape(HSK_GRAMMAR_KEY_TERMS[title][1])}</i> · "
+        f"{html.escape(HSK_GRAMMAR_KEY_TERMS[title][2])}</div>"
         f"<div style='font-size:13px;margin-top:5px'>{html.escape(formula)}</div>"
         f"<i style='font-size:12px;color:#64748b'>{html.escape(formula_pinyin)}</i></div>"
         for index, (title, formula, formula_pinyin, *_rest) in enumerate(lessons, 1)
@@ -1098,11 +1142,26 @@ def _render_hsk_grammar_course():
     )
 
     lesson_titles = [item[0] for item in lessons]
-    lesson_title = st.selectbox("Chọn bài học", lesson_titles, key=f"zh_grammar_lesson_{level}")
+    lesson_title = st.selectbox(
+        "Chọn bài học", lesson_titles,
+        format_func=lambda name: (
+            f"{name} · {HSK_GRAMMAR_KEY_TERMS[name][1]} · {HSK_GRAMMAR_KEY_TERMS[name][2]}"
+        ),
+        key=f"zh_grammar_lesson_{level}",
+    )
     lesson_index = lesson_titles.index(lesson_title)
     title, formula, formula_pinyin, formula_meaning, example, example_pinyin, example_meaning = lessons[lesson_index]
+    key_hanzi, key_pinyin, key_meaning = HSK_GRAMMAR_KEY_TERMS[title]
 
     st.markdown(f"### Bài {lesson_index + 1}/{len(lessons)} · {title}")
+    st.markdown(
+        f"<div style='display:inline-flex;align-items:center;gap:10px;padding:9px 14px;margin:-3px 0 12px;"
+        f"border-radius:12px;background:#fff1f2;border:1px solid #fecdd3'>"
+        f"<b style='font-size:22px;color:#7f1d1d'>{html.escape(key_hanzi)}</b>"
+        f"<span style='color:#dc2626;font-weight:700'>/{html.escape(key_pinyin)}/</span>"
+        f"<span style='color:#374151'>→ {html.escape(key_meaning)}</span></div>",
+        unsafe_allow_html=True,
+    )
     left, right = st.columns(2)
     with left:
         st.info(f"**Công thức**  \n{formula}  \n\n*{formula_pinyin}*")
