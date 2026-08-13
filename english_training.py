@@ -299,6 +299,43 @@ GRAMMAR_CLOZE = {
     },
 }
 
+VSTEP_FORMAT = [
+    ("🎧", "Listening", "~40 phút", "3 phần · 35 câu", "Ý chính, chi tiết, mục đích, thái độ và suy luận"),
+    ("📖", "Reading", "60 phút", "4 bài · 40 câu", "Ý chính, chi tiết, thái độ, suy luận và từ trong ngữ cảnh"),
+    ("✍️", "Writing", "60 phút", "Email ~120 từ + Essay ~250 từ", "Task 1 chiếm 1/3; Task 2 chiếm 2/3 điểm Viết"),
+    ("🎙️", "Speaking", "12 phút", "3 phần", "Tương tác xã hội · chọn giải pháp · phát triển chủ đề"),
+]
+
+VSTEP_8_WEEK_PLAN = [
+    ("Tuần 1", "Chẩn đoán & dựng nền", ["Làm mini-test 4 kỹ năng", "Ôn thì cơ bản, câu đơn–ghép", "Lập sổ lỗi sai", "Nói Part 1: bản thân, học tập, công việc"]),
+    ("Tuần 2", "Đọc nhanh & nghe thông tin", ["Reading: main idea + scan chi tiết", "Listening: đoạn ngắn/thông báo", "Học 15 cụm từ theo 3 chủ đề", "Viết email hỏi và cung cấp thông tin"]),
+    ("Tuần 3", "Suy luận & từ trong ngữ cảnh", ["Reading: reference, inference, vocabulary", "Listening: mục đích và thái độ", "Ôn từ nối và mệnh đề quan hệ", "Speaking Part 1 dưới áp lực thời gian"]),
+    ("Tuần 4", "Writing Task 1 & Speaking Part 2", ["Viết email đủ mở–thân–kết trong 20 phút", "Chọn giải pháp và bác bỏ 2 phương án", "Sửa lỗi chia thì, mạo từ, số ít/nhiều", "Làm 1 bài Reading 40 câu có bấm giờ"]),
+    ("Tuần 5", "Writing Task 2 nền tảng", ["Lập dàn ý opinion/discussion essay", "Viết introduction + 2 body paragraphs", "Nghe hội thoại dài và ghi keyword", "Speaking Part 3 theo khung PREP"]),
+    ("Tuần 6", "Tăng tốc & liên kết ý", ["Essay 250 từ trong 40 phút", "Reading 4 bài trong 60 phút", "Listening 35 câu gần đủ format", "Nói liền mạch 3–4 phút"]),
+    ("Tuần 7", "Thi thử & vá điểm yếu", ["Làm 2 đề mô phỏng đủ 4 kỹ năng", "Phân loại lỗi: kiến thức/kỹ thuật/thời gian", "Viết lại 2 bài yếu nhất", "Ghi âm và tự chấm 3 bài Speaking"]),
+    ("Tuần 8", "Ổn định phong độ", ["Làm 1 đề cuối tuần ở đầu tuần", "Ôn sổ lỗi và cụm diễn đạt", "Luyện chiến thuật bỏ qua–quay lại", "Hai ngày cuối giảm tải và ngủ đủ"]),
+]
+
+VSTEP_PRACTICE = {
+    "🎧 Listening": {
+        "strategy": ["Đọc câu hỏi trước khi nghe", "Gạch từ phân biệt các lựa chọn", "Không dừng lại ở một câu đã lỡ", "Lượt nghe sau tập trung vào bằng chứng"],
+        "task": "Nghe một thông báo 60–100 từ và ghi: người nói, mục đích, thời gian, hành động cần làm.",
+    },
+    "📖 Reading": {
+        "strategy": ["Khoanh từ khóa trong câu hỏi", "Tìm đoạn chứa bằng chứng", "Phân biệt thông tin đúng với thông tin chỉ có vẻ liên quan", "Giới hạn khoảng 15 phút mỗi bài"],
+        "task": "Đọc một bài B1 trong tab Đọc & Dịch; trả lời câu hỏi trước khi bật bản dịch và ghi bằng chứng cho từng đáp án.",
+    },
+    "✍️ Writing": {
+        "strategy": ["Task 1: trả lời đủ mọi gạch đầu dòng", "Task 2: nêu quan điểm nhất quán", "Mỗi đoạn chỉ có một ý chính", "Dành 5 phút cuối kiểm tra động từ, số nhiều và chính tả"],
+        "task": "Task 1: A friend will visit your city. Write about transport, accommodation and two places to visit (about 120 words).",
+    },
+    "🎙️ Speaking": {
+        "strategy": ["Trả lời trực tiếp rồi mới giải thích", "Part 2: chọn một phương án và so sánh cả ba", "Part 3: dùng Point–Reason–Example–Point", "Nếu thiếu từ, diễn đạt lại thay vì im lặng"],
+        "task": "Part 2: Your class wants a weekend activity. Choose the best option: a picnic, a museum visit, or volunteer work. Reject the other two options.",
+    },
+}
+
 
 def _drive_link(file_id, is_folder=False):
     kind = "folders" if is_folder else "file/d"
@@ -458,17 +495,81 @@ def render_english_training():
     st.subheader("Training tiếng Anh")
     st.caption("Lộ trình từ mất gốc đến giao tiếp, đọc và viết chuyên nghiệp trong công việc.")
     mode = st.radio(
-        "Chương trình", ["🚀 Từ mất gốc đến công sở", "⚡ Luyện tình huống", "🗂 Kho tiếng Anh", "🎓 Video IELTS tham khảo"],
+        "Chương trình", ["🚀 Từ mất gốc đến công sở", "🎯 Ôn VSTEP B1", "⚡ Luyện tình huống", "🗂 Kho tiếng Anh", "🎓 Video IELTS tham khảo"],
         horizontal=True, key="english_program_mode",
     )
     if mode.startswith("🚀"):
         render_workplace_path()
+    elif mode.startswith("🎯"):
+        render_vstep_b1_path()
     elif mode.startswith("⚡"):
         render_quick_training()
     elif mode.startswith("🗂"):
         render_english_resource_library()
     else:
         render_full_course()
+
+
+def render_vstep_b1_path():
+    st.markdown("### Lộ trình ôn VSTEP B1 · 8 tuần")
+    st.caption("Mục tiêu bậc 3: 4.0–5.5/10 · Khuyến nghị học 7–10 giờ/tuần")
+    tab_format, tab_plan, tab_practice, tab_progress = st.tabs([
+        "🧭 Cấu trúc đề", "📅 Lộ trình 8 tuần", "🧪 Luyện theo kỹ năng", "📊 Theo dõi tiến độ",
+    ])
+
+    with tab_format:
+        st.info("Mục tiêu an toàn nên đặt từ 5.0 thay vì chỉ chạm ngưỡng 4.0, để có khoảng đệm khi một kỹ năng làm chưa tốt.")
+        columns = st.columns(2)
+        for index, (icon, skill, duration, format_text, focus) in enumerate(VSTEP_FORMAT):
+            columns[index % 2].markdown(
+                f"<div style='min-height:165px;padding:16px;border:1px solid #bfdbfe;border-radius:15px;margin-bottom:10px'>"
+                f"<div style='font-size:21px;font-weight:800;color:#1d4ed8'>{icon} {skill}</div>"
+                f"<div style='font-weight:700;margin:6px 0'>{duration} · {format_text}</div>"
+                f"<div style='color:#475569'>{focus}</div></div>", unsafe_allow_html=True,
+            )
+        st.warning("Điểm tổng là trung bình của 4 kỹ năng, làm tròn đến 0.5. Không nên bỏ hẳn một kỹ năng dù mục tiêu chỉ là B1.")
+
+    with tab_plan:
+        hours = st.select_slider("Thời gian học mỗi tuần", [5, 7, 10, 12, 15], value=10, format_func=lambda value: f"{value} giờ")
+        st.caption(f"Gợi ý phân bổ: Listening {hours * 0.25:.1f}h · Reading {hours * 0.25:.1f}h · Writing {hours * 0.3:.1f}h · Speaking {hours * 0.2:.1f}h")
+        for week_index, (week, focus, tasks) in enumerate(VSTEP_8_WEEK_PLAN, 1):
+            with st.expander(f"{week} · {focus}", expanded=week_index == 1):
+                completed = 0
+                for task_index, task in enumerate(tasks):
+                    completed += int(st.checkbox(task, key=f"vstep_week_{week_index}_{task_index}"))
+                st.progress(completed / len(tasks), text=f"{completed}/{len(tasks)} nhiệm vụ")
+
+    with tab_practice:
+        selected_skill = st.radio("Kỹ năng", list(VSTEP_PRACTICE), horizontal=True, key="vstep_practice_skill")
+        content = VSTEP_PRACTICE[selected_skill]
+        st.markdown("#### Chiến thuật")
+        for item in content["strategy"]:
+            st.markdown(f"- {item}")
+        st.info(f"**Bài luyện hôm nay:** {content['task']}")
+        st.text_area("Bài làm / ghi chú bằng chứng", key=f"vstep_practice_answer_{selected_skill}", height=180)
+        st.checkbox("Đã làm có bấm giờ", key=f"vstep_timed_{selected_skill}")
+        st.checkbox("Đã ghi lại lỗi sai và cách sửa", key=f"vstep_reviewed_{selected_skill}")
+
+    with tab_progress:
+        st.markdown("#### Chẩn đoán nhanh hiện tại")
+        scores = {}
+        columns = st.columns(2)
+        for index, skill in enumerate(["Listening", "Reading", "Writing", "Speaking"]):
+            scores[skill] = columns[index % 2].slider(skill, 0.0, 10.0, 4.0, 0.5, key=f"vstep_score_{skill}")
+        average = sum(scores.values()) / len(scores)
+        weakest = min(scores, key=scores.get)
+        st.metric("Điểm trung bình tự đánh giá", f"{average:.1f}/10")
+        st.progress(min(average / 10, 1.0), text=f"Kỹ năng cần ưu tiên: {weakest} ({scores[weakest]:.1f})")
+        if average < 4:
+            st.warning("Chưa đạt ngưỡng B1 mô phỏng. Dành 40% thời gian tuần tới cho kỹ năng yếu nhất.")
+        elif average < 5:
+            st.info("Đã gần/đạt ngưỡng nhưng khoảng đệm còn thấp. Mục tiêu tiếp theo: duy trì trung bình từ 5.0.")
+        else:
+            st.success("Đang có khoảng đệm tốt cho mục tiêu B1. Tiếp tục luyện đề có bấm giờ để ổn định phong độ.")
+
+    with st.expander("Nguồn chính thức"):
+        st.markdown("- [Định dạng đề thi VSTEP.3-5 – ULIS, ĐHQGHN](https://vstep.vnu.edu.vn/files/uploads/2020/12/Dinh-dang-VSTEP.3-5.pdf)")
+        st.markdown("- [Bảng điểm và cấp độ VSTEP.3-5 – ULIS, ĐHQGHN](https://vstep.vnu.edu.vn/scores-levels/)")
 
 
 def render_english_resource_library():

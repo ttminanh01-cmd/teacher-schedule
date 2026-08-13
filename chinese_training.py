@@ -493,36 +493,54 @@ def _get_words(level, cumulative=False):
 
 
 def _render_flashcards(level, words):
-    key = f"zh_card_index_{level}"
-    if key not in st.session_state:
-        st.session_state[key] = 0
-    index = st.session_state[key] % len(words)
-    hanzi, pinyin, meaning, example, translation, *extra = words[index]
-    example_pinyin = extra[0] if extra else ""
-
-    st.markdown(
-        f"<div style='text-align:center;padding:35px 15px;border:1px solid #ddd;border-radius:16px;'>"
-        f"<div style='font-size:52px;font-weight:700'>{hanzi}</div>"
-        f"<div style='font-size:22px;color:#d97706;margin:8px'>{pinyin}</div>"
-        f"<div style='font-size:20px'>{meaning}</div></div>", unsafe_allow_html=True,
+    cards = [
+        {
+            "hanzi": word[0], "pinyin": word[1], "meaning": word[2],
+            "example": word[3], "translation": word[4],
+            "example_pinyin": word[5] if len(word) > 5 else "",
+        }
+        for word in words
+    ]
+    card_data = json.dumps(cards, ensure_ascii=False).replace("</", "<\\/")
+    components.html(
+        f"""<!doctype html><html><head><meta charset="utf-8"><style>
+        *{{box-sizing:border-box}}body{{margin:0;font-family:Arial,'Microsoft YaHei',sans-serif;color:#172033}}
+        .card{{min-height:270px;padding:28px 18px;border:1px solid #ddd;border-radius:18px;text-align:center;
+        background:linear-gradient(145deg,#fff,#fffbeb);cursor:pointer;display:flex;flex-direction:column;justify-content:center}}
+        .hanzi{{font-size:56px;font-weight:800}}.pinyin{{font-size:23px;color:#d97706;margin:8px}}
+        .answer{{display:none}}.card.flipped .answer{{display:block}}.hint{{color:#64748b;font-size:13px;margin-top:14px}}
+        .meaning{{font-size:21px;font-weight:700;margin:5px}}.example{{font-size:18px;margin-top:13px}}
+        .example-pinyin{{color:#7c3aed;margin-top:4px}}.translation{{color:#64748b;margin-top:4px}}
+        .controls{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}}
+        button{{border:0;border-radius:10px;padding:10px;background:#fef3c7;color:#92400e;font-weight:750;cursor:pointer}}
+        button:hover{{background:#fde68a}}.audio{{display:flex;justify-content:center;gap:8px;margin-top:10px}}
+        .audio button{{background:#ede9fe;color:#5b21b6}}.progress{{height:8px;background:#e5e7eb;border-radius:99px;margin-top:12px;overflow:hidden}}
+        .bar{{height:100%;background:#7c3aed;transition:width .15s}}.count{{text-align:center;color:#64748b;font-size:13px;margin-top:5px}}
+        </style></head><body>
+        <div id="card" class="card"><div id="hanzi" class="hanzi"></div><div id="pinyin" class="pinyin"></div>
+        <div id="answer" class="answer"><div id="meaning" class="meaning"></div><div id="example" class="example"></div>
+        <div id="examplePinyin" class="example-pinyin"></div><div id="translation" class="translation"></div></div>
+        <div id="hint" class="hint">Chạm vào thẻ để hiện/ẩn đáp án</div></div>
+        <div class="audio"><button id="wordAudio">🔊 Nghe từ</button><button id="exampleAudio">🔊 Nghe ví dụ</button></div>
+        <div class="controls"><button id="prev">← Từ trước</button><button id="shuffle">🔀 Ngẫu nhiên</button><button id="next">Từ tiếp →</button></div>
+        <div class="progress"><div id="bar" class="bar"></div></div><div id="count" class="count"></div>
+        <script>const cards={card_data};let index=0;const card=document.getElementById('card');
+        function render(){{const x=cards[index];card.classList.remove('flipped');
+          document.getElementById('hanzi').textContent=x.hanzi;document.getElementById('pinyin').textContent=x.pinyin;
+          document.getElementById('meaning').textContent=x.meaning;document.getElementById('example').textContent=x.example;
+          document.getElementById('examplePinyin').textContent=x.example_pinyin;document.getElementById('translation').textContent=x.translation;
+          document.getElementById('bar').style.width=((index+1)/cards.length*100)+'%';
+          document.getElementById('count').textContent=`Thẻ ${{index+1}}/${{cards.length}}`;}}
+        function speak(text){{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';u.rate=.64;u.pitch=1.05;
+          const voices=speechSynthesis.getVoices();const female=/xiaoxiao|xiaoyi|huihui|yaoyao|hanhan|ting.ting|meijia|lili|female|woman/i;
+          const preferred=voices.find(v=>v.lang.startsWith('zh')&&female.test(v.name))||voices.find(v=>v.lang==='zh-CN')||voices.find(v=>v.lang.startsWith('zh'));if(preferred)u.voice=preferred;speechSynthesis.speak(u);}}
+        card.onclick=()=>card.classList.toggle('flipped');document.getElementById('prev').onclick=()=>{{index=(index-1+cards.length)%cards.length;render()}};
+        document.getElementById('next').onclick=()=>{{index=(index+1)%cards.length;render()}};
+        document.getElementById('shuffle').onclick=()=>{{index=Math.floor(Math.random()*cards.length);render()}};
+        document.getElementById('wordAudio').onclick=()=>speak(cards[index].hanzi);
+        document.getElementById('exampleAudio').onclick=()=>speak(cards[index].example);render();</script></body></html>""",
+        height=440,
     )
-    with st.expander("Xem ví dụ"):
-        st.markdown(f"**{example}**")
-        if example_pinyin:
-            st.caption(example_pinyin)
-        st.caption(translation)
-    _render_chinese_audio([(hanzi, pinyin, meaning, example, translation)], height=62, compact=True)
-    prev_col, random_col, next_col = st.columns(3)
-    if prev_col.button("← Từ trước", use_container_width=True, key=f"zh_prev_{level}"):
-        st.session_state[key] = (index - 1) % len(words)
-        st.rerun()
-    if random_col.button("🔀 Ngẫu nhiên", use_container_width=True, key=f"zh_random_{level}"):
-        st.session_state[key] = random.randrange(len(words))
-        st.rerun()
-    if next_col.button("Từ tiếp →", use_container_width=True, key=f"zh_next_{level}"):
-        st.session_state[key] = (index + 1) % len(words)
-        st.rerun()
-    st.progress((index + 1) / len(words), text=f"Thẻ {index + 1}/{len(words)}")
 
 
 def _render_vocab_list(words):
