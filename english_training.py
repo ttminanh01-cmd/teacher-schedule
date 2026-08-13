@@ -5,6 +5,8 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
+from language_widgets import tts_speak_fn, render_resource_results
+
 
 CATALOG_PATH = Path(__file__).with_name("course_catalog_raw.json")
 EXTENDED_VOCAB_PATH = Path(__file__).with_name("english_vocab_extended.json")
@@ -874,8 +876,8 @@ def _render_vstep_objective_test(kind, test, key_suffix="skill"):
         components.html(
             f"""<!doctype html><html><head><style>body{{margin:0;font-family:Arial}}button{{padding:10px 16px;border:0;border-radius:10px;background:#dbeafe;color:#1d4ed8;font-weight:700;cursor:pointer}}</style></head>
             <body><button id="play" data-text="{safe_script}">🔊 Phát bài nghe · giọng nữ chậm</button><script>
-            document.getElementById('play').onclick=()=>{{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(document.getElementById('play').dataset.text);u.lang='en-US';u.rate=.76;u.pitch=1.05;
-            const vs=speechSynthesis.getVoices(),f=/samantha|zira|aria|jenny|ava|susan|hazel|female|woman/i,p=vs.find(v=>v.lang.startsWith('en')&&f.test(v.name))||vs.find(v=>v.lang.startsWith('en'));if(p)u.voice=p;speechSynthesis.speak(u);}};</script></body></html>""",
+            {tts_speak_fn('en', .76)}
+            document.getElementById('play').onclick=()=>speak(document.getElementById('play').dataset.text);</script></body></html>""",
             height=50,
         )
         st.caption("Nghe tối đa 2 lượt trước khi mở transcript.")
@@ -957,23 +959,14 @@ def render_english_resource_library():
     level = col1.selectbox("Cấp độ", levels, key="english_resource_level")
     tag = col2.selectbox("Kỹ năng", ["Tất cả"] + tags, key="english_resource_tag")
     query = st.text_input("Tìm tài liệu", placeholder="Ví dụ: phát âm, IELTS, writing...", key="english_resource_query")
-    filtered = resources
-    if level != "Tất cả":
-        filtered = [item for item in filtered if not item["levels"] or level in item["levels"]]
-    if tag != "Tất cả":
-        filtered = [item for item in filtered if tag in item["tags"]]
-    if query.strip():
-        needle = query.strip().casefold()
-        filtered = [item for item in filtered if needle in item["name"].casefold()]
-    st.caption(f"Tìm thấy {len(filtered)} nguồn")
-    for item in filtered[:40]:
-        with st.expander(f"📚 {item['name']}"):
-            st.markdown(" · ".join(f"`{tag}`" for tag in item["tags"]))
-            if item["levels"]:
-                st.caption("Gợi ý cấp độ: " + ", ".join(item["levels"]))
-            st.link_button("Mở tài liệu gốc ↗", item["url"])
-    if len(filtered) > 40:
-        st.info("Đang hiển thị 40 kết quả đầu. Hãy dùng bộ lọc hoặc tìm kiếm để thu hẹp danh sách.")
+
+    def level_ok(item):
+        return level == "Tất cả" or not item["levels"] or level in item["levels"]
+
+    render_resource_results(
+        resources, level_ok, tag, query,
+        "Đang hiển thị 40 kết quả đầu. Hãy dùng bộ lọc hoặc tìm kiếm để thu hẹp danh sách.",
+    )
 
 
 def _roadmap_card(level, data, active=False):
@@ -1092,19 +1085,7 @@ def _render_speaking_vocabulary(words, height=680):
         background:#dbeafe;color:#1e40af;font-weight:700;cursor:pointer}} button:hover{{background:#bfdbfe}}
         button.playing{{background:#2563eb;color:white}}
         </style></head><body>{content}<script>
-        function speak(text, button){{
-          window.speechSynthesis.cancel();
-          document.querySelectorAll('button').forEach(b => b.classList.remove('playing'));
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'en-US'; utterance.rate = 0.72; utterance.pitch = 1.05;
-          const voices = window.speechSynthesis.getVoices();
-          const female = /samantha|zira|aria|jenny|ava|susan|hazel|female|woman/i;
-          const preferred = voices.find(v => v.lang.startsWith('en') && female.test(v.name))
-            || voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
-          if (preferred) utterance.voice = preferred;
-          button.classList.add('playing'); utterance.onend = () => button.classList.remove('playing');
-          utterance.onerror = () => button.classList.remove('playing'); window.speechSynthesis.speak(utterance);
-        }}
+        {tts_speak_fn('en', 0.72)}
         document.querySelectorAll('[data-speak]').forEach(button => button.addEventListener('click', () => speak(button.dataset.speak, button)));
         </script></body></html>""",
         height=height, scrolling=True,
@@ -1182,16 +1163,14 @@ def _render_reading_translation(level):
 
     full_text = " ".join(lesson["paragraphs"])
     safe_text = html.escape(full_text, quote=True)
+    rate = 0.62 if level.startswith(("Pre-A1", "A1")) else 0.68 if level.startswith("A2") else 0.75
     components.html(
         f"""<!doctype html><html><head><style>
         body{{margin:0;font-family:Arial,sans-serif}}button{{border:0;border-radius:10px;padding:9px 15px;
         background:#dbeafe;color:#1e40af;font-weight:700;cursor:pointer}}button.playing{{background:#2563eb;color:white}}
         </style></head><body><button id="read" data-text="{safe_text}">🔊 Giọng nữ · đọc chậm</button><script>
-        const button=document.getElementById('read');button.onclick=()=>{{speechSynthesis.cancel();
-        const u=new SpeechSynthesisUtterance(button.dataset.text);u.lang='en-US';u.rate={0.62 if level.startswith(('Pre-A1', 'A1')) else 0.68 if level.startswith('A2') else 0.75};u.pitch=1.05;
-        const voices=speechSynthesis.getVoices();const female=/samantha|zira|aria|jenny|ava|susan|hazel|female|woman/i;
-        const preferred=voices.find(v=>v.lang.startsWith('en')&&female.test(v.name))||voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang.startsWith('en'));if(preferred)u.voice=preferred;
-        button.classList.add('playing');u.onend=()=>button.classList.remove('playing');u.onerror=()=>button.classList.remove('playing');speechSynthesis.speak(u);}};
+        {tts_speak_fn('en', rate)}
+        const button=document.getElementById('read');button.onclick=()=>speak(button.dataset.text, button);
         </script></body></html>""", height=48,
     )
 

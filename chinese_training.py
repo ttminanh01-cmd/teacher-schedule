@@ -8,6 +8,8 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from language_widgets import tts_speak_fn, render_resource_results
+
 
 TERABOX_URL = "https://1024terabox.com/s/1blLvuQOMDPTNE-DLJu73YQ"
 GRAMMAR_DRIVE_URL = "https://drive.google.com/drive/folders/1qDNrvYbB3ekCyFBZ9-sEq6YlKdBpoif5"
@@ -189,80 +191,8 @@ MATERIAL_LESSON_TEMPLATES = {
 }
 
 
-VOCABULARY = {
-    "HSK1": [
-        ("你好", "nǐ hǎo", "xin chào", "你好！很高兴认识你。", "Xin chào! Rất vui được gặp bạn."),
-        ("谢谢", "xièxie", "cảm ơn", "谢谢你的帮助。", "Cảm ơn sự giúp đỡ của bạn."),
-        ("学习", "xuéxí", "học tập", "我每天学习汉语。", "Tôi học tiếng Trung mỗi ngày."),
-        ("朋友", "péngyou", "bạn bè", "她是我的好朋友。", "Cô ấy là bạn tốt của tôi."),
-        ("老师", "lǎoshī", "giáo viên", "王老师教我们汉语。", "Giáo viên Vương dạy chúng tôi tiếng Trung."),
-        ("学校", "xuéxiào", "trường học", "我的学校很大。", "Trường của tôi rất lớn."),
-        ("喜欢", "xǐhuan", "thích", "我喜欢喝茶。", "Tôi thích uống trà."),
-        ("今天", "jīntiān", "hôm nay", "今天天气很好。", "Hôm nay thời tiết rất đẹp."),
-        ("吃", "chī", "ăn", "我们一起吃米饭吧。", "Chúng ta cùng ăn cơm nhé."),
-        ("家", "jiā", "nhà, gia đình", "我家有三个人。", "Gia đình tôi có ba người."),
-    ],
-    "HSK2": [
-        ("开始", "kāishǐ", "bắt đầu", "电影八点开始。", "Bộ phim bắt đầu lúc tám giờ."),
-        ("希望", "xīwàng", "hy vọng", "我希望明天不下雨。", "Tôi hy vọng ngày mai không mưa."),
-        ("问题", "wèntí", "vấn đề, câu hỏi", "这个问题不难。", "Câu hỏi này không khó."),
-        ("准备", "zhǔnbèi", "chuẩn bị", "我在准备明天的考试。", "Tôi đang chuẩn bị cho bài thi ngày mai."),
-        ("旅游", "lǚyóu", "du lịch", "暑假我们去北京旅游。", "Nghỉ hè chúng tôi đi Bắc Kinh du lịch."),
-        ("因为", "yīnwèi", "bởi vì", "因为下雨，所以我没出去。", "Vì trời mưa nên tôi không ra ngoài."),
-        ("运动", "yùndòng", "vận động", "每天运动对身体很好。", "Vận động mỗi ngày rất tốt cho cơ thể."),
-        ("已经", "yǐjīng", "đã", "我已经做完作业了。", "Tôi đã làm xong bài tập rồi."),
-        ("一起", "yìqǐ", "cùng nhau", "周末我们一起去看电影。", "Cuối tuần chúng ta cùng đi xem phim."),
-        ("告诉", "gàosu", "nói, cho biết", "请告诉我你的名字。", "Hãy cho tôi biết tên của bạn."),
-    ],
-    "HSK3": [
-        ("影响", "yǐngxiǎng", "ảnh hưởng", "睡眠会影响学习效率。", "Giấc ngủ ảnh hưởng đến hiệu quả học tập."),
-        ("习惯", "xíguàn", "thói quen", "早起是一个好习惯。", "Dậy sớm là một thói quen tốt."),
-        ("环境", "huánjìng", "môi trường", "我们应该保护环境。", "Chúng ta nên bảo vệ môi trường."),
-        ("选择", "xuǎnzé", "lựa chọn", "你可以选择坐地铁。", "Bạn có thể chọn đi tàu điện ngầm."),
-        ("提高", "tígāo", "nâng cao", "阅读能提高汉语水平。", "Đọc sách có thể nâng cao trình độ tiếng Trung."),
-        ("机会", "jīhuì", "cơ hội", "这是一次很好的机会。", "Đây là một cơ hội rất tốt."),
-        ("认真", "rènzhēn", "nghiêm túc", "她学习得很认真。", "Cô ấy học rất nghiêm túc."),
-        ("解决", "jiějué", "giải quyết", "我们一起解决这个问题。", "Chúng ta cùng giải quyết vấn đề này."),
-        ("经验", "jīngyàn", "kinh nghiệm", "他有丰富的工作经验。", "Anh ấy có kinh nghiệm làm việc phong phú."),
-        ("文化", "wénhuà", "văn hóa", "我对中国文化很感兴趣。", "Tôi rất hứng thú với văn hóa Trung Quốc."),
-    ],
-    "HSK4": [
-        ("适应", "shìyìng", "thích nghi", "我慢慢适应了这里的生活。", "Tôi dần thích nghi với cuộc sống ở đây."),
-        ("交流", "jiāoliú", "giao lưu, trao đổi", "学习语言需要多跟别人交流。", "Học ngôn ngữ cần giao tiếp nhiều với người khác."),
-        ("坚持", "jiānchí", "kiên trì", "只要坚持，就会看到进步。", "Chỉ cần kiên trì sẽ thấy tiến bộ."),
-        ("责任", "zérèn", "trách nhiệm", "每个人都应该对自己的选择负责。", "Mỗi người nên chịu trách nhiệm với lựa chọn của mình."),
-        ("计划", "jìhuà", "kế hoạch", "我们正在计划一次旅行。", "Chúng tôi đang lên kế hoạch cho một chuyến đi."),
-        ("结果", "jiéguǒ", "kết quả", "考试结果比我想的好。", "Kết quả thi tốt hơn tôi nghĩ."),
-        ("理解", "lǐjiě", "hiểu", "谢谢你对我的理解。", "Cảm ơn bạn đã thấu hiểu tôi."),
-        ("发展", "fāzhǎn", "phát triển", "这个城市发展得很快。", "Thành phố này phát triển rất nhanh."),
-        ("建议", "jiànyì", "đề nghị", "医生建议我多休息。", "Bác sĩ khuyên tôi nghỉ ngơi nhiều hơn."),
-        ("成功", "chénggōng", "thành công", "努力是成功的重要条件。", "Nỗ lực là điều kiện quan trọng của thành công."),
-    ],
-    "HSK5": [
-        ("挑战", "tiǎozhàn", "thử thách", "这份工作对我来说是新的挑战。", "Công việc này là thử thách mới đối với tôi."),
-        ("效率", "xiàolǜ", "hiệu suất", "合理安排时间能提高效率。", "Sắp xếp thời gian hợp lý có thể nâng cao hiệu suất."),
-        ("独立", "dúlì", "độc lập", "大学生应该学会独立生活。", "Sinh viên nên học cách sống độc lập."),
-        ("资源", "zīyuán", "tài nguyên", "我们要节约自然资源。", "Chúng ta cần tiết kiệm tài nguyên thiên nhiên."),
-        ("趋势", "qūshì", "xu hướng", "网上学习已经成为一种趋势。", "Học trực tuyến đã trở thành một xu hướng."),
-        ("贡献", "gòngxiàn", "cống hiến", "他为团队做出了很大贡献。", "Anh ấy đã đóng góp rất lớn cho đội."),
-        ("改善", "gǎishàn", "cải thiện", "运动可以改善睡眠质量。", "Vận động có thể cải thiện chất lượng giấc ngủ."),
-        ("观点", "guāndiǎn", "quan điểm", "我同意你的观点。", "Tôi đồng ý với quan điểm của bạn."),
-        ("承担", "chéngdān", "đảm nhận, gánh vác", "他愿意承担更多责任。", "Anh ấy sẵn lòng đảm nhận thêm trách nhiệm."),
-        ("珍惜", "zhēnxī", "trân trọng", "我们应该珍惜学习的机会。", "Chúng ta nên trân trọng cơ hội học tập."),
-    ],
-    "HSK6": [
-        ("潜力", "qiánlì", "tiềm năng", "每个孩子都有巨大的潜力。", "Mỗi đứa trẻ đều có tiềm năng to lớn."),
-        ("协调", "xiétiáo", "phối hợp", "经理负责协调各部门的工作。", "Quản lý chịu trách nhiệm phối hợp công việc các phòng ban."),
-        ("缓解", "huǎnjiě", "giảm nhẹ", "运动有助于缓解压力。", "Vận động giúp giảm căng thẳng."),
-        ("倡导", "chàngdǎo", "đề xướng", "政府倡导绿色出行。", "Chính phủ đề xướng giao thông xanh."),
-        ("维持", "wéichí", "duy trì", "双方一直维持着良好的关系。", "Hai bên luôn duy trì quan hệ tốt đẹp."),
-        ("局限", "júxiàn", "hạn chế", "我们不能把思考局限在一个角度。", "Không nên giới hạn suy nghĩ trong một góc nhìn."),
-        ("衡量", "héngliáng", "đánh giá, đo lường", "金钱不是衡量成功的唯一标准。", "Tiền không phải tiêu chuẩn duy nhất đánh giá thành công."),
-        ("忽略", "hūlüè", "bỏ qua", "不要忽略生活中的小细节。", "Đừng bỏ qua những chi tiết nhỏ trong cuộc sống."),
-        ("实施", "shíshī", "thực hiện", "新计划将从下个月开始实施。", "Kế hoạch mới sẽ được thực hiện từ tháng sau."),
-        ("突破", "tūpò", "đột phá", "研究团队取得了重大突破。", "Nhóm nghiên cứu đã đạt được đột phá lớn."),
-    ],
-}
+# Cấp độ HSK hợp lệ (nguồn từ vựng thật nằm trong hsk_vocab_full.json, xem _vocab_levels()).
+HSK_LEVELS = ["HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6"]
 
 
 STORIES = {
@@ -456,6 +386,16 @@ def _load_full_vocabulary():
 
 
 @st.cache_data
+def _vocab_levels() -> tuple:
+    """Chỉ trả về danh sách cấp độ có trong hsk_vocab_full.json (vài chuỗi ngắn),
+    tránh việc st.cache_data phải deep-copy toàn bộ ~2.3MB dữ liệu từ vựng
+    mỗi lần chỉ cần kiểm tra 1 cấp độ có tồn tại hay không."""
+    if not FULL_VOCAB_PATH.exists():
+        return ()
+    return tuple(json.loads(FULL_VOCAB_PATH.read_text(encoding="utf-8")).keys())
+
+
+@st.cache_data
 def _load_materials():
     if not MATERIALS_PATH.exists():
         return []
@@ -489,7 +429,7 @@ def _get_words(level, cumulative=False):
     if level in full_data:
         levels = list(full_data)[:int(level[-1])] if cumulative else [level]
         return [_dict_to_tuple(word) for item in levels for word in full_data[item]]
-    return VOCABULARY[level]
+    return []
 
 
 def _render_flashcards(level, words):
@@ -531,9 +471,7 @@ def _render_flashcards(level, words):
           document.getElementById('examplePinyin').textContent=x.example_pinyin;document.getElementById('translation').textContent=x.translation;
           document.getElementById('bar').style.width=((index+1)/cards.length*100)+'%';
           document.getElementById('count').textContent=`Thẻ ${{index+1}}/${{cards.length}}`;}}
-        function speak(text){{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';u.rate=.64;u.pitch=1.05;
-          const voices=speechSynthesis.getVoices();const female=/xiaoxiao|xiaoyi|huihui|yaoyao|hanhan|ting.ting|meijia|lili|female|woman/i;
-          const preferred=voices.find(v=>v.lang.startsWith('zh')&&female.test(v.name))||voices.find(v=>v.lang==='zh-CN')||voices.find(v=>v.lang.startsWith('zh'));if(preferred)u.voice=preferred;speechSynthesis.speak(u);}}
+        {tts_speak_fn('zh', .64)}
         card.onclick=()=>card.classList.toggle('flipped');document.getElementById('prev').onclick=()=>{{index=(index-1+cards.length)%cards.length;render()}};
         document.getElementById('next').onclick=()=>{{index=(index+1)%cards.length;render()}};
         document.getElementById('shuffle').onclick=()=>{{index=Math.floor(Math.random()*cards.length);render()}};
@@ -602,19 +540,7 @@ def _render_chinese_audio(rows, height=720, compact=False):
         button{{border:0;border-radius:9px;padding:8px 13px;background:#fef3c7;color:#92400e;font-weight:700;cursor:pointer}}
         button:hover{{background:#fde68a}} button.playing{{background:#d97706;color:white}}
         </style></head><body>{''.join(cards)}<script>
-        function speak(text, button){{
-          window.speechSynthesis.cancel();
-          document.querySelectorAll('button').forEach(b => b.classList.remove('playing'));
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'zh-CN'; utterance.rate = 0.64; utterance.pitch = 1.05;
-          const voices = window.speechSynthesis.getVoices();
-          const female = /xiaoxiao|xiaoyi|huihui|yaoyao|hanhan|ting.ting|meijia|lili|female|woman/i;
-          const preferred = voices.find(v => v.lang.startsWith('zh') && female.test(v.name))
-            || voices.find(v => v.lang === 'zh-CN') || voices.find(v => v.lang.startsWith('zh'));
-          if (preferred) utterance.voice = preferred;
-          button.classList.add('playing'); utterance.onend = () => button.classList.remove('playing');
-          utterance.onerror = () => button.classList.remove('playing'); window.speechSynthesis.speak(utterance);
-        }}
+        {tts_speak_fn('zh', 0.64)}
         document.querySelectorAll('[data-speak]').forEach(button => button.addEventListener('click', () => speak(button.dataset.speak, button)));
         </script></body></html>""",
         height=height, scrolling=not compact,
@@ -858,12 +784,8 @@ def _render_story(level):
         body{{margin:0;font-family:Arial,sans-serif}}button{{border:0;border-radius:10px;padding:9px 15px;
         background:#ede9fe;color:#5b21b6;font-weight:700;cursor:pointer}}button.playing{{background:#7c3aed;color:white}}
         </style></head><body><button id="read" data-text="{safe_text}">🔊 Giọng nữ · đọc chậm</button><script>
-        const b=document.getElementById('read');b.onclick=()=>{{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(b.dataset.text);
-        u.lang='zh-CN';u.rate={rate};u.pitch=1.05;const voices=speechSynthesis.getVoices();
-        const female=/xiaoxiao|xiaoyi|huihui|yaoyao|hanhan|ting.ting|meijia|lili|female|woman/i;
-        const preferred=voices.find(v=>v.lang.startsWith('zh')&&female.test(v.name))||voices.find(v=>v.lang==='zh-CN')||voices.find(v=>v.lang.startsWith('zh'));if(preferred)u.voice=preferred;
-        b.classList.add('playing');u.onend=()=>b.classList.remove('playing');
-        u.onerror=()=>b.classList.remove('playing');speechSynthesis.speak(u);}};</script></body></html>""", height=48,
+        {tts_speak_fn('zh', rate)}
+        const b=document.getElementById('read');b.onclick=()=>speak(b.dataset.text, b);</script></body></html>""", height=48,
     )
     lesson_key = f"{level}_{selected_index}"
     show_pinyin = st.toggle("Hiện pinyin", value=True, key=f"zh_story_pinyin_{lesson_key}")
@@ -998,31 +920,22 @@ def _render_extended_sources(level):
     scope = col1.selectbox("Cấp độ", [f"Gợi ý cho {level}", "Tất cả"], key="zh_extended_level")
     tag = col2.selectbox("Chủ đề", ["Tất cả"] + tags, key="zh_extended_tag")
     query = st.text_input("Tìm nguồn", placeholder="Ví dụ: HSK, giao tiếp, ngữ pháp...", key="zh_extended_query")
-    filtered = resources
-    if scope.startswith("Gợi ý"):
-        filtered = [item for item in filtered if not item["levels"] or level in item["levels"]]
-    if tag != "Tất cả":
-        filtered = [item for item in filtered if tag in item["tags"]]
-    if query.strip():
-        needle = query.strip().casefold()
-        filtered = [item for item in filtered if needle in item["name"].casefold()]
-    st.caption(f"Tìm thấy {len(filtered)} nguồn")
-    for item in filtered[:40]:
-        with st.expander(f"📚 {item['name']}"):
-            st.markdown(" · ".join(f"`{tag}`" for tag in item["tags"]))
-            if item["levels"]:
-                st.caption("Gợi ý cấp độ: " + ", ".join(item["levels"]))
-            st.link_button("Mở tài liệu gốc ↗", item["url"])
-    if len(filtered) > 40:
-        st.info("Đang hiển thị 40 kết quả đầu. Hãy dùng tìm kiếm để thu hẹp danh sách.")
+
+    def level_ok(item):
+        return not scope.startswith("Gợi ý") or not item["levels"] or level in item["levels"]
+
+    render_resource_results(
+        resources, level_ok, tag, query,
+        "Đang hiển thị 40 kết quả đầu. Hãy dùng tìm kiếm để thu hẹp danh sách.",
+    )
 
 
 def render_chinese_training():
     st.subheader("Training tiếng Trung")
     st.caption("Học từ vựng và luyện đọc theo lộ trình HSK1-HSK6.")
-    level = st.selectbox("Cấp độ", list(VOCABULARY), key="zh_level")
+    level = st.selectbox("Cấp độ", HSK_LEVELS, key="zh_level")
     cumulative = False
-    if level in _load_full_vocabulary():
+    if level in _vocab_levels():
         scope = st.radio(
             "Phạm vi từ vựng", ["Từ mới riêng cấp", "Lũy kế đến cấp này"],
             horizontal=True, key="zh_vocab_scope",
