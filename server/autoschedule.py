@@ -213,22 +213,32 @@ def generate(con, ws: date, actor: str = "Hệ thống") -> dict:
     return report
 
 
-def tick(now: datetime | None = None):
-    """Gọi định kỳ: từ 20:00 CN tới hết thứ 2, nếu tuần tới chưa được tự xếp thì xếp."""
+_checked: dict = {}  # tuần → thời điểm kiểm tra DB gần nhất ("done" = đã xếp / đã duyệt)
+
+
+def tick(now: datetime | None = None, force: bool = False):
+    """Gọi định kỳ: từ 20:00 CN tới hết thứ 2, nếu tuần tới chưa được tự xếp thì xếp.
+    Ngoài khung giờ đó không đụng tới database (để Neon được ngủ); trong khung chỉ kiểm tra 10 phút/lần."""
     now = now or datetime.now()
     ws = monday(now.date()) + (timedelta(days=0) if now.weekday() == 0 else timedelta(days=7))
     if not (gen_time(ws) <= now < datetime.combine(ws + timedelta(days=1), datetime.min.time())):
         return None
+    last = _checked.get(ws)
+    if last == "done" or (not force and last and (now - last).total_seconds() < 600):
+        return None
+    _checked[ws] = now
     con = db.connect()
     try:
         st = statuses(con).get(ws.isoformat(), {})
         if st.get("generated_at") or st.get("approved_at"):
+            _checked[ws] = "done"
             return None
         # chưa ai đăng ký theo tuần (VD tuần xếp tay như trước) → không đụng tới, không ẩn lịch với CTV
         if not con.execute("SELECT 1 FROM availability WHERE ym=?", (ws.isoformat(),)).fetchone():
             return None
         rep = generate(con, ws)
         con.commit()
+        _checked[ws] = "done"
         return rep
     finally:
         con.close()

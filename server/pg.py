@@ -11,6 +11,7 @@ Hàng trả về hỗ trợ cả r[0] lẫn r["cột"] và dict(r), giống sqli
 """
 import re
 import threading
+import time
 
 import psycopg
 
@@ -104,16 +105,39 @@ class Cursor:
         return iter(self.fetchall())
 
 
+IDLE_MAX = 60  # giây: kết nối rảnh lâu hơn thì đóng → Neon tự ngủ (scale to zero), tiết kiệm giờ chạy gói free
+
+
 class _Pool:
     def __init__(self, url: str, size: int = 5):
         self.url, self.size, self.idle, self.lock = url, size, [], threading.Lock()
+        threading.Thread(target=self._reaper, daemon=True).start()
+
+    def _reaper(self):
+        while True:
+            time.sleep(30)
+            now, stale = time.time(), []
+            with self.lock:
+                keep = []
+                for c, t in self.idle:
+                    (stale if now - t > IDLE_MAX else keep).append((c, t))
+                self.idle = keep
+            for c, _ in stale:
+                try:
+                    c.close()
+                except Exception:  # noqa: BLE001
+                    pass
 
     def get(self):
         with self.lock:
             while self.idle:
-                c = self.idle.pop()
-                if not c.closed:
+                c, t = self.idle.pop()
+                if not c.closed and time.time() - t <= IDLE_MAX:
                     return c
+                try:
+                    c.close()
+                except Exception:  # noqa: BLE001
+                    pass
         return psycopg.connect(self.url, autocommit=False, connect_timeout=15)
 
     def put(self, c):
@@ -123,7 +147,7 @@ class _Pool:
             c.rollback()
             with self.lock:
                 if len(self.idle) < self.size:
-                    self.idle.append(c)
+                    self.idle.append((c, time.time()))
                     return
             c.close()
         except Exception:  # noqa: BLE001

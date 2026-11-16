@@ -1069,11 +1069,18 @@ def handbook_search(q: str, u=Depends(current_user), con=Depends(get_con)):
 
 def _handbook_warmer():
     """Chạy nền: tải trước và làm mới toàn bộ sheet định kỳ để Cẩm nang luôn mới và tìm kiếm nhanh."""
+    cfg, cfg_at = None, 0.0
     while True:
         try:
-            con = db.connect()
-            sid, hidden = handbook_settings(con)
-            con.close()
+            if cfg is None or time.time() - cfg_at > 1800:  # đọc cài đặt 30 phút/lần để database (Neon) được ngủ
+                con = db.connect()
+                cfg = handbook_settings(con)
+                con.close()
+                cfg_at = time.time()
+            sid, hidden = cfg
+            if not sid:
+                time.sleep(300)
+                continue
             tabs, _, _ = handbook.list_tabs(sid, refresh=True)
             for t in tabs:
                 if t["gid"] not in hidden:
