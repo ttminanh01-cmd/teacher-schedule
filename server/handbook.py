@@ -6,6 +6,8 @@ thay đổi, web sẽ tự cập nhật theo sau tối đa CACHE_TTL giây (ho�
 import os
 import csv
 import io
+import urllib.parse
+import html
 import re
 import threading
 import time
@@ -84,10 +86,67 @@ def list_tabs(sheet_id: str, refresh: bool = False):
     return _cached(f"tabs:{sheet_id}", load, refresh)
 
 
+LINK_MAX_ROWS = 2000  # sheet lớn hơn (VD CSS ~10k dòng) bỏ qua bước lấy link để không chậm
+
+
+def _cell_text(h: str) -> str:
+    h = re.sub(r"<br\s*/?>", "\n", h, flags=re.I)
+    return html.unescape(re.sub(r"<[^>]+>", "", h))
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", s or "").strip()
+
+
+def _real_url(href: str) -> str:
+    href = html.unescape(href)
+    m = re.match(r"https?://www\.google\.com/url\?(.*)", href)
+    if m:
+        q = urllib.parse.parse_qs(m.group(1)).get("q")
+        if q:
+            return q[0]
+    return href
+
+
+def attach_links(sheet_id: str, gid: str, rows: list) -> list:
+    """Bản CSV làm mất link gắn trong chữ (VD chữ "LINK" trỏ tới 1 file). Đọc bản htmlview để lấy link
+    theo từng ô rồi ghép vào đúng ô đó dạng ⟦chữ|url⟧ — giao diện hiển thị thành link bấm được."""
+    try:
+        page = _get(f"https://docs.google.com/spreadsheets/d/{sheet_id}/htmlview/sheet?headers=false&gid={gid}")
+    except Exception:  # noqa: BLE001 — không lấy được link thì vẫn dùng dữ liệu CSV
+        return rows
+    page = page.decode("utf-8", "replace") if isinstance(page, bytes) else page
+    used = set()
+    for i, tr in enumerate(re.findall(r"<tr[^>]*>(.*?)</tr>", page, re.S)):
+        for td in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S):
+            anchors = re.findall(r'<a [^>]*href="([^"]+)"[^>]*>(.*?)</a>', td, re.S)
+            if not anchors:
+                continue
+            text = _norm(_cell_text(td))
+            # tìm ô CSV có cùng nội dung: ưu tiên dòng gần vị trí tương ứng
+            order = sorted(range(len(rows)), key=lambda r: abs(r - i))
+            hit = next(((r, c) for r in order for c, v in enumerate(rows[r]) if (r, c) not in used and _norm(v) == text), None)
+            if not hit:
+                continue
+            used.add(hit)
+            r, c = hit
+            cell = rows[r][c]
+            for href, inner in anchors:
+                label, url = _cell_text(inner).strip(), _real_url(href)
+                if not label or label == url or url.startswith("#") or "⟦" in label:
+                    continue  # ô ghi thẳng URL: giao diện đã tự tạo link
+                if label in cell:
+                    cell = cell.replace(label, f"⟦{label}|{url}⟧", 1)
+            rows[r][c] = cell
+    return rows
+
+
 def get_tab(sheet_id: str, gid: str, refresh: bool = False):
     def load():
         text = _get(f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}")
         rows = [[c.strip() for c in r] for r in csv.reader(io.StringIO(text))]
+        if len(rows) <= LINK_MAX_ROWS:
+            rows = attach_links(sheet_id, gid, rows)
         rows = [r for r in rows if any(r)]
         width = max((max((i + 1 for i, c in enumerate(r) if c), default=0) for r in rows), default=0)
         # bỏ các cột trống hoàn toàn

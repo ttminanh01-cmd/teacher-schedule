@@ -363,7 +363,13 @@ async function pageSwaps(v) {
 /* =========================================================
    6. Cẩm nang (đồng bộ từ Google Sheet)
    ========================================================= */
-const linkify = t => esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+/* chữ có link gắn trong sheet (⟦chữ|url⟧) + URL ghi thẳng → link bấm được */
+const linkify = t => {
+  const parts = [];
+  const s = String(t ?? '').replace(LINK_RE, (m, label, url) => { parts.push([label, url]); return `\u0000${parts.length - 1}\u0000`; });
+  return esc0(s).replace(/(https?:\/\/[^\s<\u0000]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/\u0000(\d+)\u0000/g, (m, k) => { const [label, url] = parts[+k]; return /^https?:\/\//.test(url) ? `<a href="${esc0(url)}" target="_blank" rel="noopener">${esc0(label)}</a>` : esc0(label); });
+};
 /* bỏ dấu tiếng Việt để tìm "doi lich" cũng ra "Đổi lịch" */
 const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const words = q => fold(q).split(/\s+/).filter(Boolean);
