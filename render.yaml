@@ -1,0 +1,19 @@
+# Render Blueprint — New → Blueprint → chọn repo này
+services:
+  - type: web
+    name: cong-ctv
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false        # dán chuỗi kết nối Neon
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CRON_KEY
+        generateValue: true
+      - key: HANDBOOK_WARM
+        value: "1"

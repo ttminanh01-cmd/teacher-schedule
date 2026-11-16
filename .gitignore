@@ -1,6 +1,6 @@
-.streamlit/secrets.toml
-credentials.json
+data/
 __pycache__/
 *.pyc
-.venv/
-venv/
+.env
+*.db
+*.sqlite
