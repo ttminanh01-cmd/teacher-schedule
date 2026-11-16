@@ -480,7 +480,7 @@ async function aTimesheet(v) {
 async function aSwaps(v) {
   let rows = [], status = 'pending';
   const ST = { pending: ['Chờ duyệt', 'amber'], approved: ['Đã duyệt', 'green'], rejected: ['Từ chối', 'red'] };
-  v.innerHTML = pageHead('Duyệt đổi ca', 'Khi duyệt, ca sẽ tự chuyển sang người làm thay.') + `<div class="filters"><div class="seg" id="seg"></div></div><div class="card" id="body">${loading()}</div>`;
+  v.innerHTML = pageHead('Duyệt đổi ca', 'Khi duyệt, ca tự chuyển sang người làm thay: PIC trong Chấm công, lương và lịch của 2 bạn đều cập nhật; nếu tuần đã đẩy lên sheet Lịch trực thì sheet cũng được ghi lại.') + `<div class="filters"><div class="seg" id="seg"></div></div><div class="card" id="body">${loading()}</div>`;
   const paint = () => {
     const c = { all: rows.length, pending: 0, approved: 0, rejected: 0 }; rows.forEach(r => c[r.status]++);
     App.setCount('swaps', c.pending);
@@ -499,7 +499,13 @@ async function aSwaps(v) {
   $('#seg').onclick = e => { const b = e.target.closest('[data-s]'); if (b) { status = b.dataset.s; paint(); } };
   $('#body').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
-    run(b, async () => { await api(`/admin/swaps/${b.dataset.id}/${b.dataset.act}`, { method: 'POST' }); toast(b.dataset.act === 'approve' ? 'Đã duyệt phiếu' : 'Đã từ chối phiếu'); load(); });
+    run(b, async () => {
+      const r = await api(`/admin/swaps/${b.dataset.id}/${b.dataset.act}`, { method: 'POST' });
+      if (b.dataset.act !== 'approve') toast('Đã từ chối phiếu');
+      else if (r.sheet_error) toast(`Đã duyệt — PIC & chấm công đã cập nhật, nhưng chưa ghi được sheet: ${r.sheet_error}`, 'error');
+      else toast(r.sheet === 'updated' ? 'Đã duyệt — đã cập nhật PIC, chấm công và sheet Lịch trực' : 'Đã duyệt — đã cập nhật PIC và chấm công');
+      load();
+    });
   });
   load();
 }

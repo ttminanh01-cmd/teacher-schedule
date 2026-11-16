@@ -793,7 +793,11 @@ def handle_swap(sid: int, action: str, u=Depends(admin_user), con=Depends(get_co
         if con.execute('SELECT 1 FROM schedules WHERE user_id=? AND date=? AND start < ? AND "end" > ?',
                        (w["to_user"], w["date"], w["end"], w["start"])).fetchone():
             err(f"{w['to_username']} đã có ca trùng giờ, không thể duyệt")
-        con.execute("UPDATE schedules SET user_id=? WHERE id=?", (w["to_user"], w["schedule_id"]))
+        sc = row(con.execute(SCHED_SQL + " WHERE s.id=?", (w["schedule_id"],)))
+        plan = sc["plan"] or dumps({"user_id": sc["user_id"], "username": sc["username"], "start": sc["start"], "end": sc["end"],
+                                     "position_id": sc["position_id"], "position": sc["position"]})
+        note = f"Đổi ca: {w['from_username']} → {w['to_username']}" + (f" · {sc['note']}" if sc["note"] else "")
+        con.execute("UPDATE schedules SET user_id=?, plan=?, note=? WHERE id=?", (w["to_user"], plan, note, w["schedule_id"]))
         status = "approved"
     elif action == "reject":
         status = "rejected"
@@ -801,7 +805,29 @@ def handle_swap(sid: int, action: str, u=Depends(admin_user), con=Depends(get_co
         err("Hành động không hợp lệ")
     con.execute("UPDATE swaps SET status=?, handled_by=?, handled_at=? WHERE id=?", (status, u["name"], now_str(), sid))
     log(con, u, f"{'Duyệt' if status == 'approved' else 'Từ chối'} phiếu đổi ca #{sid} ({w['from_username']} → {w['to_username']})")
-    return {"ok": True}
+    out = {"ok": True}
+    if status == "approved":
+        out.update(resync_sheet_day(con, w["date"]))
+    return out
+
+
+def resync_sheet_day(con, day: str) -> dict:
+    """Tuần đã từng đẩy lên sheet "Lịch trực" → ghi lại cột của ngày vừa đổi ca (giữ nguyên các ngày khác)."""
+    ws = autoschedule.monday(date.fromisoformat(day)).isoformat()
+    cfg = sync_cfg(con)
+    if not cfg["url"] or ws not in json.loads(db.get_setting(con, "week_sync", "{}")):
+        return {}
+    try:
+        b = week_build(con, ws)
+        days = [d for d in b["days"] if d["date"] == day]
+        if days:
+            sheet_sync.push(cfg["url"], cfg["token"], b["tab"], days)
+            return {"sheet": "updated"}
+    except HTTPException as e:
+        return {"sheet_error": e.detail}
+    except sheet_sync.SyncError as e:
+        return {"sheet_error": str(e)}
+    return {}
 
 
 # ----- bảng lương
