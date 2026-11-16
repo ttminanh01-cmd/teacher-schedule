@@ -1087,6 +1087,66 @@ def handbook_tab(gid: str, refresh: bool = False, u=Depends(current_user), con=D
     return {"gid": gid, "rows": rows, "fetched_at": fmt_ts(ts), "warning": warn}
 
 
+# ----- tra cứu học viên theo SĐT / email
+# SĐT: quy mọi kiểu ghi về 0xxxxxxxxx rồi so — "967705605", "0967705605", "84967705605", "+84 967 705 605" đều khớp
+PHONE_COL = re.compile(r"dien thoai|\bsdt\b|so dt|phone|mobile")
+MAIL_COL = re.compile(r"e-?mail|\bmail\b")
+
+
+def norm_phone(s: str) -> str:
+    d = re.sub(r"\D", "", s or "")
+    if d.startswith("84") and len(d) >= 11:
+        d = "0" + d[2:]
+    if len(d) == 9:
+        d = "0" + d
+    return d
+
+
+def mask_contact(q: str) -> str:
+    if "@" in q:
+        name, _, dom = q.partition("@")
+        return name[:2] + "***@" + dom
+    d = norm_phone(q)
+    return d[:4] + "***" + d[-3:]
+
+
+@app.get("/api/handbook/lookup")
+def handbook_lookup(q: str, u=Depends(current_user), con=Depends(get_con)):
+    q = q.strip()
+    is_mail = "@" in q
+    if is_mail:
+        key = q.lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", key):
+            err("Nhập đủ địa chỉ email để tra cứu học viên")
+    else:
+        key = norm_phone(q)
+        if not 10 <= len(key) <= 11:
+            err("Nhập đủ số điện thoại để tra cứu học viên")
+    sid, hidden = handbook_settings(con)
+    tabs, _, _ = hb_call(handbook.list_tabs, sid)
+    col_re = MAIL_COL if is_mail else PHONE_COL
+    match = (lambda v: v.strip().lower() == key) if is_mail else (lambda v: norm_phone(v) == key)
+    results = []
+    for t in handbook.sort_tabs(tabs):
+        if t["gid"] in hidden:
+            continue
+        try:
+            rows, _, _ = handbook.get_tab(sid, t["gid"])
+        except handbook.HandbookError:
+            continue
+        h = handbook.header_index(rows)
+        if h < 0:
+            continue
+        cols = [i for i, c in enumerate(rows[h]) if col_re.search(handbook.fold(c))]
+        if not cols:
+            continue
+        hits = [r for r in rows[h + 1:] if any(i < len(r) and r[i].strip() and match(r[i]) for i in cols)]
+        if hits:
+            results.append({"gid": t["gid"], "tab": t["name"], "header": rows[h], "rows": hits[:50], "more": len(hits) > 50})
+    log(con, u, f"Tra cứu học viên {mask_contact(q)} ({sum(len(r['rows']) for r in results)} dòng)")
+    return {"type": "email" if is_mail else "phone", "results": results}
+
+
 @app.get("/api/handbook/search")
 def handbook_search(q: str, u=Depends(current_user), con=Depends(get_con)):
     """Tìm trên tất cả mục. Trả về theo từng mục có kết quả.

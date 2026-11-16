@@ -390,7 +390,7 @@ async function pageHandbook(v) {
 
   v.innerHTML = head(`<button class="btn" id="hb-toggle">${icon('menu')} <span>Ẩn danh sách mục</span></button>
       <button class="btn" id="hb-refresh">${icon('refresh')} Làm mới</button><a class="btn" href="${esc(idx.sheet_url)}" target="_blank" rel="noopener">Mở Google Sheet</a>`) + `
-    <div class="search hb-search">${icon('search')}<input class="input full" id="hb-q" placeholder="Tìm trong toàn bộ cẩm nang — VD: đổi lịch, xin nghỉ, lỗi cam mic…" autocomplete="off">
+    <div class="search hb-search">${icon('search')}<input class="input full" id="hb-q" placeholder="Tìm trong cẩm nang (VD: đổi lịch, xin nghỉ…) hoặc nhập SĐT / email học viên" autocomplete="off">
       <button class="btn btn-ghost btn-sm hb-clear" id="hb-clear" hidden aria-label="Xoá tìm kiếm">${icon('x')}</button></div>
     <div class="hb ${store.get('hb_nav') === 'hide' ? 'nav-hidden' : ''}" id="hb">
       <nav class="card hb-nav" id="hb-nav" aria-label="Các mục cẩm nang">${idx.tabs.map(t => `<button data-gid="${t.gid}">${esc(t.name)}</button>`).join('')}</nav>
@@ -550,7 +550,39 @@ async function pageHandbook(v) {
     return { count: blocks.length, html: `<div class="hb-entries hb-other-body">${blocks.slice(0, 10).map(b => entryHtml(b.rows, g.header)).join('')}</div>` };
   }
 
+  /* tra cứu học viên: ô tìm kiếm là SĐT / email → hiện thông tin học viên đó */
+  const contactKind = s => /@/.test(s) ? 'email' : /^[+\d][\d\s.\-()]*$/.test(s) ? 'phone' : null;
+  const normPhone = s => { let d = s.replace(/\D/g, ''); if (d.startsWith('84') && d.length >= 11) d = '0' + d.slice(2); if (d.length === 9) d = '0' + d; return d; };
+  const contactReady = s => contactKind(s) === 'email' ? /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) : normPhone(s).length >= 10;
+  const studentHtml = g => {
+    const H = g.header.map(h => (h || '').trim());
+    const val = (r, i) => ((r[i] || '') + '').trim();
+    const cols = H.map((_, i) => i).filter(i => H[i] && g.rows.some(r => val(r, i)));
+    const same = cols.filter(i => g.rows.every(r => val(r, i) === val(g.rows[0], i)));
+    const seen = new Set(), fixed = same.filter(i => { const k = H[i] + '|' + val(g.rows[0], i); if (seen.has(k)) return false; seen.add(k); return true; });
+    const vary = cols.filter(i => !same.includes(i));
+    return `<section class="hb-step hb-student"><div class="hb-step-head"><span class="hb-step-no">${icon('users')}</span>
+        <div><h3>Thông tin học viên</h3><div class="small muted">Sheet ${esc(g.tab)} · ${g.rows.length}${g.more ? '+' : ''} dòng khớp</div></div>
+        <button class="btn btn-sm btn-ghost" data-open="${g.gid}">Mở sheet ${icon('chevR')}</button></div>
+      <div class="hb-step-body"><dl class="kv">${fixed.map(i => `<dt>${esc(H[i])}</dt><dd>${linkify(val(g.rows[0], i))}</dd>`).join('')}</dl>
+        ${vary.length ? `<div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr>${vary.map(i => `<th>${esc(H[i])}</th>`).join('')}</tr></thead>
+          <tbody>${g.rows.map(r => `<tr>${vary.map(i => `<td>${linkify(val(r, i))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : ''}</div></section>`;
+  };
+  const lookup = async () => {
+    const seq = ++searchSeq;
+    $$('#hb-nav button').forEach(b => b.classList.remove('active'));
+    $('#hb-heading').textContent = `Tra cứu học viên: ${q}`; $('#hb-time').textContent = '';
+    if (!contactReady(q)) { $('#hb-body').innerHTML = emptyState(contactKind(q) === 'email' ? 'Nhập đủ địa chỉ email để tra cứu học viên' : 'Nhập đủ số điện thoại để tra cứu học viên (có hoặc không có 0 / 84 / +84 đầu đều được)'); return; }
+    $('#hb-body').innerHTML = '<div class="skel"></div><div class="skel w60"></div>';
+    let res;
+    try { res = await api('/handbook/lookup', { query: { q } }); } catch (e) { if (seq === searchSeq) $('#hb-body').innerHTML = emptyState(e.message); return; }
+    if (seq !== searchSeq) return;
+    $('#hb-body').innerHTML = res.results.length ? res.results.map(studentHtml).join('')
+      : emptyState(`Không tìm thấy học viên có ${res.type === 'email' ? 'email' : 'số điện thoại'} này`);
+  };
+
   const search = async () => {
+    if (contactKind(q)) return lookup();
     const seq = ++searchSeq;
     $$('#hb-nav button').forEach(b => b.classList.remove('active'));
     $('#hb-heading').textContent = `Kết quả cho “${q}”`; $('#hb-time').textContent = '';
