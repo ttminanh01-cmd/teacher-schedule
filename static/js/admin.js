@@ -210,9 +210,9 @@ async function aSchedule(v) {
 
   function assignDialog(d, sh, av) {
     const taken = new Set(list.filter(s => s.date === d && t2m(s.start) < t2m(sh.end) && t2m(s.end) > t2m(sh.start)).map(s => s.user_id));
-    const key = `${dowKey(d)}-${sh.code}`;
+    const key = `${dowKey(d)}-${sh.code}`, gkey = `${dowKey(d)}-${shiftGroup(sh.code)}`;  // ca gãy tối → xem đăng ký ca Tối
     const ctvs = users.filter(u => u.role === 'ctv' && u.active && !taken.has(u.id)).map(u => {
-      const a = av.users.find(x => x.id === u.id); const slot = a && a.slots[key];
+      const a = av.users.find(x => x.id === u.id); const slot = a && (a.slots[key] || a.slots[gkey]);
       const fit = !slot ? 0 : (t2m(slot.start) <= t2m(sh.start) && t2m(slot.end) >= t2m(sh.end)) ? 2 : 1;
       return { ...u, slot, fit };
     }).sort((a, b) => b.fit - a.fit || a.username.localeCompare(b.username));

@@ -14,6 +14,7 @@ Thuật toán xếp (tham lam, công bằng):
 """
 import hashlib
 import json
+import re
 from datetime import date, datetime, timedelta
 
 from . import db
@@ -98,8 +99,11 @@ def week_regs(con, key: str) -> dict:
 
 # ---------------------------------------------------------------- xếp ca
 def group_of(code: str) -> str:
-    c = code.lower()
-    return "toi" if c.startswith("toi") else "chieu" if c.startswith("chieu") else "sang" if c.startswith("sang") else c
+    c = code.lower().strip()
+    for g in ("toi", "chieu", "sang"):  # VD "toi gay", "ca gay toi" → nhóm tối
+        if c == g or re.search(rf"(^|[^a-z]){g}([^a-z]|$)", c):
+            return g
+    return c
 
 
 def generate(con, ws: date, actor: str = "Hệ thống") -> dict:

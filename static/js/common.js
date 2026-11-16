@@ -194,7 +194,7 @@ function shiftState(s) {
   return { key: 'done', label: 'Chờ duyệt', badge: 'amber' };
 }
 /* ca chính (Sáng / Chiều / Tối); ca phụ như "Tối gãy" thuộc nhóm ca chính cùng tiền tố mã */
-const shiftGroup = code => { const f = String(code || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase(); return f.startsWith('toi') ? 'toi' : f.startsWith('chieu') ? 'chieu' : f.startsWith('sang') ? 'sang' : code; };
+const shiftGroup = code => { const f = String(code || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase(); for (const g of ['toi', 'chieu', 'sang']) if (f === g || new RegExp(`(^|[^a-z])${g}([^a-z]|$)`).test(f)) return g; return code; };
 const mainShifts = () => { const m = App.meta.shifts.filter(s => shiftGroup(s.code) === s.code); return m.length ? m : App.meta.shifts; };
 const shortShift = code => ((App.meta.shifts.find(s => s.code === code) || {}).name || code).replace(/^ca\s+/i, '').replace(/^./, c => c.toUpperCase());
 /* so số CTV với chỉ tiêu của ca (need_min–need_max) */

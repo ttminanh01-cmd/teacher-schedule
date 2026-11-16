@@ -38,8 +38,11 @@ def col_letter(i: int) -> str:
 
 
 def group_of(code: str) -> str:
-    f = handbook.fold(code)
-    return "toi" if f.startswith("toi") else "chieu" if f.startswith("chieu") else "sang" if f.startswith("sang") else f
+    f = handbook.fold(code).strip()
+    for g in ("toi", "chieu", "sang"):
+        if f == g or re.search(rf"(^|[^a-z]){g}([^a-z]|$)", f):
+            return g
+    return f
 
 
 def read_layout(sheet_id: str):
