@@ -134,7 +134,7 @@ async function aSchedule(v) {
   const shifts = App.meta.shifts;
   const avCache = {};
   let list = [], users = [];
-  v.innerHTML = pageHead('Xếp lịch', 'Bấm “+ Thêm” trong ô để xếp CTV vào ca. CTV đã đăng ký rảnh khung đó sẽ được gợi ý trước.',
+  v.innerHTML = pageHead('Xếp lịch', 'Bấm “+ Thêm” để xếp CTV vào ca, bấm vào tên CTV để sửa giờ vào / ra, ca hoặc vị trí.',
     `<button class="btn" id="copy">${icon('copy')} Sao chép tuần trước</button><button class="btn" id="auto">${icon('refresh')} Tự xếp ca</button><button class="btn btn-primary" id="sync">${icon('check')} Duyệt lịch tuần</button>`) + `
     <div class="filters">
       <button class="btn btn-icon" id="prev" aria-label="Tuần trước">${icon('chevL')}</button>
@@ -161,7 +161,7 @@ async function aSchedule(v) {
       ${shifts.filter(sh => shiftGroup(sh.code) === sh.code || shown.some(s => s.shift_code === sh.code)).map(sh => `<div class="br">${esc(sh.name)}<span>${sh.start}–${sh.end}</span></div>${days.map(d => {
         const items = shown.filter(s => s.date === d && s.shift_code === sh.code);
         const ni = needInfo(items.length, sh);
-        return `<div class="cell">${ni.target ? `<div class="need ${ni.cls}">${ni.text}${ni.missing ? ` · thiếu ${ni.missing}` : ''}</div>` : ''}${items.map(s => `<div class="pill ${s.approved_at ? 'in' : ''} ${s.source === 'auto' ? 'auto' : ''}" title="${esc(s.name)} · ${s.start}–${s.end} · ${esc(s.position || '')}${s.source === 'auto' ? ' · hệ thống tự xếp' : ''}${s.approved_at ? ' · đã chấm công' : ''}">
+        return `<div class="cell">${ni.target ? `<div class="need ${ni.cls}">${ni.text}${ni.missing ? ` · thiếu ${ni.missing}` : ''}</div>` : ''}${items.map(s => `<div class="pill ${s.approved_at ? 'in' : ''} ${s.source === 'auto' ? 'auto' : ''}" data-edit-s="${s.id}" role="button" tabindex="0" title="Bấm để sửa giờ / ca · ${esc(s.name)} · ${s.start}–${s.end} · ${esc(s.position || '')}${s.source === 'auto' ? ' · hệ thống tự xếp' : ''}${s.approved_at ? ' · đã chấm công' : ''}">
           <span>${esc(s.username)} <span class="muted">${esc(s.position || '')}</span></span>
           ${s.approved_at ? '' : `<button class="rm" data-rm="${s.id}" aria-label="Xoá">×</button>`}</div>`).join('')}
           <button class="add-chip" data-add="${d}|${sh.code}">+ Thêm</button></div>`;
@@ -169,7 +169,8 @@ async function aSchedule(v) {
   };
 
   $('#board').onclick = async e => {
-    const rm = e.target.closest('[data-rm]'), add = e.target.closest('[data-add]');
+    const rm = e.target.closest('[data-rm]'), add = e.target.closest('[data-add]'), pill = !rm && e.target.closest('[data-edit-s]');
+    if (pill) editDialog(list.find(x => x.id === +pill.dataset.editS));
     if (rm) {
       const s = list.find(x => x.id === +rm.dataset.rm);
       if (!(await confirmDialog('Xoá ca này?', `${s.username} · ${fmtDate(s.date)} ${s.start}–${s.end}`, 'Xoá', true))) return;
@@ -177,9 +178,35 @@ async function aSchedule(v) {
     }
     if (add) {
       const [d, code] = add.dataset.add.split('|');
-      assignDialog(d, shifts.find(s => s.code === code), await availability(d.slice(0, 7)));
+      assignDialog(d, shifts.find(s => s.code === code), await availability(ymd(mondayOf(parseDate(d)))));  // đăng ký theo tuần (+ lịch tháng nếu chưa đăng ký tuần)
     }
   };
+
+  /* sửa 1 ca đã xếp: ca, giờ vào / ra, vị trí, ghi chú */
+  function editDialog(s) {
+    if (s.approved_at) return toast('Ca này đã chấm công — sửa ở mục Chấm công (bỏ duyệt ngày đó trước)', 'info');
+    modal({
+      title: `Sửa ca · ${esc(s.username)} · ${dowOf(s.date)} ${fmtDate(s.date)}`,
+      body: `<div class="field"><label>Ca</label><select class="input" id="es-shift">${shifts.map(x => `<option value="${x.code}" ${x.code === s.shift_code ? 'selected' : ''}>${esc(x.name)} (${x.start}–${x.end})</option>`).join('')}</select></div>
+        <div class="form-row"><div class="field"><label>Giờ vào</label><input type="time" class="input" id="es-start" value="${s.start}" step="300"></div>
+          <div class="field"><label>Giờ ra</label><input type="time" class="input" id="es-end" value="${s.end}" step="300"></div></div>
+        <div class="field"><label>Vị trí</label><select class="input" id="es-pos">${App.meta.positions.map(p => `<option value="${p.id}" ${p.id === s.position_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Ghi chú</label><input class="input" id="es-note" value="${esc(s.note || '')}" placeholder="VD: vào muộn 30p, kèm CTV…"></div>`,
+      footer: `<button class="btn btn-danger" id="es-del" style="margin-right:auto">Xoá ca</button><button class="btn" data-close>Huỷ</button><button class="btn btn-primary" id="es-ok">Lưu</button>`,
+      onOpen(el, close) {
+        $('#es-shift', el).onchange = e => { const x = shifts.find(y => y.code === e.target.value); $('#es-start', el).value = x.start; $('#es-end', el).value = x.end; };
+        $('#es-ok', el).onclick = ev => run(ev.currentTarget, async () => {
+          await api(`/admin/schedules/${s.id}`, { method: 'PUT', body: { shift_code: $('#es-shift', el).value, start: $('#es-start', el).value, end: $('#es-end', el).value,
+            position_id: +$('#es-pos', el).value, note: $('#es-note', el).value } });
+          close(); toast('Đã sửa ca'); load();
+        });
+        $('#es-del', el).onclick = async ev => {
+          if (!(await confirmDialog('Xoá ca này?', `${s.username} · ${fmtDate(s.date)} ${s.start}–${s.end}`, 'Xoá', true))) return;
+          run(ev.currentTarget, async () => { await api(`/admin/schedules/${s.id}`, { method: 'DELETE' }); close(); toast('Đã xoá ca'); load(); });
+        };
+      },
+    });
+  }
 
   function assignDialog(d, sh, av) {
     const taken = new Set(list.filter(s => s.date === d && t2m(s.start) < t2m(sh.end) && t2m(s.end) > t2m(sh.start)).map(s => s.user_id));

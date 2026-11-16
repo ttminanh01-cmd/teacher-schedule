@@ -525,6 +525,31 @@ def add_schedule(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_
     return {"ok": True}
 
 
+@app.put("/api/admin/schedules/{sid}")
+def update_schedule(sid: int, body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    """Sửa 1 ca trên bảng Xếp lịch: ca, giờ vào / ra, vị trí, ghi chú."""
+    s = row(con.execute(SCHED_SQL + " WHERE s.id=?", (sid,)))
+    if not s:
+        err("Không tìm thấy ca", 404)
+    if s["approved_at"]:
+        err("Ca đã được chấm công. Sửa ở mục Chấm công (bỏ duyệt ngày đó trước).")
+    code = body.get("shift_code") or s["shift_code"]
+    if not con.execute("SELECT 1 FROM shift_types WHERE code=?", (code,)).fetchone():
+        err("Ca không hợp lệ")
+    start, end = (body.get("start") or s["start"]).strip(), (body.get("end") or s["end"]).strip()
+    if not re.fullmatch(r"\d{2}:\d{2}", start) or not re.fullmatch(r"\d{2}:\d{2}", end) or t2m(end) <= t2m(start):
+        err("Giờ vào / ra không hợp lệ")
+    note = (body.get("note") if body.get("note") is not None else s["note"] or "").strip()
+    clash = con.execute('SELECT note FROM schedules WHERE user_id=? AND date=? AND id<>? AND start < ? AND "end" > ?',
+                        (s["user_id"], s["date"], sid, end, start)).fetchone()
+    if clash and not (note or clash[0]):
+        err(f"{s['username']} đã có ca khác trùng giờ trong ngày. Nếu là ca kèm CTV, ghi chú vào ca này.")
+    pos = body.get("position_id") or s["position_id"]
+    con.execute('UPDATE schedules SET shift_code=?, start=?, "end"=?, position_id=?, note=? WHERE id=?', (code, start, end, pos, note, sid))
+    log(con, u, f"Sửa ca {s['date']} của {s['username']}: {s['start']}-{s['end']} → {start}-{end}")
+    return {"ok": True}
+
+
 @app.delete("/api/admin/schedules/{sid}")
 def delete_schedule(sid: int, u=Depends(admin_user), con=Depends(get_con)):
     s = row(con.execute(SCHED_SQL + " WHERE s.id=?", (sid,)))

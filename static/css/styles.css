@@ -535,3 +535,6 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
 
 .team-block .people { padding-top: 14px; }
 .tag-mon { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
+
+.pill[data-edit-s] { cursor: pointer; }
+.pill[data-edit-s]:hover { border-color: var(--accent); }
