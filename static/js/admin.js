@@ -158,11 +158,12 @@ async function aSchedule(v) {
     const shown = list;
     const days = Array.from({ length: 7 }, (_, i) => ymd(addDays(boardStart, i)));
     $('#board').innerHTML = `<div class="board"><div class="bh"></div>${days.map(d => `<div class="bh ${d === todayStr() ? 'today' : ''}">${dowOf(d)}<b>${fmtDM(d)}</b></div>`).join('')}
-      ${shifts.filter(sh => shiftGroup(sh.code) === sh.code || shown.some(s => s.shift_code === sh.code)).map(sh => `<div class="br">${esc(sh.name)}<span>${sh.start}–${sh.end}</span></div>${days.map(d => {
-        const items = shown.filter(s => s.date === d && s.shift_code === sh.code);
+      ${mainShifts().map(sh => `<div class="br">${esc(sh.name)}<span>${sh.start}–${sh.end}</span></div>${days.map(d => {
+        const items = shown.filter(s => s.date === d && shiftGroup(s.shift_code) === sh.code)  // ca gãy tối nằm chung dòng Tối
+          .sort((a, b) => a.start.localeCompare(b.start) || a.username.localeCompare(b.username));
         const ni = needInfo(items.length, sh);
         return `<div class="cell">${ni.target ? `<div class="need ${ni.cls}">${ni.text}${ni.missing ? ` · thiếu ${ni.missing}` : ''}</div>` : ''}${items.map(s => `<div class="pill ${s.approved_at ? 'in' : ''} ${s.source === 'auto' ? 'auto' : ''}" data-edit-s="${s.id}" role="button" tabindex="0" title="Bấm để sửa giờ / ca · ${esc(s.name)} · ${s.start}–${s.end} · ${esc(s.position || '')}${s.source === 'auto' ? ' · hệ thống tự xếp' : ''}${s.approved_at ? ' · đã chấm công' : ''}">
-          <span>${esc(s.username)} <span class="muted">${esc(s.position || '')}</span></span>
+          <span>${esc(s.username)} <span class="muted">${esc(s.position || '')}</span>${s.shift_code !== sh.code ? ` <span class="tag-mon">${esc(shortShift(s.shift_code))}</span>` : ''}${s.start !== sh.start || s.end !== sh.end ? `<br><span class="pill-time">${s.start}–${s.end}</span>` : ''}</span>
           ${s.approved_at ? '' : `<button class="rm" data-rm="${s.id}" aria-label="Xoá">×</button>`}</div>`).join('')}
           <button class="add-chip" data-add="${d}|${sh.code}">+ Thêm</button></div>`;
       }).join('')}`).join('')}</div>`;
@@ -220,6 +221,7 @@ async function aSchedule(v) {
     modal({
       title: `Xếp ca · ${sh.name} ${dowOf(d)} ${fmtDate(d)}`, wide: true,
       body: `<div class="form-row">
+          ${(() => { const grp = shifts.filter(x => shiftGroup(x.code) === shiftGroup(sh.code)); return grp.length > 1 ? `<div class="field"><label>Ca</label><select class="input" id="as-shift">${grp.map(x => `<option value="${x.code}" ${x.code === sh.code ? 'selected' : ''}>${esc(x.name)} (${x.start}–${x.end})</option>`).join('')}</select></div>` : ''; })()}
           <div class="field"><label>Vị trí</label><select class="input" id="as-pos">${App.meta.positions.map(p => `<option value="${p.id}">${esc(p.name)} · ${esc((App.meta.teams.find(t => t.id === p.team_id) || {}).name || '')}</option>`).join('')}</select></div>
           <div class="field"><label>Giờ làm</label><div style="display:flex;gap:8px;align-items:center"><input type="time" class="input" id="as-start" value="${sh.start}" step="900"> – <input type="time" class="input" id="as-end" value="${sh.end}" step="900"></div></div>
         </div>
@@ -231,11 +233,12 @@ async function aSchedule(v) {
           </div></div>`,
       footer: `<button class="btn" data-close>Huỷ</button><button class="btn btn-primary" id="as-ok">Xếp ca</button>`,
       onOpen(el, close) {
+        $('#as-shift', el)?.addEventListener('change', e => { const x = shifts.find(y => y.code === e.target.value); $('#as-start', el).value = x.start; $('#as-end', el).value = x.end; });
         $('#as-q', el).oninput = e => { const q = e.target.value.toLowerCase(); $$('#as-list label', el).forEach(l => { l.hidden = !l.dataset.name.includes(q); }); };
         $('#as-ok', el).onclick = ev => run(ev.currentTarget, async () => {
           const ids = $$('#as-list input:checked', el).map(i => +i.value);
           if (!ids.length) throw new Error('Chưa chọn CTV nào');
-          const body = { date: d, shift_code: sh.code, start: $('#as-start', el).value, end: $('#as-end', el).value, position_id: +$('#as-pos', el).value };
+          const body = { date: d, shift_code: $('#as-shift', el)?.value || sh.code, start: $('#as-start', el).value, end: $('#as-end', el).value, position_id: +$('#as-pos', el).value };
           const errors = [];
           for (const id of ids) await api('/admin/schedules', { method: 'POST', body: { ...body, user_id: id } }).catch(e => errors.push(e.message));
           close(); load();

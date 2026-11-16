@@ -46,7 +46,9 @@ def norm_user(s: str) -> str:
 
 def split_shifts(start: int, end: int, shifts):
     """Tách khoảng giờ theo ranh giới ca (12:00 / 18:00) → [(code, start, end)]."""
-    bounds = sorted({t2m(s["end"]) for s in shifts if t2m(s["end"]) < 24 * 60})
+    # chỉ cắt ở ranh giới giữa các ca chính (hết ca sáng 12:00, hết ca chiều 18:00) — phần sau 22:00 vẫn thuộc ca tối
+    mains = sorted((s for s in shifts if s["code"] in ("sang", "chieu", "toi")), key=lambda s: t2m(s["end"]))
+    bounds = sorted({t2m(s["end"]) for s in mains[:-1]})
     cuts = [start] + [b for b in bounds if start < b < end] + [end]
     out = []
     for a, b in zip(cuts, cuts[1:]):

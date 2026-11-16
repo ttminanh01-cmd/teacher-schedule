@@ -8,7 +8,7 @@ const cdText = st => `${st.key === 'wait' ? 'Bắt đầu sau ' : 'Còn '}${fmtS
 function todayCard(s) {
   const st = shiftState(s);
   return `<div class="today-card">
-    <div style="display:flex;justify-content:space-between;align-items:center"><span class="time">${s.start} – ${s.end}</span><span class="badge ${st.badge}">${st.label}</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center"><span class="time"><small class="muted" style="font-size:12px;font-weight:500">Vào</small> ${s.start} – <small class="muted" style="font-size:12px;font-weight:500">Ra</small> ${s.end}</span><span class="badge ${st.badge}">${st.label}</span></div>
     <div class="meta">${esc(s.shift_name || '')} · ${esc(s.team || '')} · ${esc(s.position || '')}</div>
     ${st.secs != null ? `<div class="count" data-cd="${s.id}">${cdText(st)}</div>` : ''}</div>`;
 }
@@ -35,7 +35,7 @@ function shiftDialog(s, reload) {
   modal({
     title: `${s.shift_name || 'Ca'} · ${dowOf(s.date)} ${fmtDate(s.date)}`,
     body: `<dl class="kv">
-        <dt>Giờ</dt><dd>${s.start} – ${s.end}</dd>
+        <dt>Giờ vào – ra</dt><dd><b>${s.start}</b> – <b>${s.end}</b> (${hoursOf(s)} giờ)</dd>
         <dt>Team</dt><dd>${esc(s.team || '—')}</dd>
         <dt>Vị trí</dt><dd>${esc(s.position || '—')}</dd>
         <dt>Trạng thái</dt><dd><span class="badge ${st.badge}">${st.label}</span></dd>
@@ -131,7 +131,7 @@ async function pageSchedule(v) {
           return `<div class="slot-row"><span class="slot-name">${label}</span>${inSlot.map(s => {
             const st = shiftState(s);
             return `<button class="chip ${st.key === 'done' ? 'done' : st.key === 'missed' ? 'missed' : ''}" data-id="${s.id}">
-              ${s.shift_code !== sh.code ? `<span class="badge" style="margin-bottom:3px">${esc(shortShift(s.shift_code))}</span>` : ''}<b>${s.start}–${s.end}</b>${esc(s.position || '')}<br><span class="who">${st.label}</span></button>`;
+              ${s.shift_code !== sh.code ? `<span class="badge" style="margin-bottom:3px">${esc(shortShift(s.shift_code))}</span>` : ''}<b>Vào ${s.start} · Ra ${s.end}</b>${esc(s.position || '')}<br><span class="who">${st.label}</span></button>`;
           }).join('')}</div>`;
         }).join('')}</div></div>`;
     }).join('')}</div>${list.length ? '' : '<div class="empty">Tuần này bạn không có ca nào.</div>'}`;
@@ -645,7 +645,9 @@ async function pageSalary(v) {
     if (s.qc.length) dataTable($('#qc'), s.qc, QC_COLUMNS, { pageSize: 20 });
     dataTable($('#rows'), s.rows, [
       { label: 'Ngày', render: r => `${dowOf(r.date)} ${fmtDate(r.date)}` },
-      { label: 'Ca', render: r => `${r.start}–${r.end}` },
+      { label: 'Ca', render: r => esc(shortShift(r.shift_code)) },
+      { label: 'Giờ vào', cls: 'mono', render: r => r.start },
+      { label: 'Giờ ra', cls: 'mono', render: r => r.end },
       { label: 'Vị trí', render: r => esc(r.position || '') },
       { label: 'Giờ', cls: 'right mono', render: r => hoursOf(r) },
     ], { pageSize: 15 });
@@ -679,7 +681,9 @@ async function pageHistory(v) {
       <div class="stat"><div class="label">Giờ được tính lương</div><div class="value">${done.reduce((a, r) => a + hoursOf(r), 0)}</div></div>`;
     dataTable($('#body'), rows, [
       { label: 'Ngày', render: r => `<span class="nowrap">${dowOf(r.date)} ${fmtDate(r.date)}</span>` },
-      { label: 'Ca', render: r => `${r.start}–${r.end}` },
+      { label: 'Ca', render: r => esc(shortShift(r.shift_code)) },
+      { label: 'Giờ vào', cls: 'mono', render: r => r.start },
+      { label: 'Giờ ra', cls: 'mono', render: r => r.end },
       { label: 'Vị trí', render: r => `${esc(r.position || '')}<br><span class="small muted">${esc(r.team || '')}</span>` },
       { label: 'Giờ', cls: 'right mono', render: r => hoursOf(r) },
       { label: 'Trạng thái', render: attStatus },

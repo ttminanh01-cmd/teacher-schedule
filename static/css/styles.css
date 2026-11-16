@@ -538,3 +538,5 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
 
 .pill[data-edit-s] { cursor: pointer; }
 .pill[data-edit-s]:hover { border-color: var(--accent); }
+
+.pill-time { font-size: 11.5px; font-weight: 600; color: var(--accent); }
