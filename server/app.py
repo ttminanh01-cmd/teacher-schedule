@@ -88,7 +88,10 @@ def public_user(u):
 # ---------------------------------------------------------------- auth
 @app.post("/api/login")
 def login(body: dict = Body(...), con=Depends(get_con)):
-    u = row(con.execute("SELECT * FROM users WHERE username=?", (body.get("username", "").strip(),)))
+    name = body.get("username", "").strip()
+    u = row(con.execute("SELECT * FROM users WHERE username=?", (name,)))
+    if not u and name and "." not in name:  # CTV gõ "haott" thay vì "ctv.haott"
+        u = row(con.execute("SELECT * FROM users WHERE username=?", ("ctv." + name,)))
     if not u or not db.check_pw(body.get("password", ""), u["password_hash"]):
         err("Sai tên đăng nhập hoặc mật khẩu", 401)
     if not u["active"]:

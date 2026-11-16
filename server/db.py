@@ -4,7 +4,12 @@ import json
 import os
 import secrets
 import sqlite3
+import time
 from datetime import date, datetime, timedelta
+
+os.environ.setdefault("TZ", "Asia/Ho_Chi_Minh")
+if hasattr(time, "tzset"):  # Linux / macOS (Render); Windows dùng giờ máy
+    time.tzset()
 
 DB_PATH = os.environ.get("CTV_DB", os.path.join(os.path.dirname(__file__), "..", "data", "ctv.db"))
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()

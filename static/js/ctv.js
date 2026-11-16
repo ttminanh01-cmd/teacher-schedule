@@ -702,7 +702,7 @@ async function pageLogs(v) {
 
 /* ---------- khởi động ---------- */
 App.start({
-  role: 'ctv', brand: 'Cổng CTV', subtitle: 'Cộng tác viên', loginHint: 'Dùng tài khoản được quản lý cấp.',
+  role: 'ctv', brand: 'Cổng CTV', subtitle: 'Cộng tác viên', loginHint: 'Tên đăng nhập dạng ctv.tenban (VD ctv.haott). Mật khẩu ban đầu do quản lý cấp.',
   nav: [
     { group: 'Tổng quan', items: [{ id: 'dashboard', label: 'Tổng quan', icon: 'home', render: pageDashboard }] },
     { group: 'Lịch làm', items: [
