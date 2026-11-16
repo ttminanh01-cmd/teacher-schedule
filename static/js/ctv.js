@@ -258,11 +258,10 @@ async function pageTeam(v) {
       <button class="btn btn-icon" id="prev" aria-label="Ngày trước">${icon('chevL')}</button>
       <input type="date" class="input" id="day">
       <button class="btn btn-icon" id="next" aria-label="Ngày sau">${icon('chevR')}</button>
-      <select class="input" id="team"><option value="">Tất cả team</option>${App.meta.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
     </div><div id="body">${loading()}</div>`;
   const load = async () => {
     $('#day').value = ymd(day);
-    const list = await api('/team-day', { query: { day: ymd(day), team_id: $('#team').value } });
+    const list = await api('/team-day', { query: { day: ymd(day) } });
     if (!list.length) { $('#body').innerHTML = `<div class="card">${emptyState('Không có ai được xếp ca trong ngày này')}</div>`; return; }
     // mỗi ca 1 hàng chung tất cả CTV; người trực Monitor có nhãn; ca tối gãy nằm chung ca Tối
     const isMon = p => /monitor/i.test(p.position || '');
@@ -279,7 +278,6 @@ async function pageTeam(v) {
   $('#prev').onclick = () => { day = addDays(day, -1); load(); };
   $('#next').onclick = () => { day = addDays(day, 1); load(); };
   $('#day').onchange = e => { if (e.target.value) { day = parseDate(e.target.value); load(); } };
-  $('#team').onchange = load;
   load();
 }
 

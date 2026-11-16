@@ -141,7 +141,6 @@ async function aSchedule(v) {
       <button class="btn" id="this">Tuần này</button>
       <button class="btn btn-icon" id="next" aria-label="Tuần sau">${icon('chevR')}</button>
       <strong id="range" style="margin-left:8px"></strong><span style="flex:1"></span>
-      <select class="input" id="team"><option value="">Tất cả team</option>${App.meta.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
     </div>
     <div id="wk-st"></div>
     <div class="card"><div class="table-wrap" id="board">${loading()}</div></div>
@@ -156,8 +155,7 @@ async function aSchedule(v) {
     [list, users, wk] = await Promise.all([api('/admin/schedules', { query: { start: ymd(boardStart), end: ymd(end) } }), users.length ? users : api('/admin/users'),
       api('/admin/week', { query: { start: ymd(boardStart) } })]);
     paintWeek(wk);
-    const team = +$('#team').value;
-    const shown = team ? list.filter(s => App.meta.positions.find(p => p.id === s.position_id)?.team_id === team) : list;
+    const shown = list;
     const days = Array.from({ length: 7 }, (_, i) => ymd(addDays(boardStart, i)));
     $('#board').innerHTML = `<div class="board"><div class="bh"></div>${days.map(d => `<div class="bh ${d === todayStr() ? 'today' : ''}">${dowOf(d)}<b>${fmtDM(d)}</b></div>`).join('')}
       ${shifts.filter(sh => shiftGroup(sh.code) === sh.code || shown.some(s => s.shift_code === sh.code)).map(sh => `<div class="br">${esc(sh.name)}<span>${sh.start}–${sh.end}</span></div>${days.map(d => {
@@ -249,7 +247,6 @@ async function aSchedule(v) {
   $('#prev').onclick = () => { boardStart = addDays(boardStart, -7); load(); };
   $('#next').onclick = () => { boardStart = addDays(boardStart, 7); load(); };
   $('#this').onclick = () => { boardStart = mondayOf(new Date()); load(); };
-  $('#team').onchange = load;
   $('#copy').onclick = async e => {
     if (!(await confirmDialog('Sao chép tuần trước?', `Toàn bộ ca của tuần ${fmtDate(ymd(addDays(boardStart, -7)))} sẽ được chép sang tuần đang xem. Ca bị trùng giờ sẽ được bỏ qua.`, 'Sao chép'))) return;
     run(e.currentTarget, async () => {
