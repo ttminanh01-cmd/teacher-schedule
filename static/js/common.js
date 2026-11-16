@@ -193,6 +193,10 @@ function shiftState(s) {
   if (nowS < endAt) return { key: 'working', label: 'Đang trong ca', badge: 'blue', secs: endAt - nowS };
   return { key: 'done', label: 'Chờ duyệt', badge: 'amber' };
 }
+/* ca chính (Sáng / Chiều / Tối); ca phụ như "Tối gãy" thuộc nhóm ca chính cùng tiền tố mã */
+const shiftGroup = code => { const f = String(code || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase(); return f.startsWith('toi') ? 'toi' : f.startsWith('chieu') ? 'chieu' : f.startsWith('sang') ? 'sang' : code; };
+const mainShifts = () => { const m = App.meta.shifts.filter(s => shiftGroup(s.code) === s.code); return m.length ? m : App.meta.shifts; };
+const shortShift = code => ((App.meta.shifts.find(s => s.code === code) || {}).name || code).replace(/^ca\s+/i, '');
 /* so số CTV với chỉ tiêu của ca (need_min–need_max) */
 function needInfo(n, sh, overOk = false) {
   const lo = +sh.need_min || 0, hi = Math.max(lo, +sh.need_max || 0);

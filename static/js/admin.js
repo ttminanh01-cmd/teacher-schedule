@@ -160,7 +160,7 @@ async function aSchedule(v) {
     const shown = team ? list.filter(s => App.meta.positions.find(p => p.id === s.position_id)?.team_id === team) : list;
     const days = Array.from({ length: 7 }, (_, i) => ymd(addDays(boardStart, i)));
     $('#board').innerHTML = `<div class="board"><div class="bh"></div>${days.map(d => `<div class="bh ${d === todayStr() ? 'today' : ''}">${dowOf(d)}<b>${fmtDM(d)}</b></div>`).join('')}
-      ${shifts.map(sh => `<div class="br">${esc(sh.name)}<span>${sh.start}–${sh.end}</span></div>${days.map(d => {
+      ${shifts.filter(sh => shiftGroup(sh.code) === sh.code || shown.some(s => s.shift_code === sh.code)).map(sh => `<div class="br">${esc(sh.name)}<span>${sh.start}–${sh.end}</span></div>${days.map(d => {
         const items = shown.filter(s => s.date === d && s.shift_code === sh.code);
         const ni = needInfo(items.length, sh);
         return `<div class="cell">${ni.target ? `<div class="need ${ni.cls}">${ni.text}${ni.missing ? ` · thiếu ${ni.missing}` : ''}</div>` : ''}${items.map(s => `<div class="pill ${s.approved_at ? 'in' : ''} ${s.source === 'auto' ? 'auto' : ''}" title="${esc(s.name)} · ${s.start}–${s.end} · ${esc(s.position || '')}${s.source === 'auto' ? ' · hệ thống tự xếp' : ''}${s.approved_at ? ' · đã chấm công' : ''}">

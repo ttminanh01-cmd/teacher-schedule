@@ -124,14 +124,14 @@ async function pageSchedule(v) {
       const d = ymd(addDays(weekStart, i)); const items = list.filter(s => s.date === d);
       return `<div class="day ${d === todayStr() ? 'today' : ''} ${items.length ? '' : 'empty-day'}">
         <div class="day-h"><span>${DOW_FULL[parseDate(d).getDay()]}</span><b>${fmtDM(d)}</b></div>
-        <div class="day-body">${App.meta.shifts.map(sh => {
+        <div class="day-body">${mainShifts().map(sh => {
           const label = esc(sh.name.replace(/^ca\s+/i, ''));
-          const inSlot = items.filter(s => s.shift_code === sh.code);
+          const inSlot = items.filter(s => shiftGroup(s.shift_code) === sh.code);  // ca tối gãy nằm trong ô Tối
           if (!inSlot.length) return `<div class="slot-row"><span class="slot-name">${label}</span><div class="slot-empty">Trống</div></div>`;
           return `<div class="slot-row"><span class="slot-name">${label}</span>${inSlot.map(s => {
             const st = shiftState(s);
             return `<button class="chip ${st.key === 'done' ? 'done' : st.key === 'missed' ? 'missed' : ''}" data-id="${s.id}">
-              <b>${s.start}–${s.end}</b>${esc(s.position || '')}<br><span class="who">${st.label}</span></button>`;
+              ${s.shift_code !== sh.code ? `<span class="badge" style="margin-bottom:3px">${esc(shortShift(s.shift_code))}</span>` : ''}<b>${s.start}–${s.end}</b>${esc(s.position || '')}<br><span class="who">${st.label}</span></button>`;
           }).join('')}</div>`;
         }).join('')}</div></div>`;
     }).join('')}</div>${list.length ? '' : '<div class="empty">Tuần này bạn không có ca nào.</div>'}`;
