@@ -264,13 +264,16 @@ async function pageTeam(v) {
     $('#day').value = ymd(day);
     const list = await api('/team-day', { query: { day: ymd(day), team_id: $('#team').value } });
     if (!list.length) { $('#body').innerHTML = `<div class="card">${emptyState('Không có ai được xếp ca trong ngày này')}</div>`; return; }
-    $('#body').innerHTML = App.meta.shifts.map(sh => {
-      const inShift = list.filter(s => s.shift_code === sh.code); if (!inShift.length) return '';
-      const groups = {}; inShift.forEach(s => { const k = `${s.team || ''} · ${s.position || 'Khác'}`; (groups[k] = groups[k] || []).push(s); });
+    // mỗi ca 1 hàng chung tất cả CTV; người trực Monitor có nhãn; ca tối gãy nằm chung ca Tối
+    const isMon = p => /monitor/i.test(p.position || '');
+    $('#body').innerHTML = mainShifts().map(sh => {
+      const inShift = list.filter(s => shiftGroup(s.shift_code) === sh.code)
+        .sort((a, b) => isMon(b) - isMon(a) || a.start.localeCompare(b.start) || a.username.localeCompare(b.username));
+      if (!inShift.length) return '';
       return `<div class="card" style="margin-bottom:16px"><div class="card-head"><h2>${esc(sh.name)} <span class="muted" style="font-weight:400">${sh.start}–${sh.end}</span></h2><span class="badge">${inShift.length} người</span></div>
-        ${Object.entries(groups).map(([k, ps]) => `<div class="team-block"><h3>${esc(k)}</h3><div class="people">${ps.map(p => `
-          <div class="person ${p.user_id === App.user.id ? 'me' : ''}" title="${esc(p.name)}"><div class="avatar">${initials(p.name)}</div>
-            <div>${esc(p.username)} <small>${p.start}–${p.end}</small></div></div>`).join('')}</div></div>`).join('')}</div>`;
+        <div class="team-block"><div class="people">${inShift.map(p => `
+          <div class="person ${p.user_id === App.user.id ? 'me' : ''}" title="${esc(p.name)} · ${esc(p.position || '')}${p.team ? ' · ' + esc(p.team) : ''}"><div class="avatar">${initials(p.name)}</div>
+            <div>${esc(p.username)}${isMon(p) ? ' <span class="tag-mon">Monitor</span>' : ''}${p.shift_code !== sh.code ? ` <span class="tag-mon">${esc(shortShift(p.shift_code))}</span>` : ''} <small>${p.start}–${p.end}</small></div></div>`).join('')}</div></div></div>`;
     }).join('');
   };
   $('#prev').onclick = () => { day = addDays(day, -1); load(); };
