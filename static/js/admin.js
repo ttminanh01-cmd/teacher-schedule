@@ -183,12 +183,16 @@ async function aSchedule(v) {
     }
   };
 
-  /* sửa 1 ca đã xếp: ca, giờ vào / ra, vị trí, ghi chú */
+  const sheetToast = (msg, r) => r && r.sheet_error ? toast(`${msg} — nhưng chưa ghi được sheet Lịch trực: ${r.sheet_error}`, 'error')
+    : toast(r && r.sheet === 'updated' ? `${msg} · đã cập nhật sheet Lịch trực` : msg);
+  /* sửa 1 ca đã xếp: người trực, ca, giờ vào / ra, vị trí, ghi chú */
   function editDialog(s) {
     if (s.approved_at) return toast('Ca này đã chấm công — sửa ở mục Chấm công (bỏ duyệt ngày đó trước)', 'info');
     modal({
       title: `Sửa ca · ${esc(s.username)} · ${dowOf(s.date)} ${fmtDate(s.date)}`,
-      body: `<div class="field"><label>Ca</label><select class="input" id="es-shift">${shifts.map(x => `<option value="${x.code}" ${x.code === s.shift_code ? 'selected' : ''}>${esc(x.name)} (${x.start}–${x.end})</option>`).join('')}</select></div>
+      body: `<div class="field"><label>CTV trực (PIC)</label><select class="input" id="es-user">${users.filter(u => u.active || u.id === s.user_id).sort((a, b) => a.username.localeCompare(b.username)).map(u => `<option value="${u.id}" ${u.id === s.user_id ? 'selected' : ''}>${esc(u.username)} · ${esc(u.name)}</option>`).join('')}</select>
+          <span class="hint">Đổi ca ngoài web thì chọn người làm thay — hệ thống ghi “Đổi ca: A → B” vào chấm công.</span></div>
+        <div class="field"><label>Ca</label><select class="input" id="es-shift">${shifts.map(x => `<option value="${x.code}" ${x.code === s.shift_code ? 'selected' : ''}>${esc(x.name)} (${x.start}–${x.end})</option>`).join('')}</select></div>
         <div class="form-row"><div class="field"><label>Giờ vào</label><input type="time" class="input" id="es-start" value="${s.start}" step="300"></div>
           <div class="field"><label>Giờ ra</label><input type="time" class="input" id="es-end" value="${s.end}" step="300"></div></div>
         <div class="field"><label>Vị trí</label><select class="input" id="es-pos">${App.meta.positions.map(p => `<option value="${p.id}" ${p.id === s.position_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
@@ -197,13 +201,13 @@ async function aSchedule(v) {
       onOpen(el, close) {
         $('#es-shift', el).onchange = e => { const x = shifts.find(y => y.code === e.target.value); $('#es-start', el).value = x.start; $('#es-end', el).value = x.end; };
         $('#es-ok', el).onclick = ev => run(ev.currentTarget, async () => {
-          await api(`/admin/schedules/${s.id}`, { method: 'PUT', body: { shift_code: $('#es-shift', el).value, start: $('#es-start', el).value, end: $('#es-end', el).value,
+          const r = await api(`/admin/schedules/${s.id}`, { method: 'PUT', body: { user_id: +$('#es-user', el).value, shift_code: $('#es-shift', el).value, start: $('#es-start', el).value, end: $('#es-end', el).value,
             position_id: +$('#es-pos', el).value, note: $('#es-note', el).value } });
-          close(); toast('Đã sửa ca'); load();
+          close(); sheetToast('Đã sửa ca', r); load();
         });
         $('#es-del', el).onclick = async ev => {
           if (!(await confirmDialog('Xoá ca này?', `${s.username} · ${fmtDate(s.date)} ${s.start}–${s.end}`, 'Xoá', true))) return;
-          run(ev.currentTarget, async () => { await api(`/admin/schedules/${s.id}`, { method: 'DELETE' }); close(); toast('Đã xoá ca'); load(); });
+          run(ev.currentTarget, async () => { const r = await api(`/admin/schedules/${s.id}`, { method: 'DELETE' }); close(); sheetToast('Đã xoá ca', r); load(); });
         };
       },
     });
@@ -261,7 +265,7 @@ async function aSchedule(v) {
     const G = { sang: 'Sáng', chieu: 'Chiều', toi: 'Tối' };
     const dl = wk.deadline.slice(11, 16) + ' ' + fmtDM(wk.deadline.slice(0, 10)), gt = wk.gen_time.slice(11, 16) + ' ' + fmtDM(wk.gen_time.slice(0, 10));
     const rep_ = wk.report || {};
-    const status = wk.approved_at ? `<span class="badge green">Đã duyệt</span> <span class="small muted">${esc(wk.approved_by || '')} · ${hm(wk.approved_at)} ${fmtDate(wk.approved_at.slice(0, 10))} — CTV đã thấy lịch</span>`
+    const status = wk.approved_at ? `<span class="badge green">Đã duyệt</span> <span class="small muted">${esc(wk.approved_by || '')} · ${hm(wk.approved_at)} ${fmtDate(wk.approved_at.slice(0, 10))} — CTV đã thấy lịch. Vẫn sửa được (bấm vào tên để đổi người / giờ); thay đổi hiện ngay cho CTV${wk.sync ? ' và tự cập nhật sheet' : ''}.</span>`
       : wk.generated_at ? `<span class="badge amber">Bản nháp tự xếp — chờ duyệt</span> <span class="small muted">${esc(wk.generated_by || '')} xếp lúc ${hm(wk.generated_at)} ${fmtDate(wk.generated_at.slice(0, 10))}. CTV chưa thấy lịch tuần này cho tới khi bạn bấm “Duyệt lịch tuần”.</span>`
       : wk.reg_open ? `<span class="badge blue">Đang nhận đăng ký</span> <span class="small muted">Hạn chót ${dl} · tự xếp ca lúc ${gt}</span>`
       : wk.registered_week ? `<span class="badge">Chưa tự xếp</span> <span class="small muted">Hạn đăng ký đã qua (${dl}). Bấm “Tự xếp ca” để xếp ngay.</span>`

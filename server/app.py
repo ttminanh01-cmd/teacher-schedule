@@ -534,7 +534,7 @@ def add_schedule(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_
                 (uid, d, code, start, end, body.get("position_id")))
     name = con.execute("SELECT username FROM users WHERE id=?", (uid,)).fetchone()[0]
     log(con, u, f"Xếp ca {d} {start}-{end} cho {name}")
-    return {"ok": True}
+    return {"ok": True, **resync_sheet_day(con, d)}
 
 
 @app.put("/api/admin/schedules/{sid}")
@@ -557,9 +557,26 @@ def update_schedule(sid: int, body: dict = Body(...), u=Depends(admin_user), con
     if clash and not (note or clash[0]):
         err(f"{s['username']} đã có ca khác trùng giờ trong ngày. Nếu là ca kèm CTV, ghi chú vào ca này.")
     pos = body.get("position_id") or s["position_id"]
-    con.execute('UPDATE schedules SET shift_code=?, start=?, "end"=?, position_id=?, note=? WHERE id=?', (code, start, end, pos, note, sid))
-    log(con, u, f"Sửa ca {s['date']} của {s['username']}: {s['start']}-{s['end']} → {start}-{end}")
-    return {"ok": True}
+    uid, plan = s["user_id"], s["plan"]
+    new_uid = body.get("user_id")
+    if new_uid and int(new_uid) != s["user_id"]:  # đổi ca ngoài web: admin chuyển ca sang người khác
+        to = row(con.execute("SELECT id, username FROM users WHERE id=? AND active=1", (new_uid,)))
+        if not to:
+            err("CTV nhận ca không hợp lệ")
+        c2 = con.execute('SELECT note FROM schedules WHERE user_id=? AND date=? AND id<>? AND start < ? AND "end" > ?',
+                         (to["id"], s["date"], sid, end, start)).fetchone()
+        if c2 and not (note or c2[0]):
+            err(f"{to['username']} đã có ca khác trùng giờ trong ngày")
+        uid = to["id"]
+        plan = plan or dumps({"user_id": s["user_id"], "username": s["username"], "start": s["start"], "end": s["end"],
+                              "position_id": s["position_id"], "position": s["position"]})
+        if "Đổi ca" not in note:
+            note = f"Đổi ca: {s['username']} → {to['username']}" + (f" · {note}" if note else "")
+    con.execute('UPDATE schedules SET user_id=?, shift_code=?, start=?, "end"=?, position_id=?, note=?, plan=? WHERE id=?',
+                (uid, code, start, end, pos, note, plan, sid))
+    log(con, u, f"Sửa ca {s['date']} của {s['username']}: {s['start']}-{s['end']} → {start}-{end}"
+        + (f", chuyển cho user #{uid}" if uid != s["user_id"] else ""))
+    return {"ok": True, **resync_sheet_day(con, s["date"])}
 
 
 @app.delete("/api/admin/schedules/{sid}")
@@ -571,7 +588,7 @@ def delete_schedule(sid: int, u=Depends(admin_user), con=Depends(get_con)):
         err("Ca đã được chấm công. Bỏ duyệt ngày đó ở mục Chấm công trước khi xoá.")
     con.execute("DELETE FROM schedules WHERE id=?", (sid,))
     log(con, u, f"Xoá ca {s['date']} {s['start']}-{s['end']} của {s['username']}")
-    return {"ok": True}
+    return {"ok": True, **resync_sheet_day(con, s["date"])}
 
 
 @app.post("/api/admin/schedules/copy-week")
