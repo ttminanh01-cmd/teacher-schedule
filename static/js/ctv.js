@@ -252,31 +252,63 @@ async function pageAvailability(v) {
    4. Lịch team theo ngày
    ========================================================= */
 async function pageTeam(v) {
-  let day = new Date();
-  v.innerHTML = pageHead('Lịch team theo ngày', 'Xem ai trực cùng ca để tiện phối hợp.') + `
+  let day = new Date(), mode = store.get('team_mode') || 'day';
+  const isMon = p => /monitor/i.test(p.position || '');
+  const sortP = (a, b) => isMon(b) - isMon(a) || a.start.localeCompare(b.start) || a.username.localeCompare(b.username);
+  const tags = (p, sh) => `${isMon(p) ? ' <span class="tag-mon">Monitor</span>' : ''}${p.shift_code !== sh.code ? ` <span class="tag-mon">${esc(shortShift(p.shift_code))}</span>` : ''}`;
+  v.innerHTML = pageHead('Lịch team', 'Xem ai trực cùng ca theo ngày hoặc cả tuần để tiện phối hợp.') + `
     <div class="filters">
-      <button class="btn btn-icon" id="prev" aria-label="Ngày trước">${icon('chevL')}</button>
+      <div class="seg" id="mode"><button data-m="day">Theo ngày</button><button data-m="week">Theo tuần</button></div>
+      <button class="btn btn-icon" id="prev" aria-label="Lùi">${icon('chevL')}</button>
       <input type="date" class="input" id="day">
-      <button class="btn btn-icon" id="next" aria-label="Ngày sau">${icon('chevR')}</button>
+      <button class="btn btn-icon" id="next" aria-label="Tiến">${icon('chevR')}</button>
+      <button class="btn" id="today">Hôm nay</button>
+      <strong id="range" style="margin-left:4px"></strong>
     </div><div id="body">${loading()}</div>`;
-  const load = async () => {
-    $('#day').value = ymd(day);
+
+  const loadDay = async () => {
     const list = await api('/team-day', { query: { day: ymd(day) } });
     if (!list.length) { $('#body').innerHTML = `<div class="card">${emptyState('Không có ai được xếp ca trong ngày này')}</div>`; return; }
     // mỗi ca 1 hàng chung tất cả CTV; người trực Monitor có nhãn; ca tối gãy nằm chung ca Tối
-    const isMon = p => /monitor/i.test(p.position || '');
     $('#body').innerHTML = mainShifts().map(sh => {
-      const inShift = list.filter(s => shiftGroup(s.shift_code) === sh.code)
-        .sort((a, b) => isMon(b) - isMon(a) || a.start.localeCompare(b.start) || a.username.localeCompare(b.username));
+      const inShift = list.filter(s => shiftGroup(s.shift_code) === sh.code).sort(sortP);
       if (!inShift.length) return '';
       return `<div class="card" style="margin-bottom:16px"><div class="card-head"><h2>${esc(sh.name)} <span class="muted" style="font-weight:400">${sh.start}–${sh.end}</span></h2><span class="badge">${inShift.length} người</span></div>
         <div class="team-block"><div class="people">${inShift.map(p => `
           <div class="person ${p.user_id === App.user.id ? 'me' : ''}" title="${esc(p.name)} · ${esc(p.position || '')}${p.team ? ' · ' + esc(p.team) : ''}"><div class="avatar">${initials(p.name)}</div>
-            <div>${esc(p.username)}${isMon(p) ? ' <span class="tag-mon">Monitor</span>' : ''}${p.shift_code !== sh.code ? ` <span class="tag-mon">${esc(shortShift(p.shift_code))}</span>` : ''} <small>${p.start}–${p.end}</small></div></div>`).join('')}</div></div></div>`;
+            <div>${esc(p.username)}${tags(p, sh)} <small>${p.start}–${p.end}</small></div></div>`).join('')}</div></div></div>`;
     }).join('');
   };
-  $('#prev').onclick = () => { day = addDays(day, -1); load(); };
-  $('#next').onclick = () => { day = addDays(day, 1); load(); };
+
+  const loadWeek = async () => {
+    const ws = mondayOf(day), days = Array.from({ length: 7 }, (_, i) => ymd(addDays(ws, i)));
+    $('#range').textContent = `${fmtDate(days[0])} – ${fmtDate(days[6])}`;
+    const list = await api('/team-week', { query: { start: days[0] } });
+    if (!list.length) { $('#body').innerHTML = `<div class="card">${emptyState('Tuần này chưa có lịch trực')}</div>`; return; }
+    const cell = (d, sh) => {
+      const ps = list.filter(s => s.date === d && shiftGroup(s.shift_code) === sh.code).sort(sortP);
+      return ps.length ? ps.map(p => `<div class="tw-p ${p.user_id === App.user.id ? 'me' : ''}" title="${esc(p.name)} · ${esc(p.position || '')}">
+          <span>${esc(p.username.replace(/^ctv\./, ''))}${tags(p, sh)}</span>${p.start !== sh.start || p.end !== sh.end ? `<small>${p.start}–${p.end}</small>` : ''}</div>`).join('')
+        : '<span class="muted small">—</span>';
+    };
+    $('#body').innerHTML = `<div class="card"><div class="table-wrap"><table class="table tw">
+      <thead><tr><th></th>${days.map(d => `<th class="${d === todayStr() ? 'tw-today' : ''}">${dowOf(d)}<br><b>${fmtDM(d)}</b></th>`).join('')}</tr></thead>
+      <tbody>${mainShifts().map(sh => `<tr><th class="tw-shift">${esc(sh.name.replace(/^ca\s+/i, ''))}<br><span class="muted small">${sh.start}–${sh.end}</span></th>
+        ${days.map(d => `<td class="${d === todayStr() ? 'tw-today' : ''}">${cell(d, sh)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>
+      <p class="small muted" style="margin-top:8px">Tên của bạn được tô màu. Giờ nhỏ bên dưới tên là giờ làm khác giờ chuẩn của ca (ca gãy, vào muộn…).</p>`;
+  };
+
+  const load = async () => {
+    $$('#mode button').forEach(b => b.classList.toggle('active', b.dataset.m === mode));
+    $('#day').value = ymd(day);
+    $('#day').hidden = mode === 'week'; $('#range').hidden = mode !== 'week';
+    $('#body').innerHTML = loading();
+    return mode === 'week' ? loadWeek() : loadDay();
+  };
+  $('#mode').onclick = e => { const b = e.target.closest('[data-m]'); if (b) { mode = b.dataset.m; store.set('team_mode', mode); load(); } };
+  $('#prev').onclick = () => { day = addDays(day, mode === 'week' ? -7 : -1); load(); };
+  $('#next').onclick = () => { day = addDays(day, mode === 'week' ? 7 : 1); load(); };
+  $('#today').onclick = () => { day = new Date(); load(); };
   $('#day').onchange = e => { if (e.target.value) { day = parseDate(e.target.value); load(); } };
   load();
 }
@@ -745,7 +777,7 @@ App.start({
     { group: 'Lịch làm', items: [
       { id: 'schedule', label: 'Lịch làm việc', icon: 'calendar', render: pageSchedule },
       { id: 'availability', label: 'Đăng ký lịch rảnh', icon: 'checkSquare', render: pageAvailability },
-      { id: 'team', label: 'Lịch team theo ngày', icon: 'users', render: pageTeam },
+      { id: 'team', label: 'Lịch team', icon: 'users', render: pageTeam },
       { id: 'swaps', label: 'Phiếu đổi ca', icon: 'swap', render: pageSwaps },
     ] },
     { group: 'Tra cứu', items: [{ id: 'handbook', label: 'Cẩm nang', icon: 'book', render: pageHandbook }] },

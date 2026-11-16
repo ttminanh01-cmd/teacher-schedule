@@ -247,6 +247,18 @@ def own_schedule(con, u, sid: int):
     return s
 
 
+@app.get("/api/team-week")
+def team_week(start: str, u=Depends(current_user), con=Depends(get_con)):
+    """Lịch cả team trong 7 ngày bắt đầu từ `start` (tuần nháp chưa duyệt vẫn ẩn với CTV)."""
+    try:
+        d0 = date.fromisoformat(start)
+    except ValueError:
+        err("Ngày không hợp lệ")
+    hide, hargs = autoschedule.hide_sql(con)
+    return rows(con.execute(SCHED_SQL + " WHERE s.date BETWEEN ? AND ?" + hide + " ORDER BY s.date, s.start, u.username",
+                            (d0.isoformat(), (d0 + timedelta(days=6)).isoformat(), *hargs)))
+
+
 @app.get("/api/team-day")
 def team_day(day: str, team_id: int | None = None, u=Depends(current_user), con=Depends(get_con)):
     hide, hargs = autoschedule.hide_sql(con)

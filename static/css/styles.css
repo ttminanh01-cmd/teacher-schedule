@@ -543,3 +543,15 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
 
 .hb-student .kv dd { word-break: break-word; }
 .hb-student .hb-step-no svg { width: 15px; height: 15px; }
+
+/* lịch team theo tuần */
+.tw { min-width: 760px; }
+.tw th, .tw td { vertical-align: top; padding: 8px; font-size: 12.5px; }
+.tw thead th { text-align: center; font-weight: 500; color: var(--muted); }
+.tw thead th b { color: var(--text); font-size: 14px; }
+.tw .tw-shift { white-space: nowrap; font-weight: 600; width: 84px; }
+.tw .tw-today { background: var(--accent-soft); }
+.tw-p { padding: 3px 6px; border-radius: 6px; margin-bottom: 3px; line-height: 1.35; }
+.tw-p small { display: block; color: var(--accent); font-weight: 600; }
+.tw-p.me { background: var(--accent); color: #fff; }
+.tw-p.me small, .tw-p.me .tag-mon { color: #fff; background: rgba(255,255,255,.2); }
