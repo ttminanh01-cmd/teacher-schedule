@@ -236,11 +236,11 @@ async function aSchedule(v) {
     const status = wk.approved_at ? `<span class="badge green">Đã duyệt</span> <span class="small muted">${esc(wk.approved_by || '')} · ${hm(wk.approved_at)} ${fmtDate(wk.approved_at.slice(0, 10))} — CTV đã thấy lịch</span>`
       : wk.generated_at ? `<span class="badge amber">Bản nháp tự xếp — chờ duyệt</span> <span class="small muted">${esc(wk.generated_by || '')} xếp lúc ${hm(wk.generated_at)} ${fmtDate(wk.generated_at.slice(0, 10))}. CTV chưa thấy lịch tuần này cho tới khi bạn bấm “Duyệt lịch tuần”.</span>`
       : wk.reg_open ? `<span class="badge blue">Đang nhận đăng ký</span> <span class="small muted">Hạn chót ${dl} · tự xếp ca lúc ${gt}</span>`
-      : wk.registered ? `<span class="badge">Chưa tự xếp</span> <span class="small muted">Hạn đăng ký đã qua (${dl}). Bấm “Tự xếp ca” để xếp ngay.</span>`
+      : wk.registered_week ? `<span class="badge">Chưa tự xếp</span> <span class="small muted">Hạn đăng ký đã qua (${dl}). Bấm “Tự xếp ca” để xếp ngay.</span>`
       : `<span class="badge">Lịch xếp tay</span> <span class="small muted">Tuần này không có đăng ký theo tuần — lịch do admin xếp, CTV đang thấy bình thường.</span>`;
     $('#wk-st').innerHTML = `<div class="wk-st card card-pad">
       <div>${status}</div>
-      <div class="small muted" style="margin-top:6px">${wk.registered}/${wk.active_ctv} CTV đã đăng ký tuần này · <a href="#availability" id="go-av">xem đăng ký</a>${wk.sync ? ` · đã ghi sheet lúc ${hm(wk.sync.at)} ${fmtDate(wk.sync.at.slice(0, 10))}` : ''}</div>
+      <div class="small muted" style="margin-top:6px">${wk.registered_week}/${wk.active_ctv} CTV đã đăng ký theo tuần${wk.registered > wk.registered_week ? ` (+${wk.registered - wk.registered_week} bạn dùng lịch rảnh tháng)` : ''} · <a href="#availability" id="go-av">xem đăng ký</a>${wk.sync ? ` · đã ghi sheet lúc ${hm(wk.sync.at)} ${fmtDate(wk.sync.at.slice(0, 10))}` : ''}</div>
       ${!wk.approved_at && rep_.short && rep_.short.length ? `<div class="low-list" style="margin-top:8px">${rep_.short.map(x => `<span class="chip-low">${dowOf(x.date)} ${fmtDM(x.date)} · ${G[x.group] || x.group}: ${x.have}/${x.need} <b>thiếu ${x.need - x.have}</b>${x.registered <= x.have ? ' (hết người đăng ký)' : ''}</span>`).join('')}</div>` : ''}
       ${!wk.approved_at && rep_.no_monitor && rep_.no_monitor.length ? `<p class="small" style="margin-top:6px;color:var(--amber)">Ca tối chưa có Monitor: ${rep_.no_monitor.map(fmtDM).join(', ')}</p>` : ''}
     </div>`;
@@ -283,7 +283,8 @@ async function aAvailability(v) {
     $('#tg').onclick = e => run(e.currentTarget, async () => { await api('/admin/reg-month', { method: 'PUT', body: { ym, open: !d.open } }); toast('Đã cập nhật'); load(); });
     const c = { submitted: 0, draft: 0, empty: 0 }; d.users.forEach(u => c[u.status || 'empty']++); d.users.forEach(u => { u.status = u.status || 'empty'; });
     const max = Math.max(1, d.users.length);
-    $('#body').innerHTML = `<div class="stats">
+    const fromMonth = d.users.filter(u => u.source === 'month').length;
+    $('#body').innerHTML = `${fromMonth ? `<div class="notice">${fromMonth} CTV chưa đăng ký theo tuần — đang hiển thị <b>lịch rảnh đăng ký theo tháng</b> của các bạn (nhãn “theo tháng”). Hệ thống cũng dùng lịch này khi tự xếp ca nếu bạn ấy không đăng ký tuần.</div>` : ''}<div class="stats">
         <div class="stat"><div class="label">Đã gửi đăng ký</div><div class="value">${c.submitted}</div></div>
         <div class="stat"><div class="label">Chưa gửi (nháp)</div><div class="value">${c.draft}</div></div>
         <div class="stat"><div class="label">Chưa nộp</div><div class="value ${c.empty ? 'accent' : ''}">${c.empty}</div></div></div>
@@ -311,7 +312,7 @@ async function aAvailability(v) {
     dataTable($('#tbl'), d.users, [
       { label: 'CTV', render: u => `<b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span>` },
       { label: 'Team', render: u => esc(u.team || '—') },
-      { label: 'Trạng thái', render: u => `<span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span>` },
+      { label: 'Trạng thái', render: u => `<span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span>${u.source === 'month' ? ' <span class="badge" title="Chưa đăng ký theo tuần — đang dùng lịch rảnh đăng ký theo tháng">theo tháng</span>' : ''}` },
       { label: 'Số ca rảnh', render: u => Object.keys(u.slots).length || '—' },
       { label: 'Cập nhật', render: u => u.updated_at ? `<span class="small muted">${fmtDate(u.updated_at.slice(0, 10))} ${u.updated_at.slice(11, 16)}</span>` : '—' },
       { label: '', cls: 'right', render: u => `<div class="actions">${Object.keys(u.slots).length ? `<button class="btn btn-sm" data-view="${u.id}">Xem</button>` : ''}${u.status === 'submitted' ? `<button class="btn btn-sm" data-unlock="${u.id}">Mở khoá</button>` : ''}</div>` },

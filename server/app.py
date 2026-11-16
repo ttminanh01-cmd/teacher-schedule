@@ -199,8 +199,12 @@ def get_availability(ym: str, u=Depends(current_user), con=Depends(get_con)):
     r = row(con.execute("SELECT * FROM availability WHERE user_id=? AND ym=?", (u["id"], ym)))
     # số CTV khác đã đăng ký từng khung (đã chốt + nháp) để CTV biết ca nào còn thiếu người
     counts = {}
-    for (slots,) in con.execute("SELECT slots FROM availability WHERE ym=? AND user_id<>?", (ym, u["id"])):
-        for k in json.loads(slots or "{}"):
+    if autoschedule.is_week_key(ym):
+        others = [v["slots"] for uid, v in autoschedule.week_regs(con, ym).items() if uid != u["id"]]
+    else:
+        others = [json.loads(s or "{}") for (s,) in con.execute("SELECT slots FROM availability WHERE ym=? AND user_id<>?", (ym, u["id"]))]
+    for slots in others:
+        for k in slots:
             counts[k] = counts.get(k, 0) + 1
     return {"ym": ym, "open": reg_open(con, ym), "status": r["status"] if r else "empty",
             "slots": json.loads(r["slots"]) if r else {}, "updated_at": r["updated_at"] if r else None, "counts": counts}
@@ -469,9 +473,14 @@ def admin_availability(ym: str, u=Depends(admin_user), con=Depends(get_con)):
         FROM users u LEFT JOIN teams t ON t.id=u.team_id
         LEFT JOIN availability a ON a.user_id=u.id AND a.ym=?
         WHERE u.role='ctv' AND u.active=1 ORDER BY u.username""", (ym,)))
+    regs = autoschedule.week_regs(con, ym) if autoschedule.is_week_key(ym) else {}
     for x in users:
         x["slots"] = json.loads(x["slots"]) if x["slots"] else {}
         x["status"] = x["status"] or "empty"
+        x["source"] = "week" if x["slots"] else ""
+        g = regs.get(x["id"])
+        if g and g["source"] == "month":  # chưa đăng ký tuần → hiện lịch rảnh tháng
+            x.update(slots=g["slots"], status=g["status"], updated_at=g["updated_at"], source="month")
     return {"ym": ym, "open": reg_open(con, ym), "users": users}
 
 
@@ -711,7 +720,8 @@ def week_info(con, start: str) -> dict:
     return {"week": key, "deadline": autoschedule.deadline(ws).strftime("%Y-%m-%d %H:%M"),
             "gen_time": autoschedule.gen_time(ws).strftime("%Y-%m-%d %H:%M"),
             "reg_open": autoschedule.reg_open(con, key),
-            "registered": con.execute("SELECT COUNT(*) FROM availability WHERE ym=?", (key,)).fetchone()[0],
+            "registered": len(autoschedule.week_regs(con, key)),
+            "registered_week": con.execute("SELECT COUNT(*) FROM availability WHERE ym=?", (key,)).fetchone()[0],
             "active_ctv": con.execute("SELECT COUNT(*) FROM users WHERE role='ctv' AND active=1").fetchone()[0],
             "auto_rows": con.execute("SELECT COUNT(*) FROM schedules WHERE date BETWEEN ? AND ? AND source='auto'",
                                      (key, (ws + timedelta(days=6)).isoformat())).fetchone()[0],

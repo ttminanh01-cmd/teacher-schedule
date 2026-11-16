@@ -84,6 +84,18 @@ def reg_open(con, key: str, now: datetime | None = None) -> bool:
     return now < deadline(ws) and ws <= now.date() + timedelta(days=21)
 
 
+def week_regs(con, key: str) -> dict:
+    """Đăng ký của tuần; CTV nào chưa đăng ký theo tuần thì dùng lịch rảnh theo tháng (cách cũ)
+    của tháng chứa ngày thứ 2 — để giai đoạn chuyển đổi không bị mất dữ liệu đăng ký."""
+    out = {}
+    for r in con.execute("SELECT user_id, slots, status, updated_at FROM availability WHERE ym=?", (key,)).fetchall():
+        out[r[0]] = {"slots": json.loads(r[1] or "{}"), "status": r[2], "updated_at": r[3], "source": "week"}
+    for r in con.execute("SELECT user_id, slots, status, updated_at FROM availability WHERE ym=?", (key[:7],)).fetchall():
+        if r[0] not in out and json.loads(r[1] or "{}"):
+            out[r[0]] = {"slots": json.loads(r[1] or "{}"), "status": r[2], "updated_at": r[3], "source": "month"}
+    return out
+
+
 # ---------------------------------------------------------------- xếp ca
 def group_of(code: str) -> str:
     c = code.lower()
@@ -96,8 +108,7 @@ def generate(con, ws: date, actor: str = "Hệ thống") -> dict:
     shifts = {r["code"]: dict(r) for r in con.execute("SELECT * FROM shift_types")}
     mains = {g: shifts[g] for g in ("sang", "chieu", "toi") if g in shifts}
     users = {r["id"]: dict(r) for r in con.execute("SELECT id, username FROM users WHERE active=1")}
-    regs = {r["user_id"]: json.loads(r["slots"] or "{}")
-            for r in con.execute("SELECT user_id, slots FROM availability WHERE ym=?", (key,)) if r["user_id"] in users}
+    regs = {uid: v["slots"] for uid, v in week_regs(con, key).items() if uid in users}
 
     removed = con.execute("DELETE FROM schedules WHERE date BETWEEN ? AND ? AND source=? AND approved_at IS NULL",
                           (key, we.isoformat(), SOURCE)).rowcount
