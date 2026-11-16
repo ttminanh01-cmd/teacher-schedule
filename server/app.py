@@ -1154,6 +1154,7 @@ def healthz():
 def cron_tick(key: str = ""):
     """cron-job.org gọi mỗi 10 phút (giữ web thức) — từ 20:00 CN sẽ tự xếp ca tuần tới."""
     want = os.environ.get("CRON_KEY", "")
+    key = key.replace(" ", "+")  # dấu "+" trong khoá bị hiểu thành dấu cách khi dán thẳng vào URL
     if not want or not secrets.compare_digest(key, want):
         err("Sai khoá", 403)
     rep = autoschedule.tick()
