@@ -556,18 +556,23 @@ async function monthSheetDialog(ym, userId, after) {
   const days = []; for (let d = parseDate(mStart); ymd(d) <= mEnd; d = addDays(d, 1)) days.push(ymd(d));
   let list = [...s.rows, ...s.pending_rows].map(r => ({ id: r.id, date: r.date, shift_code: r.shift_code, start: r.start, end: r.end, position_id: r.position_id, note: r.note || '', approved: !!r.approved_at }));
   const rate = id => (positions.find(p => p.id === id) || {}).hourly_rate || 0;
-  const shortName = n => n.replace(/^ca\s+/i, '');
   const posShort = p => p.name.replace('Page Hotline Monitor', 'PHM').replace('Page Hotline', 'PH');
   const normT = v => { const m = String(v).trim().replace(/[h.]/, ':').match(/^(\d{1,2})(?::?(\d{2}))?$/); return m && +m[1] < 24 && +(m[2] || 0) < 60 ? `${m[1].padStart(2, '0')}:${m[2] || '00'}` : null; };
 
-  const cell = (d, sh) => {
-    const items = list.map((e, i) => ({ e, i })).filter(x => x.e.date === d && x.e.shift_code === sh.code);
+  /* chỉ 3 cột Sáng / Chiều / Tối; ca phụ (VD Tối gãy) hiện trong cột ca chính, giữ giờ riêng */
+  const GROUP_NAMES = { sang: 'Sáng', chieu: 'Chiều', toi: 'Tối' };
+  const cols = ['sang', 'chieu', 'toi'].map(g => ({ g, name: GROUP_NAMES[g],
+    main: shifts.find(x => x.code === g) || shifts.find(x => shiftGroup(x.code) === g) })).filter(c => c.main);
+  const colOf = code => { const g = shiftGroup(code); return cols.find(c => c.g === g) || cols[cols.length - 1]; };
+  const cell = (d, col) => {
+    const sh = col.main;
+    const items = list.map((e, i) => ({ e, i })).filter(x => x.e.date === d && colOf(x.e.shift_code) === col);
     return items.map(({ e, i }) => `<div class="ms-entry ${e.approved ? '' : 'pending'}" data-i="${i}">
         <input class="input ms-t" data-k="start" value="${e.start}" maxlength="5" inputmode="numeric" placeholder="hh:mm"><span>–</span><input class="input ms-t" data-k="end" value="${e.end}" maxlength="5" inputmode="numeric" placeholder="hh:mm">
         <select class="input" data-k="position_id" title="Vị trí">${positions.map(p => `<option value="${p.id}" ${p.id === e.position_id ? 'selected' : ''}>${esc(posShort(p))}</option>`).join('')}</select>
         <button type="button" class="ms-x" data-rm="${i}" aria-label="Bỏ ca">×</button>
         ${e.note ? `<input class="input ms-note" data-k="note" value="${esc(e.note)}" title="Ghi chú">` : ''}</div>`).join('')
-      + (items.length ? `<button type="button" class="ms-kem" data-add="${d}|${sh.code}|kem" title="Thêm 1 ca trùng giờ (VD làm kèm CTV)">+ kèm</button>` : '')
+      + (items.length ? `<button type="button" class="ms-kem" data-add="${d}|${items.length ? items[items.length - 1].e.shift_code : sh.code}|kem" title="Thêm 1 ca trùng giờ (VD làm kèm CTV)">+ kèm</button>` : '')
       || `<button type="button" class="ms-add" data-add="${d}|${sh.code}">+</button>`;
   };
   const totals = () => {
@@ -582,9 +587,9 @@ async function monthSheetDialog(ym, userId, after) {
     $('#ms-sum', el).innerHTML = `<b>${t.h}</b> giờ · lương giờ <b>${money(t.money)}</b> − phạt QC ${money(s.qc_fine)} + thưởng ${money(bonus)} − khấu trừ ${money(ded)} = <b class="accent">${money(t.money - s.qc_fine + bonus - ded)}</b>`;
     days.forEach(d => { const c = $(`[data-dh="${d}"]`, el); if (c) c.textContent = list.filter(e => e.date === d).reduce((a, e) => a + Math.max(0, hoursOf(e)), 0) || ''; });
   };
-  const table = () => `<table class="table ms"><thead><tr><th>Ngày</th>${shifts.map(sh => `<th>${esc(shortName(sh.name))} <span class="muted small">${sh.start}–${sh.end}</span></th>`).join('')}<th class="right">Giờ</th></tr></thead><tbody>
+  const table = () => `<table class="table ms"><thead><tr><th>Ngày</th>${cols.map(c => `<th>${c.name} <span class="muted small">${c.main.start}–${c.main.end}</span></th>`).join('')}<th class="right">Giờ</th></tr></thead><tbody>
     ${days.map(d => { const w = parseDate(d).getDay(); return `<tr class="${w === 0 || w === 6 ? 'we' : ''} ${d > todayStr() ? 'future' : ''}">
-      <td class="nowrap"><b>${dowOf(d)}</b> ${fmtDM(d)}</td>${shifts.map(sh => `<td>${cell(d, sh)}</td>`).join('')}<td class="right mono" data-dh="${d}"></td></tr>`; }).join('')}
+      <td class="nowrap"><b>${dowOf(d)}</b> ${fmtDM(d)}</td>${cols.map(c => `<td>${cell(d, c)}</td>`).join('')}<td class="right mono" data-dh="${d}"></td></tr>`; }).join('')}
     </tbody></table>`;
 
   modal({
