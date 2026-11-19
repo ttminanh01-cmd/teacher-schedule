@@ -642,7 +642,7 @@ async function monthSheetDialog(ym, userId, after) {
 
 async function aSalary(v) {
   const now = new Date();
-  let ym = ymOf(new Date(now.getFullYear(), now.getMonth() - 1, 1)), data = null, view = 'month', personId = null, users = [];
+  let ym = ymOf(now), data = null, view = 'month', personId = null, users = [];
   v.innerHTML = pageHead('Bảng lương', 'Lương tính theo bảng chấm công đã duyệt (theo PIC): giờ × đơn giá − phạt lỗi QC + lương CTV gọi.') + `
     <div class="steps">
       <a href="#timesheet"><b>1</b> Duyệt chấm công từng ngày</a><span>→</span>
