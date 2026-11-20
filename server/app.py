@@ -14,7 +14,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import autoschedule, db, handbook, sheet_sync
+from . import autoschedule, db, handbook, notify, sheet_sync
 from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -304,9 +304,22 @@ def create_swap(body: dict = Body(...), u=Depends(current_user), con=Depends(get
     to = row(con.execute("SELECT * FROM users WHERE id=? AND role='ctv' AND active=1", (body.get("to_user"),)))
     if not to:
         err("Vui lòng chọn người làm thay")
+    reason = body.get("reason", "").strip()
     con.execute("INSERT INTO swaps(schedule_id, from_user, to_user, reason, created_at) VALUES (?,?,?,?,?)",
-                (s["id"], u["id"], to["id"], body.get("reason", "").strip(), now_str()))
+                (s["id"], u["id"], to["id"], reason, now_str()))
+    sw_id = con.execute("SELECT id FROM swaps WHERE schedule_id=? AND status='pending'", (s["id"],)).fetchone()[0]
     log(con, u, f"Gửi phiếu đổi ca {s['date']} ({s['start']}-{s['end']}) cho {to['username']}")
+    d = date.fromisoformat(s["date"])
+    dow = "CN" if d.weekday() == 6 else f"T{d.weekday() + 2}"
+    e = notify.esc
+    notify.send_async("\n".join(filter(None, [
+        "🔄 <b>Phiếu đổi ca mới</b>",
+        f"<b>{e(u['name'])}</b> ({e(u['username'])}) → <b>{e(to['name'])}</b> ({e(to['username'])})",
+        f"Ca: {dow} {d:%d/%m/%Y}, {e(s['start'])}–{e(s['end'])}" + (f" · {e(s['position'])}" if s["position"] else ""),
+        f"Lý do: {e(reason)}" if reason else "",
+        f"Web: {notify.PUBLIC_URL}/admin#swaps",
+    ])), buttons=[[{"text": "✅ Duyệt", "callback_data": f"sw:{sw_id}:approve"},
+                   {"text": "❌ Từ chối", "callback_data": f"sw:{sw_id}:reject"}]])
     return {"ok": True}
 
 
@@ -865,6 +878,51 @@ def handle_swap(sid: int, action: str, u=Depends(admin_user), con=Depends(get_co
     return out
 
 
+@app.post("/api/telegram/webhook")
+def telegram_webhook(body: dict = Body(...), x_telegram_bot_api_secret_token: str = Header(default=""),
+                     con=Depends(get_con)):
+    """Bấm nút Duyệt/Từ chối trong tin Telegram."""
+    token, chats = notify.config(con)
+    if not token or not secrets.compare_digest(x_telegram_bot_api_secret_token, notify.webhook_secret(token)):
+        err("Forbidden", 403)
+    msg = body.get("message") or {}
+    if msg.get("text", "").startswith("/start"):
+        notify.call(con, "sendMessage", {"chat_id": msg["chat"]["id"], "text": f"Chat ID của bạn: {msg['chat']['id']}"})
+        return {"ok": True}
+    cq = body.get("callback_query")
+    if not cq:
+        return {"ok": True}
+    sender = cq.get("from") or {}
+    reply = lambda text: notify.call(con, "answerCallbackQuery",
+                                     {"callback_query_id": cq["id"], "text": text, "show_alert": "true"})
+    m = re.fullmatch(r"sw:(\d+):(approve|reject)", cq.get("data", ""))
+    if not m:
+        return {"ok": True}
+    if str(sender.get("id")) not in chats:
+        reply("Bạn không có quyền duyệt")
+        return {"ok": True}
+    admin = row(con.execute("SELECT * FROM users WHERE role='admin' AND active=1 ORDER BY id LIMIT 1"))
+    actor = {**admin, "name": f"{admin['name']} (Telegram)"}
+    sid, action = int(m.group(1)), m.group(2)
+    try:
+        handle_swap(sid, action, u=actor, con=con)
+        con.commit()
+        result = "✅ Đã duyệt" if action == "approve" else "❌ Đã từ chối"
+    except HTTPException as e:
+        con.rollback()
+        reply(str(e.detail))
+        result = f"⚠️ {e.detail}"
+    else:
+        reply(result)
+    cm = cq.get("message") or {}
+    if cm:
+        notify.call(con, "editMessageText", {
+            "chat_id": cm["chat"]["id"], "message_id": cm["message_id"], "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+            "text": notify.esc(cm.get("text", "")) + f"\n\n<b>{notify.esc(result)}</b> · {now_str()[:16]}"})
+    return {"ok": True}
+
+
 def resync_sheet_day(con, day: str) -> dict:
     """Tuần đã từng đẩy lên sheet "Lịch trực" → ghi lại cột của ngày vừa đổi ca (giữ nguyên các ngày khác)."""
     ws = autoschedule.monday(date.fromisoformat(day)).isoformat()
@@ -1264,6 +1322,12 @@ def _week_scheduler():
 def start_week_scheduler():
     if os.environ.get("AUTO_SCHEDULE", "1") == "1":
         threading.Thread(target=_week_scheduler, daemon=True).start()
+
+
+@app.on_event("startup")
+def start_telegram_webhook():
+    if os.environ.get("TELEGRAM_WEBHOOK", "1") == "1":
+        notify.ensure_webhook_async()
 
 
 @app.on_event("startup")

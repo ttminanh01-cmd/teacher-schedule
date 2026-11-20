@@ -15,6 +15,10 @@ services:
         sync: false
       - key: CRON_KEY
         generateValue: true
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false        # bot báo phiếu đổi ca + nút duyệt
+      - key: TELEGRAM_CHAT_ID
+        sync: false        # chat id admin nhận tin (nhiều id cách nhau dấu phẩy)
       - key: HANDBOOK_WARM
         value: "1"
       - key: TZ
