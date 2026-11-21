@@ -58,10 +58,11 @@ async function swapDialog(s, reload) {
     body: `<p class="muted" style="margin-bottom:14px">${dowOf(s.date)} ${fmtDate(s.date)} · ${s.start}–${s.end} · ${esc(s.position || '')}</p>
       <div class="field"><label>Người làm thay</label>
         <select class="input" id="sw-to">${cands.length ? '<option value="">— Chọn CTV đang rảnh —</option>' + cands.map(c => `<option value="${c.id}">${esc(c.username)} · ${esc(c.name)}</option>`).join('') : '<option value="">Không có CTV nào rảnh khung giờ này</option>'}</select>
-        <span class="hint">Chỉ hiện những người chưa có ca trùng giờ</span></div>
+        <span class="hint">Gõ vài ký tự tên / username để tìm · chỉ gợi ý những người chưa có ca trùng giờ (${cands.length} người)</span></div>
       <div class="field"><label>Lý do</label><textarea class="input" rows="3" id="sw-reason" placeholder="VD: Trùng lịch thi"></textarea></div>`,
     footer: `<button class="btn" data-close>Huỷ</button><button class="btn btn-primary" id="sw-ok">Gửi phiếu</button>`,
     onOpen(el, close) {
+      if (cands.length) searchSelect($('#sw-to', el), { placeholder: 'Tìm người làm thay (VD: ha, ctv.dung…)' });
       $('#sw-ok', el).onclick = e => run(e.currentTarget, async () => {
         if (!$('#sw-to', el).value) throw new Error('Vui lòng chọn người làm thay');
         await api('/ctv/swaps', { method: 'POST', body: { schedule_id: s.id, to_user: +$('#sw-to', el).value, reason: $('#sw-reason', el).value } });
@@ -196,16 +197,37 @@ async function pageAvailability(v) {
     $('#submit').textContent = state.status === 'submitted' ? 'Cập nhật đăng ký' : 'Gửi đăng ký';
     const L = locked();
     $('#grid').innerHTML = `<div class="av-grid"><div></div>${WEEK_KEYS.map(k => `<div class="h">${WEEK_LABEL[k]}<br><span class="muted small">${fmtDM(dayOf(k))}</span></div>`).join('')}
-      ${shifts.map(s => `<div class="rowh">${esc(s.name)}<span>${s.start}–${s.end}</span></div>${WEEK_KEYS.map(k => {
-        const key = `${k}-${s.code}`; const on = !!state.slots[key];
-        const ni = needInfo((state.counts[key] || 0) + (on ? 1 : 0), s, true);
-        const cnt = `<span class="need ${ni.cls}" title="Số CTV đã đăng ký${ni.target ? ' / cần ' + ni.target : ''}">${ni.text} CTV${ni.missing ? ` · thiếu ${ni.missing}` : ''}</span>`;
-        const attrs = L ? '' : `data-toggle="${key}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${esc(s.name)} ${WEEK_LABEL[k]}"`;
-        return on ? `<div class="slot on ${L ? 'locked' : ''}" ${attrs}><b>✓ Rảnh</b>${cnt}</div>`
-          : `<div class="slot ${L ? 'locked' : ''}" ${attrs}>${L ? '—' : '+ Rảnh'}${cnt}</div>`;
-      }).join('')}`).join('')}</div>`;
-    const n = Object.keys(state.slots).length;
-    const hrs = Object.values(state.slots).reduce((a, x) => a + (t2m(x.end) - t2m(x.start)) / 60, 0);
+      ${mainShifts().map(m => {
+        const vars = shiftVariants(m);
+        if (vars.length < 2) {   // ca thường: 1 ô / ngày
+          return `<div class="rowh">${esc(m.name)}<span>${m.start}–${m.end}</span></div>${WEEK_KEYS.map(k => {
+            const key = `${k}-${m.code}`; const on = !!state.slots[key];
+            const ni = needInfo((state.counts[key] || 0) + (on ? 1 : 0), m, true);
+            const cnt = `<span class="need ${ni.cls}" title="Số CTV đã đăng ký${ni.target ? ' / cần ' + ni.target : ''}">${ni.text} CTV${ni.missing ? ` · thiếu ${ni.missing}` : ''}</span>`;
+            const attrs = L ? '' : `data-toggle="${key}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${esc(m.name)} ${WEEK_LABEL[k]}"`;
+            return on ? `<div class="slot on ${L ? 'locked' : ''}" ${attrs}><b>✓ Rảnh</b>${cnt}</div>`
+              : `<div class="slot ${L ? 'locked' : ''}" ${attrs}>${L ? '—' : '+ Rảnh'}${cnt}</div>`;
+          }).join('')}`;
+        }
+        // ca có nhiều lựa chọn (Tối: Ca full / Ca gãy): CTV chọn 1 hoặc cả 2, admin sẽ chọn ca khi chia lịch
+        return `<div class="rowh">${esc(m.name)}${vars.map(s => `<span>${esc(variantLabel(s))}</span>`).join('')}</div>${WEEK_KEYS.map(k => {
+          const mine = vars.some(s => state.slots[`${k}-${s.code}`]);
+          const ni = needInfo((state.counts[`g:${k}-${m.code}`] || 0) + (mine ? 1 : 0), m, true);
+          return `<div class="slot-split">${vars.map(s => {
+            const key = `${k}-${s.code}`, on = !!state.slots[key];
+            const attrs = L ? '' : `data-toggle="${key}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${esc(m.name)} ${esc(variantLabel(s))} ${WEEK_LABEL[k]}"`;
+            return `<div class="slot ${on ? 'on' : ''} ${L ? 'locked' : ''}" ${attrs} title="${esc(variantLabel(s))}"><b>${on ? '✓ ' : L ? '' : '+ '}${esc(variantLabel(s).replace(/^Ca\s+/i, ''))}</b></div>`;
+          }).join('')}<span class="need ${ni.cls}" title="Số CTV đã đăng ký ca ${esc(m.name)}${ni.target ? ' / cần ' + ni.target : ''}">${ni.text} CTV${ni.missing ? ` · thiếu ${ni.missing}` : ''}</span></div>`;
+        }).join('')}`;
+      }).join('')}</div>`;
+    // 1 ngày đăng ký cả Full lẫn Gãy vẫn tính là 1 ca, lấy giờ dài nhất
+    const perCell = {};
+    Object.entries(state.slots).forEach(([key, x]) => {
+      const k = key.slice(0, key.indexOf('-')), g = shiftGroup(key.slice(key.indexOf('-') + 1));
+      const h = (t2m(x.end) - t2m(x.start)) / 60; perCell[`${k}-${g}`] = Math.max(perCell[`${k}-${g}`] || 0, h);
+    });
+    const n = Object.keys(perCell).length;
+    const hrs = Object.values(perCell).reduce((a, h) => a + h, 0);
     $('#summary').textContent = n ? `${n} ca rảnh · khoảng ${hrs} giờ` + (state.updated_at ? ` · cập nhật ${fmtDate(state.updated_at.slice(0, 10))} ${state.updated_at.slice(11, 16)}` : '') : 'Chưa chọn ca nào';
   }
 
@@ -681,13 +703,65 @@ async function pageHandbook(v) {
 }
 
 /* =========================================================
+   6b. Thao tác ở CRM — video hướng dẫn từ Google Drive
+   ========================================================= */
+async function pageCRM(v) {
+  const desc = 'Video hướng dẫn thao tác trên CRM. Chọn một video để xem ngay tại đây.';
+  const head = actions => pageHead('Thao tác ở CRM', desc, actions);
+  v.innerHTML = head('') + loading();
+  let d = await api('/crm-videos');
+  let cur = store.get('crm_video'), q = '';
+  const all = () => d.groups.flatMap(g => g.items.map(it => ({ ...it, group: g.title })));
+  const kindIcon = k => icon(k === 'video' ? 'play' : 'file');
+
+  v.innerHTML = head(`<button class="btn" id="crm-refresh">${icon('refresh')} Làm mới</button>`) + `
+    <div class="crm">
+      <div class="crm-side card">
+        <div class="search crm-search">${icon('search')}<input class="input full" id="crm-q" placeholder="Tìm video (VD: đặt lịch, chứng chỉ…)" autocomplete="off"></div>
+        <div id="crm-list" class="crm-list"></div>
+      </div>
+      <div class="crm-main"><div class="card" id="crm-player"></div></div>
+    </div>`;
+
+  const paintList = () => {
+    const ws = words(q);
+    const groups = d.groups.map(g => ({ ...g, items: g.items.filter(it => !ws.length || matches(`${it.title} ${g.title}`, ws)) }))
+      .filter(g => g.items.length || (g.error && !ws.length));
+    $('#crm-list').innerHTML = groups.length ? groups.map(g => `<div class="crm-group">
+        ${d.groups.length > 1 || g.title !== 'Video hướng dẫn' ? `<div class="crm-group-h">${esc(g.title)} <span class="badge">${g.items.length}</span></div>` : ''}
+        ${g.error ? `<div class="small" style="padding:6px 12px;color:var(--red)">${esc(g.error)}</div>` : ''}
+        ${g.items.map(it => `<button class="crm-item ${it.id === cur ? 'active' : ''}" data-id="${it.id}">${kindIcon(it.kind)}<span>${mark(esc(it.title), q)}</span></button>`).join('')}
+      </div>`).join('')
+      : emptyState(d.groups.length ? `Không có video nào chứa “${q}”` : 'Quản lý chưa thêm video hướng dẫn nào');
+  };
+  const paintPlayer = () => {
+    const it = all().find(x => x.id === cur);
+    if (!it) { $('#crm-player').innerHTML = `<div class="crm-empty">${icon('video')}<p class="muted">${all().length ? 'Chọn một video bên trái để xem' : 'Chưa có video nào'}</p></div>`; return; }
+    $('#crm-player').innerHTML = `<div class="crm-frame"><iframe src="https://drive.google.com/file/d/${encodeURIComponent(it.id)}/preview" allow="autoplay; fullscreen" allowfullscreen title="${esc(it.title)}"></iframe></div>
+      <div class="crm-cap"><div><b>${esc(it.title)}</b>${it.group && it.group !== 'Video hướng dẫn' ? `<div class="small muted">${esc(it.group)}</div>` : ''}</div>
+        <a class="btn btn-sm" href="https://drive.google.com/file/d/${encodeURIComponent(it.id)}/view" target="_blank" rel="noopener">${icon('external')} Mở trên Drive</a></div>`;
+  };
+  const select = id => {
+    cur = id; store.set('crm_video', id);
+    $$('#crm-list .crm-item').forEach(b => b.classList.toggle('active', b.dataset.id === id));
+    paintPlayer();
+    if (matchMedia('(max-width: 860px)').matches) $('#crm-player').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  if (!all().some(x => x.id === cur)) cur = (all().find(x => x.kind === 'video') || all()[0] || {}).id;
+  paintList(); paintPlayer();
+  $('#crm-list').onclick = e => { const b = e.target.closest('[data-id]'); if (b) select(b.dataset.id); };
+  $('#crm-q').oninput = e => { q = e.target.value.trim(); paintList(); };
+  $('#crm-refresh').onclick = e => run(e.currentTarget, async () => { d = await api('/crm-videos', { query: { refresh: 1 } }); paintList(); paintPlayer(); toast('Đã cập nhật danh sách video'); });
+}
+
+/* =========================================================
    7. Tra cứu lương
    ========================================================= */
 async function pageSalary(v) {
   const months = await api('/ctv/salary/months');
   v.innerHTML = pageHead('Tra cứu lương', 'Bảng lương được chốt vào ngày 02 hàng tháng. Thắc mắc vui lòng liên hệ quản lý team.') +
     (months.length ? `<div class="filters"><select class="input" id="ym">${months.map(m => `<option value="${m}">${fmtYM(m)}</option>`).join('')}</select></div><div id="body"></div>`
-      : `<div class="card">${emptyState('Chưa có bảng lương nào được công bố')}<p class="small muted" style="text-align:center;padding:0 16px 20px">Giờ làm đã được duyệt xem ở mục <a href="#history">Chấm công</a>. Lương hiện ở đây sau khi quản lý duyệt &amp; công bố bảng lương tháng.</p>${''}</div>`);
+      : `<div class="card">${emptyState('Chưa có bảng lương nào được công bố')}<p class="small muted" style="text-align:center;padding:0 16px 20px">Lương hiện ở đây sau khi quản lý duyệt &amp; công bố bảng lương tháng.</p>${''}</div>`);
   if (!months.length) return;
   const load = async () => {
     $('#body').innerHTML = loading();
@@ -734,36 +808,39 @@ const QC_COLUMNS = [
 ];
 
 /* =========================================================
-   8. Lịch sử làm việc · 9. Nhật ký
+   8. Lỗi QC của tôi · 9. Nhật ký
    ========================================================= */
-async function pageHistory(v) {
-  v.innerHTML = pageHead('Chấm công', 'Giờ làm được admin duyệt sau mỗi ngày. Chỉ ca đã chấm công mới được tính lương.', `<button class="btn" id="exp">${icon('download')} Xuất Excel</button>`) + `
-    <div class="filters"><select class="input" id="ym">${monthOptions(ymOf(new Date()), -12, 0)}</select></div>
-    <div class="stats" id="stats"></div><div class="card" id="body">${loading()}</div>`;
-  let rows = [];
-  const load = async () => {
-    rows = await api('/ctv/history', { query: { ym: $('#ym').value } });
-    const done = rows.filter(r => r.approved_at), wait = rows.filter(r => !r.approved_at);
+async function pageQC(v) {
+  const desc = 'Các lỗi QC quản lý ghi nhận cho tài khoản của bạn. Tiền phạt được trừ vào lương của tháng tương ứng.';
+  v.innerHTML = pageHead('Lỗi QC', desc) + loading();
+  const all = await api('/ctv/qc');
+  const months = [...new Set(all.map(r => r.ym).filter(Boolean))].sort().reverse();
+  const nowYm = ymOf(new Date());
+  let ym = months.includes(nowYm) ? nowYm : 'all';
+  v.innerHTML = pageHead('Lỗi QC', desc, all.length ? `<button class="btn" id="exp">${icon('download')} Xuất Excel</button>` : '') + (all.length ? `
+    <div class="filters"><select class="input" id="ym"><option value="all">Tất cả các tháng</option>
+      ${months.map(m => `<option value="${m}">${fmtYM(m)} (${all.filter(r => r.ym === m).length} lỗi)</option>`).join('')}</select></div>
+    <div class="stats" id="stats"></div><div class="card" id="body"></div>`
+    : `<div class="card">${emptyState('Bạn chưa có lỗi QC nào. Giữ vững phong độ nhé!')}</div>`);
+  if (!all.length) return;
+  $('#ym').value = ym;
+  const cols = [{ label: 'Tháng lương', render: r => `<span class="nowrap">${r.ym ? fmtYM(r.ym) : '—'}</span>` }, ...QC_COLUMNS];
+  const paint = () => {
+    const rows = ym === 'all' ? all : all.filter(r => r.ym === ym);
+    const fine = rows.reduce((a, r) => a + (r.amount || 0), 0), warn = rows.filter(r => !r.amount).length;
     $('#stats').innerHTML = `
-      <div class="stat"><div class="label">Ca được giao</div><div class="value">${rows.length}</div></div>
-      <div class="stat"><div class="label">Đã chấm công</div><div class="value">${done.length}</div></div>
-      <div class="stat"><div class="label">Chờ duyệt</div><div class="value ${wait.length ? 'accent' : ''}">${wait.length}</div></div>
-      <div class="stat"><div class="label">Giờ được tính lương</div><div class="value">${done.reduce((a, r) => a + hoursOf(r), 0)}</div></div>`;
-    dataTable($('#body'), rows, [
-      { label: 'Ngày', render: r => `<span class="nowrap">${dowOf(r.date)} ${fmtDate(r.date)}</span>` },
-      { label: 'Ca', render: r => esc(shortShift(r.shift_code)) },
-      { label: 'Giờ vào', cls: 'mono', render: r => r.start },
-      { label: 'Giờ ra', cls: 'mono', render: r => r.end },
-      { label: 'Vị trí', render: r => `${esc(r.position || '')}<br><span class="small muted">${esc(r.team || '')}</span>` },
-      { label: 'Giờ', cls: 'right mono', render: r => hoursOf(r) },
-      { label: 'Trạng thái', render: attStatus },
-      { label: 'Điều chỉnh / ghi chú', render: r => `${planDiff(r) ? `<div class="small">${planDiff(r)}</div>` : ''}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}` },
-    ], { empty: 'Không có ca nào trong tháng này' });
+      <div class="stat"><div class="label">Số lỗi${ym === 'all' ? '' : ' ' + fmtYM(ym).toLowerCase()}</div><div class="value ${rows.length ? 'accent' : ''}">${rows.length}</div></div>
+      <div class="stat"><div class="label">Tiền phạt</div><div class="value">${money(fine)}</div></div>
+      <div class="stat"><div class="label">Chỉ nhắc nhở</div><div class="value">${warn}</div></div>`;
+    dataTable($('#body'), rows, ym === 'all' ? cols : QC_COLUMNS, { pageSize: 20, empty: 'Không có lỗi nào trong tháng này' });
   };
-  $('#ym').onchange = load;
-  $('#exp').onclick = () => downloadCSV(`lich-su-${$('#ym').value}.csv`, ['Ngày', 'Ca', 'Team', 'Vị trí', 'Số giờ', 'Trạng thái', 'Ghi chú'],
-    rows.map(r => [fmtDate(r.date), `${r.start}-${r.end}`, r.team, r.position, hoursOf(r), r.approved_at ? 'Đã chấm công' : 'Chờ duyệt', r.note]));
-  load();
+  $('#ym').onchange = e => { ym = e.target.value; paint(); };
+  $('#exp').onclick = () => {
+    const rows = ym === 'all' ? all : all.filter(r => r.ym === ym);
+    downloadCSV(`loi-qc-${ym}.csv`, ['Tháng lương', 'Ngày', 'Lỗi', 'Ghi chú', 'Hình thức', 'Phân loại', 'Ticket', 'Tiền phạt'],
+      rows.map(r => [r.ym, fmtDate(r.date), r.error, r.note, r.penalty, r.category, r.ticket, r.amount || 0]));
+  };
+  paint();
 }
 
 async function pageLogs(v) {
@@ -786,10 +863,13 @@ App.start({
       { id: 'team', label: 'Lịch team', icon: 'users', render: pageTeam },
       { id: 'swaps', label: 'Phiếu đổi ca', icon: 'swap', render: pageSwaps },
     ] },
-    { group: 'Tra cứu', items: [{ id: 'handbook', label: 'Cẩm nang', icon: 'book', render: pageHandbook }] },
+    { group: 'Tra cứu', items: [
+      { id: 'handbook', label: 'Cẩm nang', icon: 'book', render: pageHandbook },
+      { id: 'crm', label: 'Thao tác ở CRM', icon: 'video', render: pageCRM },
+    ] },
     { group: 'Cá nhân', items: [
       { id: 'salary', label: 'Tra cứu lương', icon: 'wallet', render: pageSalary },
-      { id: 'history', label: 'Chấm công', icon: 'clock', render: pageHistory },
+      { id: 'qc', label: 'Lỗi QC', icon: 'alert', render: pageQC },
       { id: 'logs', label: 'Nhật ký hoạt động', icon: 'list', render: pageLogs },
     ] },
   ],

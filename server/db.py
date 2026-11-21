@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL,
   name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'ctv', team_id INTEGER REFERENCES teams(id),
   phone TEXT DEFAULT '', email TEXT DEFAULT '', code TEXT DEFAULT '',
-  active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, must_change_pw INTEGER NOT NULL DEFAULT 0);
+  active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, must_change_pw INTEGER NOT NULL DEFAULT 0,
+  hourly_rate INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS reg_months (ym TEXT PRIMARY KEY, open INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS availability (
@@ -118,6 +119,8 @@ def migrate(con):
         for r in con.execute("SELECT id, password_hash FROM users").fetchall():
             if check_pw("123456", r[1]) or check_pw("admin123", r[1]):
                 con.execute("UPDATE users SET must_change_pw=1 WHERE id=?", (r[0],))
+    if "hourly_rate" not in {r[1] for r in con.execute("PRAGMA table_info(users)")}:  # mức lương / giờ riêng; 0 = theo đơn giá vị trí
+        con.execute("ALTER TABLE users ADD COLUMN hourly_rate INTEGER NOT NULL DEFAULT 0")
     if "source" not in {r[1] for r in con.execute("PRAGMA table_info(schedules)")}:
         con.execute("ALTER TABLE schedules ADD COLUMN source TEXT DEFAULT ''")  # 'auto' = hệ thống tự xếp
     scols = {r[1] for r in con.execute("PRAGMA table_info(shift_types)")}

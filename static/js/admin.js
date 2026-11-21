@@ -199,8 +199,10 @@ async function aSchedule(v) {
         <div class="field"><label>Ghi chú</label><input class="input" id="es-note" value="${esc(s.note || '')}" placeholder="VD: vào muộn 30p, kèm CTV…"></div>`,
       footer: `<button class="btn btn-danger" id="es-del" style="margin-right:auto">Xoá ca</button><button class="btn" data-close>Huỷ</button><button class="btn btn-primary" id="es-ok">Lưu</button>`,
       onOpen(el, close) {
+        searchSelect($('#es-user', el));
         $('#es-shift', el).onchange = e => { const x = shifts.find(y => y.code === e.target.value); $('#es-start', el).value = x.start; $('#es-end', el).value = x.end; };
         $('#es-ok', el).onclick = ev => run(ev.currentTarget, async () => {
+          if (!$('#es-user', el).value) throw new Error('Vui lòng chọn CTV trực trong danh sách gợi ý');
           const r = await api(`/admin/schedules/${s.id}`, { method: 'PUT', body: { user_id: +$('#es-user', el).value, shift_code: $('#es-shift', el).value, start: $('#es-start', el).value, end: $('#es-end', el).value,
             position_id: +$('#es-pos', el).value, note: $('#es-note', el).value } });
           close(); sheetToast('Đã sửa ca', r); load();
@@ -215,36 +217,53 @@ async function aSchedule(v) {
 
   function assignDialog(d, sh, av) {
     const taken = new Set(list.filter(s => s.date === d && t2m(s.start) < t2m(sh.end) && t2m(s.end) > t2m(sh.start)).map(s => s.user_id));
+    const main = shifts.find(x => x.code === shiftGroup(sh.code)) || sh;
+    const grp = shiftVariants(main).length ? shiftVariants(main) : [sh];
+    const multi = grp.length > 1;   // Tối: Ca full / Ca gãy → admin chọn ca cho từng CTV
     const key = `${dowKey(d)}-${sh.code}`, gkey = `${dowKey(d)}-${shiftGroup(sh.code)}`;  // ca gãy tối → xem đăng ký ca Tối
     const ctvs = users.filter(u => u.role === 'ctv' && u.active && !taken.has(u.id)).map(u => {
-      const a = av.users.find(x => x.id === u.id); const slot = a && (a.slots[key] || a.slots[gkey]);
+      const a = av.users.find(x => x.id === u.id);
+      if (multi) {
+        const regs = grp.filter(x => a && a.slots[`${dowKey(d)}-${x.code}`]);
+        const code = (regs.find(x => x.code === sh.code) || regs[0] || sh).code;
+        return { ...u, regs, code, fit: regs.length ? 2 : 0, a };
+      }
+      const slot = a && (a.slots[key] || a.slots[gkey]);
       const fit = !slot ? 0 : (t2m(slot.start) <= t2m(sh.start) && t2m(slot.end) >= t2m(sh.end)) ? 2 : 1;
       return { ...u, slot, fit };
     }).sort((a, b) => b.fit - a.fit || a.username.localeCompare(b.username));
-    const fitBadge = c => c.fit === 2 ? `<span class="badge green">Rảnh ${c.slot.start}–${c.slot.end}</span>` : c.fit === 1 ? `<span class="badge amber">Rảnh một phần ${c.slot.start}–${c.slot.end}</span>` : '<span class="badge">Chưa đăng ký</span>';
+    const fitBadge = c => multi
+      ? (c.regs.length ? c.regs.map(x => { const z = c.a.slots[`${dowKey(d)}-${x.code}`]; return `<span class="badge green" title="Đã đăng ký ${z.start}–${z.end}">ĐK ${esc(variantLabel(x))}</span>`; }).join(' ') : '<span class="badge">Chưa đăng ký</span>')
+      : c.fit === 2 ? `<span class="badge green">Rảnh ${c.slot.start}–${c.slot.end}</span>` : c.fit === 1 ? `<span class="badge amber">Rảnh một phần ${c.slot.start}–${c.slot.end}</span>` : '<span class="badge">Chưa đăng ký</span>';
+    const pickShift = c => multi ? `<select class="input as-ca" data-ca="${c.id}" style="width:auto;height:30px;padding:0 6px;font-size:13px" title="Ca xếp cho ${esc(c.username)}">${grp.map(x => `<option value="${x.code}" ${x.code === c.code ? 'selected' : ''}>${esc(variantLabel(x))}</option>`).join('')}</select>` : '';
     modal({
-      title: `Xếp ca · ${sh.name} ${dowOf(d)} ${fmtDate(d)}`, wide: true,
+      title: `Xếp ca · ${esc(main.name)} ${dowOf(d)} ${fmtDate(d)}`, wide: true,
       body: `<div class="form-row">
-          ${(() => { const grp = shifts.filter(x => shiftGroup(x.code) === shiftGroup(sh.code)); return grp.length > 1 ? `<div class="field"><label>Ca</label><select class="input" id="as-shift">${grp.map(x => `<option value="${x.code}" ${x.code === sh.code ? 'selected' : ''}>${esc(x.name)} (${x.start}–${x.end})</option>`).join('')}</select></div>` : ''; })()}
           <div class="field"><label>Vị trí</label><select class="input" id="as-pos">${App.meta.positions.map(p => `<option value="${p.id}">${esc(p.name)} · ${esc((App.meta.teams.find(t => t.id === p.team_id) || {}).name || '')}</option>`).join('')}</select></div>
-          <div class="field"><label>Giờ làm</label><div style="display:flex;gap:8px;align-items:center"><input type="time" class="input" id="as-start" value="${sh.start}" step="900"> – <input type="time" class="input" id="as-end" value="${sh.end}" step="900"></div></div>
+          ${multi ? '' : `<div class="field"><label>Giờ làm</label><div style="display:flex;gap:8px;align-items:center"><input type="time" class="input" id="as-start" value="${sh.start}" step="900"> – <input type="time" class="input" id="as-end" value="${sh.end}" step="900"></div></div>`}
         </div>
+        ${multi ? `<p class="small muted" style="margin:-4px 0 10px">Chọn <b>Ca full</b> hoặc <b>Ca gãy</b> cho từng CTV (mặc định theo ca bạn ấy đăng ký). Giờ làm theo ca đã chọn — cần giờ khác thì bấm vào tên sau khi xếp để sửa.</p>` : ''}
         <div class="field"><label>Chọn CTV (có thể chọn nhiều)</label>
           <div class="search" style="margin-bottom:8px">${icon('search')}<input class="input full" id="as-q" placeholder="Tìm CTV"></div>
           <div id="as-list" style="max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:8px">
-          ${ctvs.length ? ctvs.map(c => `<label data-name="${esc((c.username + ' ' + c.name).toLowerCase())}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer">
-            <input type="checkbox" value="${c.id}"><span style="flex:1"><b>${esc(c.username)}</b> <span class="muted">${esc(c.name)}</span></span>${fitBadge(c)}</label>`).join('') : emptyState('Tất cả CTV đều đã có ca trùng giờ')}
+          ${ctvs.length ? ctvs.map(c => `<label data-name="${esc((c.username + ' ' + c.name).toLowerCase())}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap">
+            <input type="checkbox" value="${c.id}"><span style="flex:1;min-width:140px"><b>${esc(c.username)}</b> <span class="muted">${esc(c.name)}</span></span>${fitBadge(c)}${pickShift(c)}</label>`).join('') : emptyState('Tất cả CTV đều đã có ca trùng giờ')}
           </div></div>`,
       footer: `<button class="btn" data-close>Huỷ</button><button class="btn btn-primary" id="as-ok">Xếp ca</button>`,
       onOpen(el, close) {
-        $('#as-shift', el)?.addEventListener('change', e => { const x = shifts.find(y => y.code === e.target.value); $('#as-start', el).value = x.start; $('#as-end', el).value = x.end; });
-        $('#as-q', el).oninput = e => { const q = e.target.value.toLowerCase(); $$('#as-list label', el).forEach(l => { l.hidden = !l.dataset.name.includes(q); }); };
+        $('#as-q', el).oninput = e => { const q = foldVi(e.target.value.trim()); $$('#as-list label', el).forEach(l => { l.hidden = !foldVi(l.dataset.name).includes(q); }); };
+        // chọn ca cho 1 CTV thì tự tích chọn bạn ấy
+        $$('.as-ca', el).forEach(x => { x.onchange = () => { x.closest('label').querySelector('input[type=checkbox]').checked = true; }; });
         $('#as-ok', el).onclick = ev => run(ev.currentTarget, async () => {
           const ids = $$('#as-list input:checked', el).map(i => +i.value);
           if (!ids.length) throw new Error('Chưa chọn CTV nào');
-          const body = { date: d, shift_code: $('#as-shift', el)?.value || sh.code, start: $('#as-start', el).value, end: $('#as-end', el).value, position_id: +$('#as-pos', el).value };
-          const errors = [];
-          for (const id of ids) await api('/admin/schedules', { method: 'POST', body: { ...body, user_id: id } }).catch(e => errors.push(e.message));
+          const pos = +$('#as-pos', el).value, errors = [];
+          for (const id of ids) {
+            let body;
+            if (multi) { const x = grp.find(y => y.code === $(`[data-ca="${id}"]`, el).value); body = { shift_code: x.code, start: x.start, end: x.end }; }
+            else body = { shift_code: sh.code, start: $('#as-start', el).value, end: $('#as-end', el).value };
+            await api('/admin/schedules', { method: 'POST', body: { ...body, date: d, position_id: pos, user_id: id } }).catch(e => errors.push(e.message));
+          }
           close(); load();
           errors.length ? toast(`Xếp được ${ids.length - errors.length}/${ids.length}. ${errors[0]}`, 'error') : toast(`Đã xếp ${ids.length} CTV`);
         });
@@ -302,6 +321,11 @@ async function aAvailability(v) {
   avWeek = null;
   const wl = w => `${fmtDM(w)} – ${fmtDM(ymd(addDays(parseDate(w), 6)))}`;
   const shifts = App.meta.shifts;
+  // ca chính có ca phụ (Tối = Ca full + Ca gãy): CTV đăng ký ca nào trong nhóm cũng tính là rảnh ca Tối
+  const isMainMulti = s => s.code === shiftGroup(s.code) && shiftVariants(s).length > 1;
+  const regd = (u, k, s) => isMainMulti(s) ? shiftVariants(s).some(x => u.slots[`${k}-${x.code}`]) : !!u.slots[`${k}-${s.code}`];
+  const regText = (u, k, s) => (isMainMulti(s) ? shiftVariants(s) : [s]).filter(x => u.slots[`${k}-${x.code}`])
+    .map(x => { const z = u.slots[`${k}-${x.code}`]; return `<span class="badge accent">${isMainMulti(s) ? esc(variantLabel(x)) + ' ' : ''}${z.start}–${z.end}</span>`; }).join(' ');
   v.innerHTML = pageHead('Lịch rảnh CTV', 'CTV đăng ký theo tuần, tự chốt 19:00 Chủ nhật; 20:00 hệ thống tự xếp ca để bạn duyệt ở mục Xếp lịch.') + `
     <div class="filters"><div class="seg" id="wk">${weekOpts.map(w => `<button data-w="${w}">${w === ymd(thisMon) ? 'Tuần này' : w < ymd(thisMon) ? 'Tuần trước' : 'Tuần ' + wl(w)}</button>`).join('')}</div>
       <span style="flex:1"></span><span id="toggle"></span><button class="btn" id="to-board">${icon('calendar')} Xếp lịch tuần này</button></div>
@@ -319,12 +343,12 @@ async function aAvailability(v) {
         <div class="stat"><div class="label">Đã gửi đăng ký</div><div class="value">${c.submitted}</div></div>
         <div class="stat"><div class="label">Chưa gửi (nháp)</div><div class="value">${c.draft}</div></div>
         <div class="stat"><div class="label">Chưa nộp</div><div class="value ${c.empty ? 'accent' : ''}">${c.empty}</div></div></div>
-      ${(() => { const low = []; shifts.forEach(s => [1, 2, 3, 4, 5, 6, 7].forEach(k => { const ni = needInfo(d.users.filter(u => u.slots[`${k}-${s.code}`]).length, s, true); if (ni.missing) low.push(`<button class="chip-low" data-slot="${k}-${s.code}">${k === 7 ? 'CN' : 'T' + (k + 1)} · ${esc(s.name.replace(/^ca\s+/i, ''))}: ${ni.text} <b>thiếu ${ni.missing}</b></button>`); }));
+      ${(() => { const low = []; shifts.forEach(s => [1, 2, 3, 4, 5, 6, 7].forEach(k => { const ni = needInfo(d.users.filter(u => regd(u, k, s)).length, s, true); if (ni.missing) low.push(`<button class="chip-low" data-slot="${k}-${s.code}">${k === 7 ? 'CN' : 'T' + (k + 1)} · ${esc(regName(s).replace(/^ca\s+/i, ''))}: ${ni.text} <b>thiếu ${ni.missing}</b></button>`); }));
         return `<div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Ca còn thiếu CTV ${low.length ? `<span class="badge red">${low.length}</span>` : ''}</h2>${low.length ? `<div class="low-list">${low.join('')}</div>` : '<p class="muted">✓ Tất cả các ca đã đủ CTV đăng ký</p>'}</div>`; })()}
       <div class="card card-pad"><h2 style="font-size:15px;margin-bottom:4px">Số CTV rảnh theo khung (đã chốt + nháp)</h2><p class="small muted" style="margin-bottom:12px">Đỏ: thiếu so với chỉ tiêu · xanh: đủ. Bấm vào ô để xem CTV nào đã đăng ký.</p>
         <div class="table-wrap"><div class="heat" style="min-width:560px"><div></div>${[1, 2, 3, 4, 5, 6, 7].map(k => `<div class="h">${k === 7 ? 'CN' : 'T' + (k + 1)}</div>`).join('')}
-        ${shifts.map(s => `<div class="r">${esc(s.name)}</div>${[1, 2, 3, 4, 5, 6, 7].map(k => {
-          const n = d.users.filter(u => u.slots[`${k}-${s.code}`]).length; const ni = needInfo(n, s, true);
+        ${shifts.map(s => `<div class="r">${esc(isMainMulti(s) ? s.name + ' (tổng)' : regName(s))}</div>${[1, 2, 3, 4, 5, 6, 7].map(k => {
+          const n = d.users.filter(u => regd(u, k, s)).length; const ni = needInfo(n, s, true);
           return ni.target ? `<button class="c need-c ${ni.cls}" data-slot="${k}-${s.code}">${ni.text}${ni.missing ? `<small>thiếu ${ni.missing}</small>` : ''}</button>`
             : `<button class="c" data-slot="${k}-${s.code}" style="background:color-mix(in srgb, var(--accent) ${Math.round(n / max * 70)}%, var(--surface-2));color:${n / max > .45 ? '#fff' : 'var(--text)'}">${n}</button>`;
         }).join('')}`).join('')}</div></div></div>
@@ -334,11 +358,11 @@ async function aAvailability(v) {
     $('#body').onclick = e => {
       const c = e.target.closest('[data-slot]'); if (!c) return;
       const key = c.dataset.slot, [k, code] = [+key.split('-')[0], key.slice(key.indexOf('-') + 1)];
-      const s = shifts.find(x => x.code === code), who = d.users.filter(u => u.slots[key]);
+      const s = shifts.find(x => x.code === code), who = d.users.filter(u => regd(u, k, s));
       const ni = needInfo(who.length, s, true);
-      modal({ title: `${k === 7 ? 'Chủ nhật' : 'Thứ ' + (k + 1)} · ${esc(s.name)} (${s.start}–${s.end})`,
+      modal({ title: `${k === 7 ? 'Chủ nhật' : 'Thứ ' + (k + 1)} · ${esc(isMainMulti(s) ? s.name : regName(s))} (${s.start}–${s.end})`,
         body: `<p style="margin-bottom:10px">${ni.target ? `Đã đăng ký <b>${who.length}</b> / cần <b>${ni.target}</b> CTV${ni.missing ? ` — <span class="accent">thiếu ${ni.missing}</span>` : ' — đủ'}` : `<b>${who.length}</b> CTV đăng ký`}</p>
-          ${who.length ? `<table class="table"><tbody>${who.map(u => `<tr><td><b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span></td><td>${u.slots[key].start}–${u.slots[key].end}</td><td><span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span></td></tr>`).join('')}</tbody></table>` : emptyState('Chưa có CTV nào đăng ký khung này')}` });
+          ${who.length ? `<table class="table"><tbody>${who.map(u => `<tr><td><b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span></td><td>${regText(u, k, s)}</td><td><span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span></td></tr>`).join('')}</tbody></table>` : emptyState('Chưa có CTV nào đăng ký khung này')}` });
        };
     dataTable($('#tbl'), d.users, [
       { label: 'CTV', render: u => `<b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span>` },
@@ -353,14 +377,14 @@ async function aAvailability(v) {
       if (vb) {
         const u = d.users.find(x => x.id === +vb.dataset.view);
         modal({ title: `Lịch rảnh · ${esc(u.username)}`, wide: true, body: `<div class="table-wrap"><table class="table"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6, 7].map(k => `<th>${k === 7 ? 'CN' : 'T' + (k + 1)}</th>`).join('')}</tr></thead>
-          <tbody>${shifts.map(s => `<tr><td><b>${esc(s.name)}</b></td>${[1, 2, 3, 4, 5, 6, 7].map(k => { const x = u.slots[`${k}-${s.code}`]; return `<td>${x ? `<span class="badge accent">${x.start}–${x.end}</span>` : '<span class="muted">—</span>'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` });
+          <tbody>${shifts.map(s => `<tr><td><b>${esc(regName(s))}</b></td>${[1, 2, 3, 4, 5, 6, 7].map(k => { const x = u.slots[`${k}-${s.code}`]; return `<td>${x ? `<span class="badge accent">${x.start}–${x.end}</span>` : '<span class="muted">—</span>'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` });
       }
       if (ub) {
         if (!(await confirmDialog('Mở khoá lịch rảnh?', 'CTV sẽ có thể sửa và chốt lại lịch rảnh tháng này.', 'Mở khoá'))) return;
         run(ub, async () => { await api('/admin/availability/unlock', { method: 'POST', body: { user_id: +ub.dataset.unlock, ym } }); toast('Đã mở khoá'); load(); });
       }
     });
-    $('#exp').onclick = () => downloadCSV(`lich-ranh-${ym}.csv`, ['Username', 'Họ tên', 'Trạng thái', ...shifts.flatMap(s => [1, 2, 3, 4, 5, 6, 7].map(k => `${k === 7 ? 'CN' : 'T' + (k + 1)} ${s.name}`))],
+    $('#exp').onclick = () => downloadCSV(`lich-ranh-${ym}.csv`, ['Username', 'Họ tên', 'Trạng thái', ...shifts.flatMap(s => [1, 2, 3, 4, 5, 6, 7].map(k => `${k === 7 ? 'CN' : 'T' + (k + 1)} ${regName(s)}`))],
       d.users.map(u => [u.username, u.name, ST[u.status][0], ...shifts.flatMap(s => [1, 2, 3, 4, 5, 6, 7].map(k => { const x = u.slots[`${k}-${s.code}`]; return x ? `${x.start}-${x.end}` : ''; }))]));
   };
   $('#wk').onclick = e => { const b = e.target.closest('[data-w]'); if (b) { ym = b.dataset.w; load(); } };
@@ -555,7 +579,7 @@ async function monthSheetDialog(ym, userId, after) {
   const { start: mStart, end: mEnd } = monthBounds(ym);
   const days = []; for (let d = parseDate(mStart); ymd(d) <= mEnd; d = addDays(d, 1)) days.push(ymd(d));
   let list = [...s.rows, ...s.pending_rows].map(r => ({ id: r.id, date: r.date, shift_code: r.shift_code, start: r.start, end: r.end, position_id: r.position_id, note: r.note || '', approved: !!r.approved_at }));
-  const rate = id => (positions.find(p => p.id === id) || {}).hourly_rate || 0;
+  const rate = id => s.user.hourly_rate || (positions.find(p => p.id === id) || {}).hourly_rate || 0;  // mức lương riêng của nhân sự, không có thì theo vị trí
   const posShort = p => p.name.replace('Page Hotline Monitor', 'PHM').replace('Page Hotline', 'PH');
   const normT = v => { const m = String(v).trim().replace(/[h.]/, ':').match(/^(\d{1,2})(?::?(\d{2}))?$/); return m && +m[1] < 24 && +(m[2] || 0) < 60 ? `${m[1].padStart(2, '0')}:${m[2] || '00'}` : null; };
 
@@ -851,9 +875,11 @@ async function aQC(v) {
         f.category.value = p.category;
         $$('#qf-presets button', el).forEach(x => x.classList.toggle('active', x === b));
       };
+      searchSelect(f.user_id, { placeholder: 'Gõ tên / username CTV để tìm…' });
       f.onsubmit = e => {
         e.preventDefault();
         run(e.submitter, async () => {
+          if (!f.user_id.value) throw new Error('Vui lòng chọn CTV trong danh sách gợi ý');
           await api('/admin/qc', { method: 'POST', body: { id: r && r.id, user_id: +f.user_id.value, date: f.date.value, ym: f.ym.value,
             error: f.error.value, note: f.note.value, ticket: f.ticket.value, penalty: f.penalty.value, amount: +f.amount.value, category: f.category.value } });
           close(); toast('Đã lưu lỗi QC'); load();
@@ -893,6 +919,7 @@ async function aUsers(v) {
       { label: 'Vai trò', render: u => u.role === 'admin' ? '<span class="badge blue">Quản trị</span>' : '<span class="badge">CTV</span>' },
       { label: 'Team', render: u => esc(u.team || '—') },
       { label: 'Mã CTV', render: u => esc(u.code || '—') },
+      { label: 'Mức lương', cls: 'right nowrap', render: u => u.hourly_rate ? `<b>${money(u.hourly_rate)}</b><span class="small muted"> /giờ</span>` : `<span class="small muted" title="Chưa đặt mức lương riêng — tính theo đơn giá vị trí">Theo vị trí</span>` },
       { label: 'Email', render: u => `<span class="small">${esc(u.email || '—')}</span>` },
       { label: 'Trạng thái', render: u => u.active ? '<span class="badge green">Hoạt động</span>' : '<span class="badge red">Đã khoá</span>' },
       { label: '', cls: 'right', render: u => `<div class="actions"><button class="btn btn-sm" data-reset="${u.id}">Đặt lại MK</button><button class="btn btn-sm" data-edit="${u.id}">Sửa</button></div>` },
@@ -908,6 +935,8 @@ async function aUsers(v) {
         <div class="field"><label>Team</label><select class="input" name="team_id"><option value="">—</option>${App.meta.teams.map(t => `<option value="${t.id}" ${u?.team_id === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div></div>
       <div class="form-row"><div class="field"><label>Mã CTV</label><input class="input" name="code" value="${esc(u?.code || '')}" placeholder="VD: CTV.4161"></div>
         <div class="field"><label>Email</label><input class="input" name="email" type="email" value="${esc(u?.email || '')}"></div></div>
+      <div class="field"><label>Mức lương (đ / giờ)</label><input class="input" name="hourly_rate" type="number" min="0" step="1000" value="${u?.hourly_rate || ''}" placeholder="Để trống = theo đơn giá vị trí (Danh mục)">
+        <span class="hint">Bảng công = Mức lương × số giờ làm đã duyệt.</span></div>
       <div class="form-row"><div class="field"><label>Điện thoại</label><input class="input" name="phone" value="${esc(u?.phone || '')}"></div>
         ${u ? `<div class="field"><label>Trạng thái</label><select class="input" name="active"><option value="1">Hoạt động</option><option value="0" ${u.active ? '' : 'selected'}>Khoá</option></select></div>`
           : `<div class="field"><label>Mật khẩu ban đầu</label><input class="input" name="password" placeholder="Mặc định: 123456"></div>`}</div>
@@ -919,7 +948,7 @@ async function aUsers(v) {
           await api('/admin/users', { method: 'POST', body: {
             id: u?.id, username: u ? u.username : f.username.value, name: f.name.value, role: f.role.value,
             team_id: f.team_id.value ? +f.team_id.value : null, phone: f.phone.value, code: f.code.value, email: f.email.value,
-            active: u ? f.active.value === '1' : true, password: f.password?.value,
+            active: u ? f.active.value === '1' : true, password: f.password?.value, hourly_rate: +f.hourly_rate.value || 0,
           } });
           close(); toast('Đã lưu tài khoản'); load();
         });
@@ -1043,6 +1072,41 @@ async function aHandbook(v) {
   };
 }
 
+/* Thao tác ở CRM: dán link Drive (thư mục hoặc từng video) → CTV xem video ngay trên web */
+async function aCRM(v) {
+  const desc = 'Dán link Google Drive của thư mục hoặc từng video. CTV xem trực tiếp ở mục Tra cứu → Thao tác ở CRM.';
+  v.innerHTML = pageHead('Video thao tác CRM', desc) + loading();
+  const d = await api('/admin/crm-videos');
+  let src = d.sources.length ? d.sources : [{ title: '', url: '' }];
+  v.innerHTML = pageHead('Video thao tác CRM', desc, `<a class="btn" href="/ctv#crm" target="_blank" rel="noopener">Xem như CTV</a>`) + `
+    <form class="card card-pad" id="cv-form">
+      <div class="field"><label>Link Google Drive</label>
+        <span class="hint" style="margin-bottom:8px">Thư mục / video phải chia sẻ “Bất kỳ ai có đường liên kết — Người xem”. Dán link thư mục thì mọi video trong thư mục (và thư mục con) tự hiện; thêm video vào thư mục Drive là web tự cập nhật sau tối đa 5 phút.</span>
+        <div id="cv-rows"></div>
+        <button type="button" class="btn btn-sm" id="cv-add" style="margin-top:8px">${icon('plus')} Thêm link</button></div>
+      <button class="btn btn-primary">Lưu</button>
+    </form>
+    <div class="card"><div class="card-head"><h2>CTV đang thấy</h2><span class="badge">${d.groups.reduce((a, g) => a + g.items.length, 0)} video / tệp</span></div>
+      <div class="card-pad">${d.groups.length ? d.groups.map(g => `<div style="margin-bottom:12px"><b>${esc(g.title)}</b> <span class="small muted">${g.items.length} mục</span>
+        ${g.error ? `<div><span class="badge red">${esc(g.error)}</span></div>` : ''}
+        <div class="small muted" style="margin-top:4px">${g.items.map(it => esc(it.title)).join(' · ') || '—'}</div></div>`).join('') : '<p class="muted">Chưa có link nào.</p>'}</div></div>`;
+  const rowsEl = $('#cv-rows');
+  const paint = () => {
+    rowsEl.innerHTML = src.map((s, i) => `<div class="form-row" style="align-items:center;margin-bottom:8px" data-i="${i}">
+      <input class="input" data-k="title" value="${esc(s.title)}" placeholder="Tên nhóm (tuỳ chọn, VD: Đặt lịch học)" style="max-width:260px">
+      <div style="display:flex;gap:8px;flex:1;min-width:260px"><input class="input" data-k="url" value="${esc(s.url)}" placeholder="https://drive.google.com/drive/folders/…" style="flex:1">
+        <button type="button" class="btn btn-icon" data-rm="${i}" aria-label="Xoá link">${icon('x')}</button></div></div>`).join('');
+  };
+  const collect = () => { src = $$('#cv-rows [data-i]').map(r => ({ title: $('[data-k="title"]', r).value, url: $('[data-k="url"]', r).value })); };
+  paint();
+  $('#cv-add').onclick = () => { collect(); src.push({ title: '', url: '' }); paint(); $$('#cv-rows [data-k="url"]').pop().focus(); };
+  rowsEl.onclick = e => { const b = e.target.closest('[data-rm]'); if (!b) return; collect(); src.splice(+b.dataset.rm, 1); if (!src.length) src.push({ title: '', url: '' }); paint(); };
+  $('#cv-form').onsubmit = e => {
+    e.preventDefault(); collect();
+    run(e.submitter, async () => { await api('/admin/crm-videos', { method: 'PUT', body: { sources: src.filter(s => s.url.trim()) } }); toast('Đã lưu'); aCRM(v); });
+  };
+}
+
 /* =========================================================
    9. Thông báo · 10. Nhật ký
    ========================================================= */
@@ -1105,6 +1169,7 @@ App.start({
       { id: 'users', label: 'Nhân sự', icon: 'users', render: aUsers },
       { id: 'catalog', label: 'Danh mục', icon: 'grid', render: aCatalog },
       { id: 'handbook', label: 'Cẩm nang', icon: 'book', render: aHandbook },
+      { id: 'crm', label: 'Video thao tác CRM', icon: 'video', render: aCRM },
       { id: 'notifications', label: 'Thông báo', icon: 'bell', render: aNotifications },
       { id: 'logs', label: 'Nhật ký hệ thống', icon: 'list', render: aLogs },
     ] },

@@ -555,3 +555,52 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
 .tw-p small { display: block; color: var(--accent); font-weight: 600; }
 .tw-p.me { background: var(--accent); color: #fff; }
 .tw-p.me small, .tw-p.me .tag-mon { color: #fff; background: rgba(255,255,255,.2); }
+
+/* ô tìm nhân sự (searchSelect) */
+.combo { position: relative; }
+.combo .search .input { padding-right: 34px; }
+.combo-clear { position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border: 0; background: none; color: var(--muted); border-radius: 6px; display: grid; place-items: center; cursor: pointer; }
+.combo-clear:hover { background: var(--surface-2); color: var(--text); }
+.combo-clear svg { position: static; width: 14px; height: 14px; }
+.combo-list { margin-top: 4px; max-height: 240px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.combo-opt { padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 14px; }
+.combo-opt:last-child { border-bottom: 0; }
+.combo-opt.active { background: var(--accent-soft); }
+.combo-opt.sel { font-weight: 600; }
+.combo-opt mark { background: none; color: var(--accent); font-weight: 700; padding: 0; }
+.combo-more { padding: 9px 12px; color: var(--muted); font-size: 13px; }
+
+/* đăng ký ca Tối: 2 lựa chọn Ca full / Ca gãy trong 1 ô */
+.slot-split { display: flex; flex-direction: column; gap: 4px; }
+.slot-split .slot { min-height: 0; padding: 6px 4px; gap: 0; }
+.slot-split .slot b { font-size: 12.5px; }
+.slot-split .slot small { font-size: 11px; opacity: .8; }
+.slot-split .slot.on { cursor: pointer; }
+.slot-split > .need { text-align: center; margin-top: 0; }
+.av-grid .rowh span + span { margin-top: 2px; }
+
+/* Thao tác ở CRM: danh sách video + trình phát Drive */
+.crm { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+.crm-side { position: sticky; top: 16px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; overflow: hidden; margin: 0; }
+.crm-search { padding: 10px; border-bottom: 1px solid var(--border); }
+.crm-search svg { left: 20px; top: 20px; }
+.crm-list { overflow-y: auto; padding: 6px; }
+.crm-group + .crm-group { margin-top: 8px; }
+.crm-group-h { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 8px 10px 4px; display: flex; gap: 6px; align-items: center; }
+.crm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 0; background: none; color: var(--text); font: 14px var(--font); padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+.crm-item:hover { background: var(--surface-2); }
+.crm-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.crm-item svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.crm-item.active svg { color: var(--accent); }
+.crm-main .card { margin: 0; overflow: hidden; }
+.crm-frame { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.crm-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.crm-cap { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
+.crm-cap .btn svg { width: 14px; height: 14px; }
+.crm-empty { aspect-ratio: 16 / 9; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.crm-empty svg { width: 40px; height: 40px; color: var(--muted); }
+@media (max-width: 860px) {
+  .crm { grid-template-columns: 1fr; }
+  .crm-side { position: static; max-height: none; }
+  .crm-main { order: -1; }
+}

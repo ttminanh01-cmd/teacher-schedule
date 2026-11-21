@@ -14,7 +14,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import autoschedule, db, handbook, notify, sheet_sync
+from . import autoschedule, crm_videos, db, handbook, notify, sheet_sync
 from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -71,7 +71,8 @@ def admin_user(u=Depends(current_user)):
 
 SCHED_SQL = """
 SELECT s.id, s.user_id, s.date, s.shift_code, s.start, s."end", s.position_id,
-       u.username, u.name, u.team_id, p.name AS position, p.hourly_rate, t.name AS team,
+       u.username, u.name, u.team_id, p.name AS position,
+       COALESCE(NULLIF(u.hourly_rate, 0), p.hourly_rate) AS hourly_rate, t.name AS team,
        st.name AS shift_name, s.note, s.plan, s.approved_at, s.approved_by, s.source
 FROM schedules s
 JOIN users u ON u.id = s.user_id
@@ -209,6 +210,9 @@ def get_availability(ym: str, u=Depends(current_user), con=Depends(get_con)):
     for slots in others:
         for k in slots:
             counts[k] = counts.get(k, 0) + 1
+        # theo nhóm ca (VD Tối = Ca full + Ca gãy), mỗi CTV tính 1 lần
+        for gk in {f"g:{k.partition('-')[0]}-{autoschedule.group_of(k.partition('-')[2])}" for k in slots}:
+            counts[gk] = counts.get(gk, 0) + 1
     return {"ym": ym, "open": reg_open(con, ym), "status": r["status"] if r else "empty",
             "slots": json.loads(r["slots"]) if r else {}, "updated_at": r["updated_at"] if r else None, "counts": counts}
 
@@ -406,7 +410,7 @@ def admin_dashboard(day: str | None = None, u=Depends(admin_user), con=Depends(g
 # ----- nhân sự
 @app.get("/api/admin/users")
 def list_users(u=Depends(admin_user), con=Depends(get_con)):
-    return rows(con.execute("""SELECT u.id, u.username, u.name, u.role, u.team_id, u.phone, u.email, u.code, u.active, u.created_at, t.name AS team
+    return rows(con.execute("""SELECT u.id, u.username, u.name, u.role, u.team_id, u.phone, u.email, u.code, u.active, u.created_at, u.hourly_rate, t.name AS team
         FROM users u LEFT JOIN teams t ON t.id=u.team_id ORDER BY u.role, u.username"""))
 
 
@@ -415,12 +419,16 @@ def save_user(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con
     fields = (body.get("name", "").strip(), body.get("role", "ctv"), body.get("team_id") or None,
               body.get("phone", "").strip(), body.get("email", "").strip(), body.get("code", "").strip(),
               1 if body.get("active", True) else 0)
+    try:
+        rate = max(0, int(float(body.get("hourly_rate") or 0)))
+    except (TypeError, ValueError):
+        err("Mức lương không hợp lệ")
     if not fields[0]:
         err("Vui lòng nhập họ tên")
     if body.get("id"):
         if int(body["id"]) == u["id"] and (fields[1] != "admin" or not fields[6]):
             err("Không thể tự khoá hoặc hạ quyền chính mình")
-        con.execute("UPDATE users SET name=?, role=?, team_id=?, phone=?, email=?, code=?, active=? WHERE id=?", (*fields, body["id"]))
+        con.execute("UPDATE users SET name=?, role=?, team_id=?, phone=?, email=?, code=?, active=?, hourly_rate=? WHERE id=?", (*fields, rate, body["id"]))
         if not fields[6]:
             con.execute("DELETE FROM sessions WHERE user_id=?", (body["id"],))
         log(con, u, f"Cập nhật tài khoản {body.get('username')}")
@@ -431,8 +439,8 @@ def save_user(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con
             err("Vui lòng nhập tên đăng nhập")
         if con.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
             err("Tên đăng nhập đã tồn tại")
-        con.execute("INSERT INTO users(username, password_hash, name, role, team_id, phone, email, code, active, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    (username, db.hash_pw(pw), *fields, now_str()))
+        con.execute("INSERT INTO users(username, password_hash, name, role, team_id, phone, email, code, active, created_at, hourly_rate) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (username, db.hash_pw(pw), *fields, now_str(), rate))
         log(con, u, f"Tạo tài khoản {username}")
     return {"ok": True}
 
@@ -983,7 +991,7 @@ def admin_salary_daily(ym: str, u=Depends(admin_user), con=Depends(get_con)):
 @app.get("/api/admin/salary/user")
 def admin_salary_user(ym: str, user_id: int, u=Depends(admin_user), con=Depends(get_con)):
     """Chi tiết lương 1 nhân sự: các ca đã duyệt (được tính) + ca chờ duyệt (chưa tính)."""
-    user = row(con.execute("SELECT id, username, name FROM users WHERE id=?", (user_id,)))
+    user = row(con.execute("SELECT id, username, name, hourly_rate FROM users WHERE id=?", (user_id,)))
     if not user:
         err("Không tìm thấy nhân sự", 404)
     f, l = month_range(ym)
@@ -1361,6 +1369,42 @@ def save_handbook(body: dict = Body(...), u=Depends(admin_user), con=Depends(get
     db.set_setting(con, "handbook_hidden", "[]")
     handbook.clear_cache()
     log(con, u, "Cập nhật cấu hình Cẩm nang")
+    return {"ok": True}
+
+
+# ----- thao tác ở CRM: video hướng dẫn trên Google Drive
+def crm_sources(con) -> list:
+    try:
+        return json.loads(db.get_setting(con, "crm_videos", "[]")) or []
+    except ValueError:
+        return []
+
+
+@app.get("/api/crm-videos")
+def crm_video_list(refresh: bool = False, u=Depends(current_user), con=Depends(get_con)):
+    return {"groups": crm_videos.build(crm_sources(con), refresh=refresh), "fetched_at": now_str()}
+
+
+@app.get("/api/admin/crm-videos")
+def admin_crm_videos(u=Depends(admin_user), con=Depends(get_con)):
+    src = crm_sources(con)
+    return {"sources": src, "groups": crm_videos.build(src, refresh=True)}
+
+
+@app.put("/api/admin/crm-videos")
+def save_crm_videos(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    out = []
+    for s in body.get("sources") or []:
+        url, title = str(s.get("url") or "").strip(), str(s.get("title") or "").strip()[:120]
+        if not url:
+            continue
+        try:
+            crm_videos.parse_link(url)
+        except crm_videos.DriveError as e:
+            err(f"{e}: {url[:80]}")
+        out.append({"url": url, "title": title})
+    db.set_setting(con, "crm_videos", dumps(out))
+    log(con, u, f"Cập nhật video Thao tác ở CRM ({len(out)} link)")
     return {"ok": True}
 
 

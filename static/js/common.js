@@ -58,6 +58,10 @@ const ICONS = {
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   megaphone: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  video: '<rect x="2" y="5" width="14" height="14" rx="2"/><path d="m16 10 6-3v10l-6-3"/>',
+  play: '<path d="M7 4v16l13-8z"/>',
+  file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+  external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
 };
 const icon = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 
@@ -198,6 +202,16 @@ function shiftState(s) {
 /* ca chính (Sáng / Chiều / Tối); ca phụ như "Tối gãy" thuộc nhóm ca chính cùng tiền tố mã */
 const shiftGroup = code => { const f = String(code || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase(); for (const g of ['toi', 'chieu', 'sang']) if (f === g || new RegExp(`(^|[^a-z])${g}([^a-z]|$)`).test(f)) return g; return code; };
 const mainShifts = () => { const m = App.meta.shifts.filter(s => shiftGroup(s.code) === s.code); return m.length ? m : App.meta.shifts; };
+/* ca chính + các ca phụ cùng nhóm (VD Tối: Ca full 18–22 và Ca gãy 19–22), ca chính đứng đầu */
+const shiftVariants = main => App.meta.shifts.filter(s => shiftGroup(s.code) === main.code).sort((a, b) => (b.code === main.code) - (a.code === main.code));
+const isGay = s => /gay/.test(String(s.name + ' ' + s.code).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase());
+/* tên ngắn khi đăng ký: nhóm có nhiều ca → "Ca full" / "Ca gãy" */
+const variantLabel = s => shiftGroup(s.code) !== s.code ? (isGay(s) ? 'Ca gãy' : s.name)
+  : (App.meta.shifts.some(x => x.code !== s.code && shiftGroup(x.code) === s.code) ? 'Ca full' : s.name);
+/* tên đầy đủ cho admin: "Ca Tối · full", "Ca Tối · gãy" */
+const regName = s => { const g = shiftGroup(s.code), main = App.meta.shifts.find(x => x.code === g);
+  if (!main || !App.meta.shifts.some(x => x.code !== g && shiftGroup(x.code) === g)) return s.name;
+  return `${main.name} · ${variantLabel(s).replace(/^Ca\s+/i, '')}`; };
 const shortShift = code => ((App.meta.shifts.find(s => s.code === code) || {}).name || code).replace(/^ca\s+/i, '').replace(/^./, c => c.toUpperCase());
 /* so số CTV với chỉ tiêu của ca (need_min–need_max) */
 function needInfo(n, sh, overOk = false) {
@@ -218,6 +232,71 @@ function planDiff(s) {
   return out.join('<br>');
 }
 const attStatus = s => { const st = shiftState(s); return `<span class="badge ${st.badge}">${st.label}</span>`; };
+
+/* bỏ dấu để tìm "ha" cũng ra "Hà", "dung" ra "Dũng" */
+const foldVi = s => String(s || '').normalize('NFC').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+
+/* Biến <select> chọn nhân sự thành ô tìm kiếm: gõ vài ký tự → gợi ý những người có chứa ký tự đó
+   (username hoặc họ tên, không phân biệt dấu). <select> gốc vẫn giữ giá trị nên code đọc .value không đổi. */
+function searchSelect(sel, { placeholder = 'Gõ tên hoặc username để tìm…', limit = 50 } = {}) {
+  if (!sel || sel.dataset.combo) return;
+  sel.dataset.combo = 1;
+  const opts = [...sel.options].filter(o => o.value);
+  const wrap = document.createElement('div');
+  wrap.className = 'combo';
+  wrap.innerHTML = `<div class="search">${icon('search')}<input class="input full" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="${esc(placeholder)}">
+      <button type="button" class="combo-clear" aria-label="Xoá" hidden>${icon('x')}</button></div>
+    <div class="combo-list" role="listbox" hidden></div>`;
+  sel.hidden = true; sel.after(wrap);
+  const inp = $('input', wrap), list = $('.combo-list', wrap), clr = $('.combo-clear', wrap);
+  if (sel.disabled) inp.disabled = true;
+  if (sel.required) { sel.required = false; inp.required = true; }   // select ẩn không nhận focus khi trình duyệt báo thiếu
+  const cur = () => opts.find(o => o.value === sel.value);
+  const hl = (text, q) => {   // tô đậm phần khớp (chữ NFC: bỏ dấu không đổi độ dài)
+    const t = text.normalize('NFC'), f = foldVi(t), i = q ? f.indexOf(q) : -1;
+    if (i < 0 || f.length !== t.length) return esc(t);
+    return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) + '</mark>' + esc(t.slice(i + q.length));
+  };
+  let shown = [], active = 0;
+  const open = on => { list.hidden = !on; inp.setAttribute('aria-expanded', on); };
+  const paint = () => {
+    const q = foldVi(inp.value.trim());
+    const all = opts.filter(o => !q || foldVi(o.textContent).includes(q));
+    // ưu tiên người có username / tên bắt đầu bằng chuỗi gõ
+    if (q) all.sort((a, b) => (foldVi(b.textContent).split(/[\s.·]+/).some(w => w.startsWith(q))) - (foldVi(a.textContent).split(/[\s.·]+/).some(w => w.startsWith(q))));
+    shown = all.slice(0, limit); active = Math.min(active, Math.max(0, shown.length - 1));
+    list.innerHTML = shown.length
+      ? shown.map((o, i) => `<div class="combo-opt ${i === active ? 'active' : ''} ${o.value === sel.value ? 'sel' : ''}" role="option" data-i="${i}">${hl(o.textContent, q)}</div>`).join('')
+        + (all.length > limit ? `<div class="combo-more">… còn ${all.length - limit} người, gõ thêm để lọc</div>` : '')
+      : `<div class="combo-more">Không tìm thấy nhân sự chứa “${esc(inp.value.trim())}”</div>`;
+    open(true);
+  };
+  const pick = o => {
+    sel.value = o ? o.value : '';
+    inp.value = o ? o.textContent : '';
+    clr.hidden = !o;
+    open(false);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const sync = () => { const o = cur(); inp.value = o ? o.textContent : ''; clr.hidden = !o; };
+  sync();
+  inp.addEventListener('focus', () => { inp.select(); active = 0; paint(); });
+  inp.addEventListener('input', () => { active = 0; if (sel.value) { sel.value = ''; sel.dispatchEvent(new Event('change', { bubbles: true })); } clr.hidden = !inp.value; paint(); });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); if (list.hidden) return paint();
+      active = (active + (e.key === 'ArrowDown' ? 1 : -1) + shown.length) % Math.max(1, shown.length); paint();
+      $('.combo-opt.active', list)?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      if (!list.hidden && shown[active]) { e.preventDefault(); pick(shown[active]); }
+    } else if (e.key === 'Escape' && !list.hidden) { e.preventDefault(); e.stopPropagation(); open(false); sync(); }
+  });
+  inp.addEventListener('blur', () => setTimeout(() => { if (!wrap.contains(document.activeElement)) { open(false); if (!sel.value && shown.length === 1 && inp.value.trim()) pick(shown[0]); else sync(); } }, 150));
+  list.addEventListener('mousedown', e => e.preventDefault());   // giữ focus ở ô nhập
+  list.addEventListener('click', e => { const d = e.target.closest('[data-i]'); if (d) pick(shown[+d.dataset.i]); });
+  clr.addEventListener('mousedown', e => e.preventDefault());
+  clr.addEventListener('click', () => { pick(null); inp.focus(); });
+}
 
 /* =========================================================
    Khung ứng dụng: đăng nhập, sidebar, định tuyến
