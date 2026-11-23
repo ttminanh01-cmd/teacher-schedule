@@ -45,7 +45,10 @@ python -m server.import_sheet --reset --password <mật khẩu ban đầu cho CT
 - Lỗi QC: ghi lỗi, hình thức phạt (chọn nhanh: Nhắc nhở / 1/2h làm / 1h làm / 50% buổi học), số tiền, phân loại; xuất Excel
 - Bảng lương: giờ công × 25.000đ − phạt lỗi QC + lương CTV gọi − khấu trừ khác; công bố / thu hồi; xuất Excel
 - Nhân sự (thêm/sửa/khoá, đặt lại mật khẩu), danh mục (team, vị trí & đơn giá, khung ca), thông báo, nhật ký hệ thống
-- Cẩm nang: đổi link Google Sheet, chọn tab nào hiện cho CTV. Sheet phải chia sẻ “Bất kỳ ai có đường liên kết — Người xem”
+- Document (gom Cẩm nang + Video thao tác CRM thành các tab, thêm được tab mới):
+  - Cẩm nang: đổi link Google Sheet, chọn tab nào hiện cho CTV. Sheet phải chia sẻ “Bất kỳ ai có đường liên kết — Người xem”
+  - Video thao tác CRM: link Drive thư mục / video, kênh YouTube video hướng dẫn PH
+  - Tab tự thêm: Tên tab + link (video / playlist / kênh YouTube, tệp / thư mục Drive, Google Docs/Sheets/Slides); sửa, xoá, đổi thứ tự. CTV xem ở Tra cứu → Tài liệu
 
 ## Cấu trúc
 

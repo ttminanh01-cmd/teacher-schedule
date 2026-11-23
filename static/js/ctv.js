@@ -830,6 +830,70 @@ async function pagePH(v) {
 }
 
 /* =========================================================
+   6d. Tài liệu — các tab quản lý tự thêm (link YouTube / Google Drive / Docs)
+   ========================================================= */
+async function pageDocs(v) {
+  const desc = 'Tài liệu, video hướng dẫn do quản lý chia sẻ. Chọn tab để xem ngay tại đây.';
+  const head = actions => pageHead('Tài liệu', desc, actions);
+  v.innerHTML = head('') + loading();
+  const tabs = await api('/docs');
+  if (!tabs.length) { v.innerHTML = head('') + `<div class="card">${emptyState('Quản lý chưa thêm tài liệu nào')}</div>`; return; }
+  let tid = store.get('doc_tab'), d = null, cur = null, q = '';
+  if (!tabs.some(t => t.id === tid)) tid = tabs[0].id;
+  const copy = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Trình duyệt chặn sao chép', 'error'));
+  const all = () => d.groups.flatMap(g => g.items.map(it => ({ ...it, group: g.title })));
+
+  v.innerHTML = head(`<button class="btn" id="doc-refresh">${icon('refresh')} Làm mới</button>`) + `
+    <div class="doc-tabs" role="tablist">${tabs.map(t => `<button role="tab" data-tab="${t.id}">${esc(t.name)}</button>`).join('')}</div>
+    <div id="doc-body"></div>`;
+
+  const player = it => !it ? `<div class="crm-empty">${icon('video')}<p class="muted">${all().length ? 'Chọn một mục bên trái để xem' : 'Chưa có nội dung'}</p></div>`
+    : `<div class="crm-frame ${it.kind === 'doc' ? 'doc-frame' : ''}"><iframe src="${esc(it.embed)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(it.title)}"></iframe></div>
+      <div class="crm-cap"><div style="min-width:0"><b>${esc(it.title)}</b>${it.group && it.group !== it.title ? `<div class="small muted">${esc(it.group)}</div>` : ''}</div>
+        <div class="actions">${it.copy ? `<button class="btn btn-sm" data-copylink="${esc(it.open)}">${icon('copy')} Sao chép link</button>` : ''}
+          <a class="btn btn-sm" href="${esc(it.open)}" target="_blank" rel="noopener">${icon('external')} Mở trong tab mới</a></div></div>`;
+  const paintList = () => {
+    const ws = words(q);
+    const groups = d.groups.map(g => ({ ...g, items: g.items.filter(it => !ws.length || matches(`${it.title} ${g.title}`, ws)) })).filter(g => g.items.length);
+    $('#doc-list').innerHTML = groups.length ? groups.map(g => `<div class="crm-group">
+        ${g.title && d.groups.length > 1 ? `<div class="crm-group-h">${esc(g.title)} <span class="badge">${g.items.length}</span></div>` : ''}
+        ${g.items.map(it => `<button class="crm-item ${it.id === cur ? 'active' : ''}" data-id="${esc(it.id)}">${icon(it.kind === 'video' ? 'play' : 'file')}<span>${mark(esc(it.title), q)}</span></button>`).join('')}
+      </div>`).join('') : emptyState(q ? `Không có mục nào chứa “${q}”` : 'Chưa có nội dung');
+  };
+  const paint = () => {
+    const body = $('#doc-body');
+    if (d.error) { body.innerHTML = `<div class="card">${emptyState(d.error)}</div>`; return; }
+    if (d.single) { body.innerHTML = `<div class="card doc-single">${player(all()[0])}</div>`; return; }
+    if (!all().some(x => x.id === cur)) cur = (all().find(x => x.kind === 'video') || all()[0] || {}).id;
+    body.innerHTML = `<div class="crm">
+      <div class="crm-side card"><div class="search crm-search">${icon('search')}<input class="input full" id="doc-q" placeholder="Tìm trong tab này" autocomplete="off" value="${esc(q)}"></div><div id="doc-list" class="crm-list"></div></div>
+      <div class="crm-main"><div class="card" id="doc-player">${player(all().find(x => x.id === cur))}</div></div></div>`;
+    paintList();
+    $('#doc-q').oninput = e => { q = e.target.value.trim(); paintList(); };
+    $('#doc-list').onclick = e => {
+      const b = e.target.closest('[data-id]'); if (!b) return;
+      cur = b.dataset.id; store.set(`doc_item_${tid}`, cur);
+      $$('#doc-list .crm-item').forEach(x => x.classList.toggle('active', x.dataset.id === cur));
+      $('#doc-player').innerHTML = player(all().find(x => x.id === cur));
+      if (matchMedia('(max-width: 860px)').matches) $('#doc-player').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+  };
+  const load = async refresh => {
+    $$('.doc-tabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tid));
+    if (!refresh) $('#doc-body').innerHTML = loading();
+    const want = tid, r = await api(`/docs/${tid}`, { query: { refresh: refresh ? 1 : '' } });
+    if (want !== tid) return;  // đã chuyển tab khác trong lúc tải
+    d = r; if (!refresh) { cur = store.get(`doc_item_${tid}`); q = ''; }
+    paint();
+    if (d.warning) toast('Không tải được bản mới nhất, đang hiển thị bản lưu tạm', 'info');
+  };
+  $('.doc-tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === tid) return; tid = b.dataset.tab; store.set('doc_tab', tid); load(false).catch(er => { $('#doc-body').innerHTML = `<div class="card">${emptyState(er.message)}</div>`; }); };
+  $('#doc-body').addEventListener('click', e => { const c = e.target.closest('[data-copylink]'); if (c) copy(c.dataset.copylink, 'Đã sao chép link'); });
+  $('#doc-refresh').onclick = e => run(e.currentTarget, async () => { await load(true); toast('Đã cập nhật'); });
+  await load(false);
+}
+
+/* =========================================================
    7. Tra cứu lương
    ========================================================= */
 async function pageSalary(v) {
@@ -942,6 +1006,7 @@ App.start({
       { id: 'handbook', label: 'Cẩm nang', icon: 'book', render: pageHandbook },
       { id: 'crm', label: 'Thao tác ở CRM', icon: 'video', render: pageCRM },
       { id: 'ph-videos', label: 'Video hướng dẫn PH', icon: 'play', render: pagePH },
+      { id: 'docs', label: 'Tài liệu', icon: 'file', render: pageDocs },
     ] },
     { group: 'Cá nhân', items: [
       { id: 'salary', label: 'Tra cứu lương', icon: 'wallet', render: pageSalary },

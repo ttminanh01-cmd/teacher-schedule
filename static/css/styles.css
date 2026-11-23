@@ -608,3 +608,16 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
   .crm-side { position: static; max-height: none; }
   .crm-main { order: -1; }
 }
+
+/* ---------- Document (tab tài liệu) ---------- */
+.doc-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.doc-tabs button { border: 0; background: none; font: 500 14px var(--font); color: var(--muted); padding: 9px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0; display: inline-flex; gap: 6px; align-items: center; }
+.doc-tabs button:hover { color: var(--text); background: var(--surface-2); }
+.doc-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.doc-tabs .doc-add { color: var(--accent); }
+.doc-tabs .doc-add svg { width: 14px; height: 14px; }
+.doc-sub { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.doc-sub p { max-width: 80ch; overflow-wrap: anywhere; }
+.doc-sub .btn svg { width: 14px; height: 14px; }
+.doc-single { overflow: hidden; }
+.crm-frame.doc-frame { aspect-ratio: auto; height: calc(100vh - 260px); min-height: 420px; background: var(--surface); }

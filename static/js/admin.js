@@ -1074,9 +1074,9 @@ async function aCatalog(v) {
    ========================================================= */
 async function aHandbook(v) {
   const desc = 'Trang Cẩm nang của CTV đọc trực tiếp từ Google Sheet và tự cập nhật mỗi 5 phút.';
-  v.innerHTML = pageHead('Cẩm nang', desc) + loading();
+  v.innerHTML = loading();
   const d = await api('/admin/handbook');
-  v.innerHTML = pageHead('Cẩm nang', desc, `<a class="btn" href="/ctv#handbook" target="_blank" rel="noopener">Xem như CTV</a>`) + `
+  v.innerHTML = docHead(desc, `<a class="btn btn-sm" href="/ctv#handbook" target="_blank" rel="noopener">${icon('external')} Xem như CTV</a>`) + `
     <form class="card card-pad" id="hb-form">
       <div class="field"><label for="hb-sheet">Link Google Sheet</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" style="flex:1;min-width:260px" id="hb-sheet" value="${esc(d.sheet_url)}">
@@ -1101,10 +1101,10 @@ async function aHandbook(v) {
 /* Thao tác ở CRM: dán link Drive (thư mục hoặc từng video) → CTV xem video ngay trên web */
 async function aCRM(v) {
   const desc = 'Dán link Google Drive của thư mục hoặc từng video. CTV xem trực tiếp ở mục Tra cứu → Thao tác ở CRM.';
-  v.innerHTML = pageHead('Video thao tác CRM', desc) + loading();
+  v.innerHTML = loading();
   const [d, ph] = await Promise.all([api('/admin/crm-videos'), api('/admin/ph-videos')]);
   let src = d.sources.length ? d.sources : [{ title: '', url: '' }];
-  v.innerHTML = pageHead('Video thao tác CRM', desc, `<a class="btn" href="/ctv#crm" target="_blank" rel="noopener">Xem như CTV</a>`) + `
+  v.innerHTML = docHead(desc, `<a class="btn btn-sm" href="/ctv#crm" target="_blank" rel="noopener">${icon('external')} Xem như CTV</a>`) + `
     <form class="card card-pad" id="cv-form">
       <div class="field"><label>Link Google Drive</label>
         <span class="hint" style="margin-bottom:8px">Thư mục / video phải chia sẻ “Bất kỳ ai có đường liên kết — Người xem”. Dán link thư mục thì mọi video trong thư mục (và thư mục con) tự hiện; thêm video vào thư mục Drive là web tự cập nhật sau tối đa 5 phút.</span>
@@ -1141,6 +1141,96 @@ async function aCRM(v) {
     e.preventDefault();
     run(e.submitter, async () => { const r = await api('/admin/ph-videos', { method: 'PUT', body: { channel: e.target.channel.value } }); toast(`Đã lưu kênh · ${r.count} video`); aCRM(v); });
   };
+}
+
+/* =========================================================
+   Document: gom Cẩm nang + Video thao tác CRM + các tab tài liệu admin tự thêm
+   ========================================================= */
+const docHead = (desc, actions = '') => `<div class="doc-sub"><p class="muted">${desc}</p>${actions ? `<div class="actions">${actions}</div>` : ''}</div>`;
+const DOC_DESC = 'Tài liệu cho CTV: Cẩm nang, video thao tác CRM và các tab tài liệu tự thêm (link YouTube / Google Drive).';
+const DOC_BUILTIN = [
+  { id: 'handbook', name: 'Cẩm nang', render: aHandbook },
+  { id: 'crm', name: 'Video thao tác CRM', render: aCRM },
+];
+const DOC_KIND = url => {
+  const u = (url || '').trim();
+  if (/docs\.google\.com\/(document|spreadsheets|presentation|forms)\//.test(u)) return 'Google Docs';
+  if (/drive\.google\.com\/.*\/folders\//.test(u)) return 'Thư mục Drive';
+  if (/drive\.google\.com/.test(u)) return 'Tệp Drive';
+  if (/(youtube\.com|youtu\.be)/.test(u)) return /[?&]v=|youtu\.be\/|\/shorts\//.test(u) ? 'Video YouTube' : /[?&]list=/.test(u) ? 'Playlist YouTube' : 'Kênh YouTube';
+  return '';
+};
+
+async function aDocs(v) {
+  v.innerHTML = pageHead('Document', DOC_DESC) + loading();
+  let tabs = await api('/admin/docs');
+  let cur = store.get('admin_doc_tab') || 'handbook';
+  const all = () => [...DOC_BUILTIN, ...tabs];
+  const save = async next => { tabs = await api('/admin/docs', { method: 'PUT', body: { tabs: next } }); };
+
+  const paint = () => {
+    if (!all().some(t => t.id === cur)) cur = 'handbook';
+    v.innerHTML = pageHead('Document', DOC_DESC) + `
+      <div class="doc-tabs" role="tablist">${all().map(t => `<button role="tab" data-tab="${t.id}" class="${t.id === cur ? 'active' : ''}">${esc(t.name)}</button>`).join('')}
+        <button class="doc-add" id="doc-add">${icon('plus')} Thêm tab</button></div>
+      <div id="doc-body"></div>`;
+    $$('.doc-tabs [data-tab]').forEach(b => b.onclick = () => { cur = b.dataset.tab; store.set('admin_doc_tab', cur); paint(); });
+    $('#doc-add').onclick = () => editTab();
+    const b = DOC_BUILTIN.find(t => t.id === cur), body = $('#doc-body');
+    Promise.resolve(b ? b.render(body) : customTab(body, tabs.find(t => t.id === cur)))
+      .catch(e => { body.innerHTML = `<div class="card">${emptyState(e.message)}</div>`; });
+  };
+
+  const editTab = t => {
+    const m = modal({ title: t ? 'Sửa tab' : 'Thêm tab tài liệu', body: `<form id="dt-form">
+        <div class="field"><label for="dt-name">Tên tab</label><input class="input" id="dt-name" required maxlength="60" value="${esc(t ? t.name : '')}" placeholder="VD: Quy trình xử lý ticket"></div>
+        <div class="field"><label for="dt-url">Link tài liệu</label><input class="input" id="dt-url" required value="${esc(t ? t.url : '')}" placeholder="https://youtube.com/… hoặc https://drive.google.com/…">
+          <span class="hint">Hỗ trợ: video / playlist / kênh YouTube · tệp hoặc thư mục Google Drive · Google Docs, Sheets, Slides. Link Drive phải chia sẻ “Bất kỳ ai có đường liên kết — Người xem”.</span>
+          <span class="hint" id="dt-kind"></span></div>
+        <button class="btn btn-primary">${t ? 'Lưu' : 'Thêm tab'}</button></form>` });
+    const kind = () => { const k = DOC_KIND($('#dt-url').value); $('#dt-kind').textContent = k ? `Nhận dạng: ${k}` : ''; };
+    $('#dt-url').oninput = kind; kind();
+    $('#dt-name').focus();
+    $('#dt-form').onsubmit = e => {
+      e.preventDefault();
+      const item = { id: t ? t.id : '', name: $('#dt-name').value, url: $('#dt-url').value };
+      run(e.submitter, async () => {
+        const before = tabs.map(x => x.id);
+        await save(t ? tabs.map(x => x.id === t.id ? item : x) : [...tabs, item]);
+        if (!t) cur = (tabs.find(x => !before.includes(x.id)) || {}).id || cur;
+        store.set('admin_doc_tab', cur); m.close(); toast(t ? 'Đã lưu tab' : 'Đã thêm tab'); paint();
+      });
+    };
+  };
+
+  async function customTab(body, t) {
+    const i = tabs.indexOf(t);
+    body.innerHTML = docHead(`${esc(DOC_KIND(t.url) || 'Link')} · <a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.url)}</a>`, `
+      <button class="btn btn-sm" data-act="left" ${i === 0 ? 'disabled' : ''} title="Chuyển tab sang trái" aria-label="Chuyển tab sang trái">←</button>
+      <button class="btn btn-sm" data-act="right" ${i === tabs.length - 1 ? 'disabled' : ''} title="Chuyển tab sang phải" aria-label="Chuyển tab sang phải">→</button>
+      <button class="btn btn-sm" data-act="edit">Sửa</button>
+      <button class="btn btn-sm" data-act="del">${icon('x')} Xoá tab</button>
+      <a class="btn btn-sm" href="/ctv#docs" target="_blank" rel="noopener">${icon('external')} Xem như CTV</a>`) + `<div id="dv">${loading()}</div>`;
+    $('.doc-sub', body).onclick = async e => {
+      const a = e.target.closest('[data-act]'); if (!a) return;
+      if (a.dataset.act === 'edit') return editTab(t);
+      if (a.dataset.act === 'del') {
+        if (!(await confirmDialog(`Xoá tab “${esc(t.name)}”?`, 'CTV sẽ không còn thấy tab này. Tài liệu gốc trên YouTube / Drive không bị ảnh hưởng.', 'Xoá', true))) return;
+        return run(a, async () => { await save(tabs.filter(x => x.id !== t.id)); toast('Đã xoá tab'); paint(); });
+      }
+      const j = a.dataset.act === 'left' ? i - 1 : i + 1, next = tabs.slice();
+      [next[i], next[j]] = [next[j], next[i]];
+      run(a, async () => { await save(next); paint(); });
+    };
+    const d = await api(`/docs/${t.id}`, { query: { refresh: 1 } });
+    const n = d.groups.reduce((a, g) => a + g.items.length, 0);
+    $('#dv', body).innerHTML = `<div class="card"><div class="card-head"><h2>CTV đang thấy</h2><span class="badge">${n} mục</span></div><div class="card-pad">
+      ${d.error ? `<p><span class="badge red">${esc(d.error)}</span></p>` : ''}${d.warning ? `<p><span class="badge red">${esc(d.warning)}</span></p>` : ''}
+      ${d.single ? `<div class="crm-frame" style="border-radius:8px;overflow:hidden;max-width:720px"><iframe src="${esc(d.groups[0].items[0].embed)}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen title="${esc(t.name)}"></iframe></div>`
+        : d.groups.map(g => `<div style="margin-bottom:12px">${g.title ? `<b>${esc(g.title)}</b> ` : ''}<span class="small muted">${g.items.length} mục</span>
+          <div class="small muted" style="margin-top:4px">${g.items.map(it => esc(it.title)).join(' · ') || '—'}</div></div>`).join('')}</div></div>`;
+  }
+  paint();
 }
 
 /* =========================================================
@@ -1204,8 +1294,7 @@ App.start({
     { group: 'Hệ thống', items: [
       { id: 'users', label: 'Nhân sự', icon: 'users', render: aUsers },
       { id: 'catalog', label: 'Danh mục', icon: 'grid', render: aCatalog },
-      { id: 'handbook', label: 'Cẩm nang', icon: 'book', render: aHandbook },
-      { id: 'crm', label: 'Video hướng dẫn', icon: 'video', render: aCRM },
+      { id: 'docs', label: 'Document', icon: 'book', render: aDocs },
       { id: 'notifications', label: 'Thông báo', icon: 'bell', render: aNotifications },
       { id: 'logs', label: 'Nhật ký hệ thống', icon: 'list', render: aLogs },
     ] },

@@ -14,7 +14,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import autoschedule, crm_videos, db, handbook, notify, sheet_sync, yt_videos
+from . import autoschedule, crm_videos, db, docs, handbook, notify, sheet_sync, yt_videos
 from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -1425,6 +1425,43 @@ def save_crm_videos(body: dict = Body(...), u=Depends(admin_user), con=Depends(g
     db.set_setting(con, "crm_videos", dumps(out))
     log(con, u, f"Cập nhật video Thao tác ở CRM ({len(out)} link)")
     return {"ok": True}
+
+
+# ----- Document: tab tài liệu admin tự thêm (Tên tab + link YouTube / Drive)
+def doc_tabs(con) -> list:
+    try:
+        return json.loads(db.get_setting(con, "doc_tabs", "[]")) or []
+    except ValueError:
+        return []
+
+
+@app.get("/api/docs")
+def doc_list(u=Depends(current_user), con=Depends(get_con)):
+    return [{"id": t["id"], "name": t["name"]} for t in doc_tabs(con)]
+
+
+@app.get("/api/docs/{tid}")
+def doc_view(tid: str, refresh: bool = False, u=Depends(current_user), con=Depends(get_con)):
+    t = next((t for t in doc_tabs(con) if t["id"] == tid), None)
+    if not t:
+        err("Không tìm thấy tab tài liệu", 404)
+    return {**docs.resolve(t, refresh=refresh), "id": t["id"], "name": t["name"], "url": t["url"]}
+
+
+@app.get("/api/admin/docs")
+def admin_docs(u=Depends(admin_user), con=Depends(get_con)):
+    return doc_tabs(con)
+
+
+@app.put("/api/admin/docs")
+def save_docs(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    try:
+        tabs = docs.clean(body.get("tabs"))
+    except docs.DocError as e:
+        err(str(e))
+    db.set_setting(con, "doc_tabs", dumps(tabs))
+    log(con, u, f"Cập nhật tab Document ({len(tabs)} tab)")
+    return tabs
 
 
 # ----- Video hướng dẫn PH thao tác (kênh YouTube)
