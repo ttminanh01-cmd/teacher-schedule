@@ -25,7 +25,7 @@ async function aDashboard(v) {
         <div class="stat"><div class="label">Đã xong</div><div class="value">${d.done}</div></div>
         <div class="stat"><div class="label">Ngày chờ duyệt chấm công</div><div class="value ${d.pending_days ? 'accent' : ''}">${d.pending_days}</div></div>
         <div class="stat"><div class="label">Phiếu đổi ca chờ duyệt</div><div class="value">${d.pending_swaps}</div></div>
-        <div class="stat"><div class="label">Đăng ký tuần ${fmtDM(d.reg_week)}</div><div class="value">${d.availability_submitted}<span class="muted" style="font-size:16px"> / ${d.active_ctv}</span></div></div>
+        <div class="stat"><div class="label">Đăng ký ${d.reg_key.length === 7 ? fmtYM(d.reg_key).toLowerCase() : 'tuần ' + fmtDM(d.reg_week)}</div><div class="value">${d.availability_submitted}<span class="muted" style="font-size:16px"> / ${d.active_ctv}</span></div></div>
       </div>
       <div class="card"><div class="card-head"><h2>Ca trực ${fmtDate(d.day)}</h2><a class="btn btn-sm" href="#schedule">Xếp lịch</a></div><div id="tbl"></div></div>`;
     dataTable($('#tbl'), d.schedule, [
@@ -283,19 +283,21 @@ async function aSchedule(v) {
   function paintWeek(wk) {
     const G = { sang: 'Sáng', chieu: 'Chiều', toi: 'Tối' };
     const dl = wk.deadline.slice(11, 16) + ' ' + fmtDM(wk.deadline.slice(0, 10)), gt = wk.gen_time.slice(11, 16) + ' ' + fmtDM(wk.gen_time.slice(0, 10));
+    const byMonth = wk.reg_mode === 'month', regLbl = byMonth ? 'theo tháng (' + fmtYM(wk.reg_key).toLowerCase() + ')' : 'theo tuần';
     const rep_ = wk.report || {};
     const status = wk.approved_at ? `<span class="badge green">Đã duyệt</span> <span class="small muted">${esc(wk.approved_by || '')} · ${hm(wk.approved_at)} ${fmtDate(wk.approved_at.slice(0, 10))} — CTV đã thấy lịch. Vẫn sửa được (bấm vào tên để đổi người / giờ); thay đổi hiện ngay cho CTV${wk.sync ? ' và tự cập nhật sheet' : ''}.</span>`
       : wk.generated_at ? `<span class="badge amber">Bản nháp tự xếp — chờ duyệt</span> <span class="small muted">${esc(wk.generated_by || '')} xếp lúc ${hm(wk.generated_at)} ${fmtDate(wk.generated_at.slice(0, 10))}. CTV chưa thấy lịch tuần này cho tới khi bạn bấm “Duyệt lịch tuần”.</span>`
-      : wk.reg_open ? `<span class="badge blue">Đang nhận đăng ký</span> <span class="small muted">Hạn chót ${dl} · tự xếp ca lúc ${gt}</span>`
+      : byMonth && wk.registered_week ? `<span class="badge">Chưa tự xếp</span> <span class="small muted">CTV đăng ký ${regLbl}${wk.reg_open ? ' — vẫn đang nhận đăng ký' : ''} · hệ thống tự xếp lúc ${gt}, hoặc bấm “Tự xếp ca” để xếp ngay.</span>`
+      : !byMonth && wk.reg_open ? `<span class="badge blue">Đang nhận đăng ký</span> <span class="small muted">Hạn chót ${dl} · tự xếp ca lúc ${gt}</span>`
       : wk.registered_week ? `<span class="badge">Chưa tự xếp</span> <span class="small muted">Hạn đăng ký đã qua (${dl}). Bấm “Tự xếp ca” để xếp ngay.</span>`
-      : `<span class="badge">Lịch xếp tay</span> <span class="small muted">Tuần này không có đăng ký theo tuần — lịch do admin xếp, CTV đang thấy bình thường.</span>`;
+      : `<span class="badge">Lịch xếp tay</span> <span class="small muted">Tuần này không có CTV đăng ký ${regLbl} — lịch do admin xếp, CTV đang thấy bình thường.</span>`;
     $('#wk-st').innerHTML = `<div class="wk-st card card-pad">
       <div>${status}</div>
-      <div class="small muted" style="margin-top:6px">${wk.registered_week}/${wk.active_ctv} CTV đã đăng ký theo tuần${wk.registered > wk.registered_week ? ` (+${wk.registered - wk.registered_week} bạn dùng lịch rảnh tháng)` : ''} · <a href="#availability" id="go-av">xem đăng ký</a>${wk.sync ? ` · đã ghi sheet lúc ${hm(wk.sync.at)} ${fmtDate(wk.sync.at.slice(0, 10))}` : ''}</div>
+      <div class="small muted" style="margin-top:6px">${wk.registered_week}/${wk.active_ctv} CTV đã đăng ký ${regLbl}${wk.registered > wk.registered_week ? ` (+${wk.registered - wk.registered_week} bạn dùng lịch rảnh ${byMonth ? 'tuần' : 'tháng'})` : ''} · <a href="#availability" id="go-av">xem đăng ký</a>${wk.sync ? ` · đã ghi sheet lúc ${hm(wk.sync.at)} ${fmtDate(wk.sync.at.slice(0, 10))}` : ''}</div>
       ${!wk.approved_at && rep_.short && rep_.short.length ? `<div class="low-list" style="margin-top:8px">${rep_.short.map(x => `<span class="chip-low">${dowOf(x.date)} ${fmtDM(x.date)} · ${G[x.group] || x.group}: ${x.have}/${x.need} <b>thiếu ${x.need - x.have}</b>${x.registered <= x.have ? ' (hết người đăng ký)' : ''}</span>`).join('')}</div>` : ''}
       ${!wk.approved_at && rep_.no_monitor && rep_.no_monitor.length ? `<p class="small" style="margin-top:6px;color:var(--amber)">Ca tối chưa có Monitor: ${rep_.no_monitor.map(fmtDM).join(', ')}</p>` : ''}
     </div>`;
-    $('#go-av').onclick = () => { avWeek = ymd(boardStart); };
+    $('#go-av').onclick = () => { avWeek = byMonth ? wk.reg_key : ymd(boardStart); };
   }
   $('#prev').onclick = () => { boardStart = addDays(boardStart, -7); load(); };
   $('#next').onclick = () => { boardStart = addDays(boardStart, 7); load(); };
@@ -315,26 +317,36 @@ async function aSchedule(v) {
    ========================================================= */
 let avWeek = null;
 async function aAvailability(v) {
-  const thisMon = mondayOf(new Date());
-  const weekOpts = [-1, 0, 1, 2].map(i => ymd(addDays(thisMon, 7 * i)));
-  let ym = avWeek || ymd(addDays(thisMon, 7));
+  const thisMon = mondayOf(new Date()), now = new Date();
+  const mode = App.meta.reg_mode === 'month' ? 'month' : 'week';
+  const opts = mode === 'month'
+    ? [-1, 0, 1, 2].map(i => ymOf(new Date(now.getFullYear(), now.getMonth() + i, 1)))
+    : [-1, 0, 1, 2].map(i => ymd(addDays(thisMon, 7 * i)));
+  let ym = avWeek && (avWeek.length === 7) === (mode === 'month') ? avWeek : opts[2];
   avWeek = null;
   const wl = w => `${fmtDM(w)} – ${fmtDM(ymd(addDays(parseDate(w), 6)))}`;
+  const optLabel = mode === 'month'
+    ? w => w === opts[1] ? 'Tháng này' : fmtYM(w)
+    : w => w === ymd(thisMon) ? 'Tuần này' : w < ymd(thisMon) ? 'Tuần trước' : 'Tuần ' + wl(w);
   const shifts = App.meta.shifts;
   // ca chính có ca phụ (Tối = Ca full + Ca gãy): CTV đăng ký ca nào trong nhóm cũng tính là rảnh ca Tối
   const isMainMulti = s => s.code === shiftGroup(s.code) && shiftVariants(s).length > 1;
   const regd = (u, k, s) => isMainMulti(s) ? shiftVariants(s).some(x => u.slots[`${k}-${x.code}`]) : !!u.slots[`${k}-${s.code}`];
   const regText = (u, k, s) => (isMainMulti(s) ? shiftVariants(s) : [s]).filter(x => u.slots[`${k}-${x.code}`])
     .map(x => { const z = u.slots[`${k}-${x.code}`]; return `<span class="badge accent">${isMainMulti(s) ? esc(variantLabel(x)) + ' ' : ''}${z.start}–${z.end}</span>`; }).join(' ');
-  v.innerHTML = pageHead('Lịch rảnh CTV', 'CTV đăng ký theo tuần, tự chốt 19:00 Chủ nhật; 20:00 hệ thống tự xếp ca để bạn duyệt ở mục Xếp lịch.') + `
-    <div class="filters"><div class="seg" id="wk">${weekOpts.map(w => `<button data-w="${w}">${w === ymd(thisMon) ? 'Tuần này' : w < ymd(thisMon) ? 'Tuần trước' : 'Tuần ' + wl(w)}</button>`).join('')}</div>
-      <span style="flex:1"></span><span id="toggle"></span><button class="btn" id="to-board">${icon('calendar')} Xếp lịch tuần này</button></div>
+  v.innerHTML = pageHead('Lịch rảnh CTV', mode === 'month'
+      ? 'CTV đăng ký 1 lần cho cả tháng (những ca rảnh hằng tuần), tự chốt 19:00 ngày 29 của tháng trước. 20:00 Chủ nhật hệ thống tự xếp ca tuần tới theo lịch tháng để bạn duyệt ở mục Xếp lịch.'
+      : 'CTV đăng ký theo tuần, tự chốt 19:00 Chủ nhật; 20:00 hệ thống tự xếp ca để bạn duyệt ở mục Xếp lịch.') + `
+    <div class="filters" style="margin-bottom:8px"><span class="small muted">Mở đăng ký theo</span>
+      <div class="seg" id="mode"><button data-m="week" class="${mode === 'week' ? 'active' : ''}">Tuần</button><button data-m="month" class="${mode === 'month' ? 'active' : ''}">Tháng</button></div></div>
+    <div class="filters"><div class="seg" id="wk">${opts.map(w => `<button data-w="${w}">${optLabel(w)}</button>`).join('')}</div>
+      <span style="flex:1"></span><span id="toggle"></span><button class="btn" id="to-board">${icon('calendar')} ${mode === 'month' ? 'Xếp lịch' : 'Xếp lịch tuần này'}</button></div>
     <div id="body">${loading()}</div>`;
   const load = async () => {
     const d = await api('/admin/availability', { query: { ym } });
     $$('#wk button').forEach(b => b.classList.toggle('active', b.dataset.w === ym));
-    $('#toggle').innerHTML = `<span class="badge ${d.open ? 'green' : ''}" style="margin-right:8px">${d.open ? 'Đang mở · hạn 19:00 CN ' + fmtDM(ymd(addDays(parseDate(ym), -1))) : 'Đã chốt đăng ký'}</span>
-      <button class="btn" id="tg">${d.open ? 'Đóng sớm' : 'Mở lại đăng ký'}</button>`;
+    $('#toggle').innerHTML = `<span class="badge ${d.open ? 'green' : ''}" style="margin-right:8px">${!d.open ? 'Đã chốt đăng ký' : mode === 'month' ? 'Đang mở · hạn 19:00 ngày ' + fmtDM(d.deadline.slice(0, 10)) : 'Đang mở · hạn 19:00 CN ' + fmtDM(ymd(addDays(parseDate(ym), -1)))}</span>
+      <button class="btn" id="tg">${d.open ? (mode === 'month' ? 'Đóng đăng ký' : 'Đóng sớm') : (mode === 'month' ? 'Mở đăng ký' : 'Mở lại đăng ký')}</button>`;
     $('#tg').onclick = e => run(e.currentTarget, async () => { await api('/admin/reg-month', { method: 'PUT', body: { ym, open: !d.open } }); toast('Đã cập nhật'); load(); });
     const c = { submitted: 0, draft: 0, empty: 0 }; d.users.forEach(u => c[u.status || 'empty']++); d.users.forEach(u => { u.status = u.status || 'empty'; });
     const max = Math.max(1, d.users.length);
@@ -370,7 +382,7 @@ async function aAvailability(v) {
       { label: 'Trạng thái', render: u => `<span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span>${u.source === 'month' ? ' <span class="badge" title="Chưa đăng ký theo tuần — đang dùng lịch rảnh đăng ký theo tháng">theo tháng</span>' : ''}` },
       { label: 'Số ca rảnh', render: u => Object.keys(u.slots).length || '—' },
       { label: 'Cập nhật', render: u => u.updated_at ? `<span class="small muted">${fmtDate(u.updated_at.slice(0, 10))} ${u.updated_at.slice(11, 16)}</span>` : '—' },
-      { label: '', cls: 'right', render: u => `<div class="actions">${Object.keys(u.slots).length ? `<button class="btn btn-sm" data-view="${u.id}">Xem</button>` : ''}${u.status === 'submitted' ? `<button class="btn btn-sm" data-unlock="${u.id}">Mở khoá</button>` : ''}</div>` },
+      { label: '', cls: 'right', render: u => `<div class="actions">${Object.keys(u.slots).length ? `<button class="btn btn-sm" data-view="${u.id}">Xem</button>` : ''}${u.status === 'submitted' && ym.length === 7 ? `<button class="btn btn-sm" data-unlock="${u.id}">Mở khoá</button>` : ''}</div>` },
     ], { pageSize: 50 });
     $('#tbl').addEventListener('click', async e => {
       const vb = e.target.closest('[data-view]'), ub = e.target.closest('[data-unlock]');
@@ -388,7 +400,18 @@ async function aAvailability(v) {
       d.users.map(u => [u.username, u.name, ST[u.status][0], ...shifts.flatMap(s => [1, 2, 3, 4, 5, 6, 7].map(k => { const x = u.slots[`${k}-${s.code}`]; return x ? `${x.start}-${x.end}` : ''; }))]));
   };
   $('#wk').onclick = e => { const b = e.target.closest('[data-w]'); if (b) { ym = b.dataset.w; load(); } };
-  $('#to-board').onclick = () => { boardStart = parseDate(ym); location.hash = '#schedule'; };
+  $('#mode').onclick = async e => {
+    const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === mode) return;
+    const m = b.dataset.m;
+    if (!(await confirmDialog(`Chuyển sang đăng ký theo ${m === 'month' ? 'tháng' : 'tuần'}?`, m === 'month'
+      ? 'CTV sẽ đăng ký 1 lần cho cả tháng (những ca rảnh hằng tuần). Đăng ký tháng sau tự chốt 19:00 ngày 29 tháng này (bạn vẫn đóng sớm / mở lại được). Hệ thống vẫn tự xếp ca mỗi tuần dựa trên lịch tháng.'
+      : 'CTV sẽ đăng ký từng tuần, tự chốt 19:00 Chủ nhật. CTV nào chưa đăng ký tuần thì hệ thống tạm dùng lịch rảnh tháng của bạn ấy.', 'Chuyển'))) return;
+    run(b, async () => {
+      await api('/admin/reg-mode', { method: 'PUT', body: { mode: m } });
+      App.meta.reg_mode = m; toast(`Đã chuyển sang đăng ký theo ${m === 'month' ? 'tháng' : 'tuần'}`); aAvailability(v);
+    });
+  };
+  $('#to-board').onclick = () => { boardStart = ym.length === 7 ? (ym === opts[1] ? thisMon : mondayOf(addDays(parseDate(ym + '-01'), 3))) : parseDate(ym); location.hash = '#schedule'; };
   load();
 }
 
@@ -1079,7 +1102,7 @@ async function aHandbook(v) {
 async function aCRM(v) {
   const desc = 'Dán link Google Drive của thư mục hoặc từng video. CTV xem trực tiếp ở mục Tra cứu → Thao tác ở CRM.';
   v.innerHTML = pageHead('Video thao tác CRM', desc) + loading();
-  const d = await api('/admin/crm-videos');
+  const [d, ph] = await Promise.all([api('/admin/crm-videos'), api('/admin/ph-videos')]);
   let src = d.sources.length ? d.sources : [{ title: '', url: '' }];
   v.innerHTML = pageHead('Video thao tác CRM', desc, `<a class="btn" href="/ctv#crm" target="_blank" rel="noopener">Xem như CTV</a>`) + `
     <form class="card card-pad" id="cv-form">
@@ -1088,6 +1111,12 @@ async function aCRM(v) {
         <div id="cv-rows"></div>
         <button type="button" class="btn btn-sm" id="cv-add" style="margin-top:8px">${icon('plus')} Thêm link</button></div>
       <button class="btn btn-primary">Lưu</button>
+    </form>
+    <form class="card card-pad" id="ph-form">
+      <div class="field"><label>Kênh YouTube — Video hướng dẫn PH</label>
+        <span class="hint" style="margin-bottom:8px">CTV xem ở mục Tra cứu → Video hướng dẫn PH (xem trước + sao chép link gửi PH). Video mới đăng lên kênh tự hiện sau tối đa 10 phút.</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" name="channel" value="${esc(ph.channel)}" placeholder="https://www.youtube.com/@TenKenh" style="flex:1;min-width:260px">
+          <button class="btn btn-primary">Lưu kênh</button><a class="btn" href="/ctv#ph-videos" target="_blank" rel="noopener">Xem như CTV</a></div></div>
     </form>
     <div class="card"><div class="card-head"><h2>CTV đang thấy</h2><span class="badge">${d.groups.reduce((a, g) => a + g.items.length, 0)} video / tệp</span></div>
       <div class="card-pad">${d.groups.length ? d.groups.map(g => `<div style="margin-bottom:12px"><b>${esc(g.title)}</b> <span class="small muted">${g.items.length} mục</span>
@@ -1107,6 +1136,10 @@ async function aCRM(v) {
   $('#cv-form').onsubmit = e => {
     e.preventDefault(); collect();
     run(e.submitter, async () => { await api('/admin/crm-videos', { method: 'PUT', body: { sources: src.filter(s => s.url.trim()) } }); toast('Đã lưu'); aCRM(v); });
+  };
+  $('#ph-form').onsubmit = e => {
+    e.preventDefault();
+    run(e.submitter, async () => { const r = await api('/admin/ph-videos', { method: 'PUT', body: { channel: e.target.channel.value } }); toast(`Đã lưu kênh · ${r.count} video`); aCRM(v); });
   };
 }
 
@@ -1172,7 +1205,7 @@ App.start({
       { id: 'users', label: 'Nhân sự', icon: 'users', render: aUsers },
       { id: 'catalog', label: 'Danh mục', icon: 'grid', render: aCatalog },
       { id: 'handbook', label: 'Cẩm nang', icon: 'book', render: aHandbook },
-      { id: 'crm', label: 'Video thao tác CRM', icon: 'video', render: aCRM },
+      { id: 'crm', label: 'Video hướng dẫn', icon: 'video', render: aCRM },
       { id: 'notifications', label: 'Thông báo', icon: 'bell', render: aNotifications },
       { id: 'logs', label: 'Nhật ký hệ thống', icon: 'list', render: aLogs },
     ] },

@@ -163,16 +163,25 @@ const fmtLeft = ms => { const m = Math.max(0, Math.floor(ms / 60000)), d = Math.
 
 async function pageAvailability(v) {
   const shifts = App.meta.shifts;
-  const thisMon = mondayOf(new Date());
+  const thisMon = mondayOf(new Date()), now = new Date();
+  const byMonth = App.meta.reg_mode === 'month';   // admin chọn mở đăng ký theo tháng hay theo tuần
+  const monthOf = i => ymOf(new Date(now.getFullYear(), now.getMonth() + i, 1));
   const weeks = [0, 1, 2].map(i => ymd(addDays(thisMon, 7 * (i + 1))));
-  let ws = weeks.find(w => regDeadline(w) > new Date()) || weeks[0];
+  const opts = byMonth ? [0, 1, 2].map(monthOf) : [ymd(thisMon), ...weeks];
+  // theo tháng: hạn chót 19:00 ngày 29 của tháng trước (tháng 2 → ngày cuối tháng)
+  const monthDeadline = ym => { const y = +ym.slice(0, 4), m = +ym.slice(5, 7); return new Date(y, m - 2, Math.min(29, new Date(y, m - 1, 0).getDate()), 19, 0); };
+  const deadlineOf = k => byMonth ? monthDeadline(k) : regDeadline(k);
+  let ws = byMonth ? (new Date() < monthDeadline(opts[1]) ? opts[1] : opts[2]) : (weeks.find(w => regDeadline(w) > new Date()) || weeks[0]);
   let state = null;
+  const periodName = k => byMonth ? fmtYM(k).toLowerCase() : 'tuần ' + weekLabel(k);
 
-  v.innerHTML = pageHead('Đăng ký lịch rảnh', 'Đăng ký theo tuần: chọn những ca bạn có thể làm rồi bấm “Gửi đăng ký”. Hạn chót 19:00 Chủ nhật, 20:00 hệ thống tự chia ca và quản lý duyệt.') + `
+  v.innerHTML = pageHead('Đăng ký lịch rảnh', byMonth
+      ? 'Đăng ký theo tháng: chọn những ca bạn có thể làm hằng tuần trong tháng rồi bấm “Gửi đăng ký”. Hạn chót 19:00 ngày 29 của tháng trước; mỗi tuần hệ thống tự chia ca theo lịch này và quản lý duyệt.'
+      : 'Đăng ký theo tuần: chọn những ca bạn có thể làm rồi bấm “Gửi đăng ký”. Hạn chót 19:00 Chủ nhật, 20:00 hệ thống tự chia ca và quản lý duyệt.') + `
     <div class="filters">
-      <div class="seg" id="wk">${[ymd(thisMon), ...weeks].map(w => `<button data-w="${w}">${w === ymd(thisMon) ? 'Tuần này' : 'Tuần ' + weekLabel(w)}</button>`).join('')}</div>
+      <div class="seg" id="wk">${opts.map(w => `<button data-w="${w}">${byMonth ? (w === opts[0] ? 'Tháng này' : fmtYM(w)) : w === ymd(thisMon) ? 'Tuần này' : 'Tuần ' + weekLabel(w)}</button>`).join('')}</div>
       <span id="status"></span><span style="flex:1"></span>
-      <button class="btn" id="copy">${icon('copy')} Dùng lịch tuần trước</button>
+      <button class="btn" id="copy">${icon('copy')} Dùng lịch ${byMonth ? 'tháng' : 'tuần'} trước</button>
     </div>
     <div id="dl"></div>
     <div class="card"><div class="table-wrap" id="grid">${loading()}</div>
@@ -181,22 +190,27 @@ async function pageAvailability(v) {
         <div class="actions"><button class="btn btn-primary" id="submit">Gửi đăng ký</button></div>
       </div></div>`;
 
-  const locked = () => !state.open;
+  // theo tháng: đã gửi là chốt (muốn sửa nhờ quản lý mở khoá); theo tuần: sửa được tới hạn chót
+  const locked = () => !state.open || (byMonth && state.status === 'submitted');
   const dayOf = k => ymd(addDays(parseDate(ws), k - 1));
 
   function paint() {
     $$('#wk button').forEach(b => b.classList.toggle('active', b.dataset.w === ws));
     const dl = regDeadline(ws), open = state.open;
-    $('#status').innerHTML = !open ? '<span class="badge">Đã chốt đăng ký</span>'
-      : state.status === 'submitted' ? '<span class="badge green">Đã gửi — vẫn sửa được tới hạn chót</span>'
+    $('#status').innerHTML = !open ? `<span class="badge">${byMonth && state.status !== 'submitted' ? 'Chưa mở / đã đóng đăng ký' : 'Đã chốt đăng ký'}</span>`
+      : state.status === 'submitted' ? `<span class="badge green">${byMonth ? 'Đã gửi — đã chốt' : 'Đã gửi — vẫn sửa được tới hạn chót'}</span>`
       : state.status === 'draft' ? '<span class="badge amber">Chưa gửi</span>' : '<span class="badge blue">Đang mở đăng ký</span>';
-    $('#dl').innerHTML = open
+    $('#dl').innerHTML = byMonth
+      ? (open && state.status !== 'submitted'
+        ? `<div class="notice" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface))">⏰ Đăng ký <b>${periodName(ws)}</b> — hạn chót <b>19:00 ngày ${fmtDM(ymd(monthDeadline(ws)))}</b>, còn <b id="left">${fmtLeft(monthDeadline(ws) - new Date())}</b>. Chọn những ca bạn rảnh <b>hằng tuần</b> trong tháng. Sau khi gửi, lịch được chốt — muốn sửa thì liên hệ quản lý.</div>`
+        : `<div class="notice" style="border-color:var(--border);background:var(--surface-2)">${state.status === 'submitted' ? `Bạn đã gửi đăng ký ${periodName(ws)}. Muốn sửa thì liên hệ quản lý để mở khoá.` : `Quản lý chưa mở (hoặc đã đóng) đăng ký ${periodName(ws)}.`} Lịch làm sẽ hiện ở mục <a href="#schedule">Lịch làm việc</a> sau khi quản lý duyệt.</div>`)
+      : open
       ? `<div class="notice" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface))">⏰ Hạn chót <b>19:00 Chủ nhật ${fmtDM(ymd(dl))}</b> — còn <b id="left">${fmtLeft(dl - new Date())}</b>. Sau đó hệ thống tự chia ca lúc 20:00.</div>`
       : `<div class="notice" style="border-color:var(--border);background:var(--surface-2)">Tuần ${weekLabel(ws)} đã chốt đăng ký. Lịch làm sẽ hiện ở mục <a href="#schedule">Lịch làm việc</a> sau khi quản lý duyệt.</div>`;
     ['#copy', '#submit'].forEach(s => { $(s).disabled = locked(); });
     $('#submit').textContent = state.status === 'submitted' ? 'Cập nhật đăng ký' : 'Gửi đăng ký';
     const L = locked();
-    $('#grid').innerHTML = `<div class="av-grid"><div></div>${WEEK_KEYS.map(k => `<div class="h">${WEEK_LABEL[k]}<br><span class="muted small">${fmtDM(dayOf(k))}</span></div>`).join('')}
+    $('#grid').innerHTML = `<div class="av-grid"><div></div>${WEEK_KEYS.map(k => `<div class="h">${WEEK_LABEL[k]}${byMonth ? '' : `<br><span class="muted small">${fmtDM(dayOf(k))}</span>`}</div>`).join('')}
       ${mainShifts().map(m => {
         const vars = shiftVariants(m);
         if (vars.length < 2) {   // ca thường: 1 ô / ngày
@@ -238,7 +252,7 @@ async function pageAvailability(v) {
     paint();
   }
 
-  const timer = setInterval(() => { const el = $('#left'); if (el) el.textContent = fmtLeft(regDeadline(ws) - new Date()); }, 30000);
+  const timer = setInterval(() => { const el = $('#left'); if (el) el.textContent = fmtLeft(deadlineOf(ws) - new Date()); }, 30000);
   App.onLeave(() => clearInterval(timer));
   $('#wk').onclick = e => { const b = e.target.closest('[data-w]'); if (b) { ws = b.dataset.w; load(); } };
   $('#grid').addEventListener('click', e => {
@@ -256,14 +270,14 @@ async function pageAvailability(v) {
     if (!Object.keys(state.slots).length) return toast('Bạn chưa chọn ca rảnh nào', 'error');
     run(e.currentTarget, async () => {
       await api('/ctv/availability', { method: 'PUT', body: { ym: ws, slots: state.slots, submit: true } });
-      toast(`Đã gửi đăng ký tuần ${weekLabel(ws)}`); load();
+      toast(`Đã gửi đăng ký ${periodName(ws)}`); load();
     });
   };
   $('#copy').onclick = async () => {
-    const prevWs = ymd(addDays(parseDate(ws), -7));
+    const prevWs = byMonth ? ymOf(new Date(+ws.slice(0, 4), +ws.slice(5, 7) - 2, 1)) : ymd(addDays(parseDate(ws), -7));
     let prev = await api('/ctv/availability', { query: { ym: prevWs } });
-    if (!Object.keys(prev.slots).length) prev = await api('/ctv/availability', { query: { ym: prevWs.slice(0, 7) } }); // lịch theo tháng cũ
-    if (!Object.keys(prev.slots).length) return toast('Tuần trước bạn chưa đăng ký lịch', 'info');
+    if (!byMonth && !Object.keys(prev.slots).length) prev = await api('/ctv/availability', { query: { ym: prevWs.slice(0, 7) } }); // lịch theo tháng cũ
+    if (!Object.keys(prev.slots).length) return toast(`${byMonth ? 'Tháng' : 'Tuần'} trước bạn chưa đăng ký lịch`, 'info');
     state.slots = prev.slots; if (state.status === 'empty') state.status = 'draft';
     paint(); toast('Đã sao chép. Nhớ bấm “Gửi đăng ký”.', 'info');
   };
@@ -755,6 +769,67 @@ async function pageCRM(v) {
 }
 
 /* =========================================================
+   6c. Video hướng dẫn PH thao tác — từ kênh YouTube, xem trước + sao chép link gửi PH
+   ========================================================= */
+async function pagePH(v) {
+  const desc = 'Video hướng dẫn phụ huynh / học viên thao tác. Xem trước rồi bấm “Sao chép link” để gửi cho PH.';
+  const head = actions => pageHead('Video hướng dẫn PH', desc, actions);
+  v.innerHTML = head('') + loading();
+  let d = await api('/ph-videos');
+  let cur = store.get('ph_video'), q = '';
+  const all = () => d.groups.flatMap(g => g.items.map(it => ({ ...it, group: g.title })));
+  const copy = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Trình duyệt chặn sao chép', 'error'));
+
+  v.innerHTML = head(`<button class="btn" id="ph-refresh">${icon('refresh')} Làm mới</button>`) + `
+    <div class="crm">
+      <div class="crm-side card">
+        <div class="search crm-search">${icon('search')}<input class="input full" id="ph-q" placeholder="Tìm video (VD: xin nghỉ, đặt lịch…)" autocomplete="off"></div>
+        <div id="ph-list" class="crm-list"></div>
+      </div>
+      <div class="crm-main"><div class="card" id="ph-player"></div></div>
+    </div>`;
+
+  const paintList = () => {
+    const ws = words(q);
+    const groups = d.groups.map(g => ({ ...g, items: g.items.filter(it => !ws.length || matches(`${it.title} ${g.title}`, ws)) })).filter(g => g.items.length);
+    $('#ph-list').innerHTML = d.error ? emptyState(d.error)
+      : groups.length ? groups.map(g => `<div class="crm-group">
+        ${d.groups.length > 1 ? `<div class="crm-group-h">${esc(g.title)} <span class="badge">${g.items.length}</span></div>` : ''}
+        ${g.items.map(it => `<div class="ph-row"><button class="crm-item ${it.id === cur ? 'active' : ''}" data-id="${it.id}" title="${esc(it.title)}">${icon('play')}<span>${mark(esc(it.short), q)}</span></button>
+          <button class="btn btn-icon btn-ghost ph-copy" data-copy="${it.id}" title="Sao chép link" aria-label="Sao chép link ${esc(it.short)}">${icon('copy')}</button></div>`).join('')}
+      </div>`).join('')
+      : emptyState(d.groups.length ? `Không có video nào chứa “${q}”` : 'Kênh chưa có video nào');
+  };
+  const paintPlayer = () => {
+    const it = all().find(x => x.id === cur);
+    if (!it) { $('#ph-player').innerHTML = `<div class="crm-empty">${icon('video')}<p class="muted">${all().length ? 'Chọn một video bên trái để xem' : 'Chưa có video nào'}</p></div>`; return; }
+    $('#ph-player').innerHTML = `<div class="crm-frame"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(it.id)}?rel=0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(it.title)}"></iframe></div>
+      <div class="crm-cap"><div style="min-width:0"><b>${esc(it.short)}</b><div class="small muted">${esc(it.group)} · <a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.url)}</a></div></div>
+        <div class="actions"><button class="btn btn-sm btn-primary" id="ph-c1">${icon('copy')} Sao chép link</button>
+          <button class="btn btn-sm" id="ph-c2" title="Sao chép tiêu đề + link để dán vào tin nhắn">${icon('copy')} Kèm tiêu đề</button>
+          <a class="btn btn-sm" href="${esc(it.url)}" target="_blank" rel="noopener">${icon('external')} YouTube</a></div></div>`;
+    $('#ph-c1').onclick = () => copy(it.url, 'Đã sao chép link video');
+    $('#ph-c2').onclick = () => copy(`${it.short}: ${it.url}`, 'Đã sao chép tiêu đề + link');
+  };
+  const select = id => {
+    cur = id; store.set('ph_video', id);
+    $$('#ph-list .crm-item').forEach(b => b.classList.toggle('active', b.dataset.id === id));
+    paintPlayer();
+    if (matchMedia('(max-width: 860px)').matches) $('#ph-player').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  if (!all().some(x => x.id === cur)) cur = (all()[0] || {}).id;
+  paintList(); paintPlayer();
+  if (d.warning) toast('Không kết nối được YouTube, đang hiển thị bản lưu tạm', 'info');
+  $('#ph-list').onclick = e => {
+    const c = e.target.closest('[data-copy]');
+    if (c) { const it = all().find(x => x.id === c.dataset.copy); if (it) copy(it.url, `Đã sao chép link: ${it.short}`); return; }
+    const b = e.target.closest('[data-id]'); if (b) select(b.dataset.id);
+  };
+  $('#ph-q').oninput = e => { q = e.target.value.trim(); paintList(); };
+  $('#ph-refresh').onclick = e => run(e.currentTarget, async () => { d = await api('/ph-videos', { query: { refresh: 1 } }); paintList(); paintPlayer(); toast('Đã cập nhật danh sách video'); });
+}
+
+/* =========================================================
    7. Tra cứu lương
    ========================================================= */
 async function pageSalary(v) {
@@ -866,6 +941,7 @@ App.start({
     { group: 'Tra cứu', items: [
       { id: 'handbook', label: 'Cẩm nang', icon: 'book', render: pageHandbook },
       { id: 'crm', label: 'Thao tác ở CRM', icon: 'video', render: pageCRM },
+      { id: 'ph-videos', label: 'Video hướng dẫn PH', icon: 'play', render: pagePH },
     ] },
     { group: 'Cá nhân', items: [
       { id: 'salary', label: 'Tra cứu lương', icon: 'wallet', render: pageSalary },

@@ -593,6 +593,10 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
 .crm-item svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
 .crm-item.active svg { color: var(--accent); }
 .crm-main .card { margin: 0; overflow: hidden; }
+.ph-row { display: flex; align-items: center; gap: 2px; }
+.ph-row .crm-item { flex: 1; min-width: 0; }
+.ph-copy { flex: none; width: 32px; height: 32px; color: var(--muted); }
+.ph-copy svg { width: 15px; height: 15px; }
 .crm-frame { position: relative; aspect-ratio: 16 / 9; background: #000; }
 .crm-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .crm-cap { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }

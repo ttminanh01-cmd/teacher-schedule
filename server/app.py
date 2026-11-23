@@ -14,7 +14,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import autoschedule, crm_videos, db, handbook, notify, sheet_sync
+from . import autoschedule, crm_videos, db, handbook, notify, sheet_sync, yt_videos
 from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -136,6 +136,7 @@ def meta(u=Depends(current_user), con=Depends(get_con)):
         "teams": rows(con.execute("SELECT * FROM teams ORDER BY id")),
         "positions": rows(con.execute("SELECT * FROM positions ORDER BY team_id, id")),
         "shifts": rows(con.execute("SELECT * FROM shift_types ORDER BY sort")),
+        "reg_mode": autoschedule.reg_mode(con),
         "now": now_str(),
     }
 
@@ -195,7 +196,7 @@ def reg_open(con, ym: str) -> bool:
     r = row(con.execute("SELECT open FROM reg_months WHERE ym=?", (ym,)))
     if r is not None:
         return bool(r["open"])
-    return ym > date.today().strftime("%Y-%m")  # mặc định: tháng sau trở đi được đăng ký
+    return autoschedule.month_reg_open(ym)  # mặc định: tự chốt 19:00 ngày 29 của tháng trước
 
 
 @app.get("/api/ctv/availability")
@@ -214,14 +215,18 @@ def get_availability(ym: str, u=Depends(current_user), con=Depends(get_con)):
         for gk in {f"g:{k.partition('-')[0]}-{autoschedule.group_of(k.partition('-')[2])}" for k in slots}:
             counts[gk] = counts.get(gk, 0) + 1
     return {"ym": ym, "open": reg_open(con, ym), "status": r["status"] if r else "empty",
+            "deadline": None if autoschedule.is_week_key(ym) else autoschedule.month_deadline(ym).strftime("%Y-%m-%d %H:%M"),
             "slots": json.loads(r["slots"]) if r else {}, "updated_at": r["updated_at"] if r else None, "counts": counts}
 
 
 @app.put("/api/ctv/availability")
 def save_availability(body: dict = Body(...), u=Depends(current_user), con=Depends(get_con)):
     ym, slots, submit = body["ym"], body.get("slots", {}), bool(body.get("submit"))
+    mode = autoschedule.reg_mode(con)
+    if autoschedule.is_week_key(ym) != (mode == "week"):
+        err(f"Quản lý đã chuyển sang đăng ký theo {'tuần' if mode == 'week' else 'tháng'}. Bạn tải lại trang rồi đăng ký lại nhé.")
     if not reg_open(con, ym):
-        err("Tháng này đã đóng đăng ký")
+        err(f"{'Tuần' if mode == 'week' else 'Tháng'} này đã đóng đăng ký")
     cur = row(con.execute("SELECT status FROM availability WHERE user_id=? AND ym=?", (u["id"], ym)))
     if cur and cur["status"] == "submitted" and not autoschedule.is_week_key(ym):  # tuần: sửa được tới hạn chót
         err("Lịch tháng này đã chốt. Liên hệ quản lý nếu cần sửa.")
@@ -392,6 +397,7 @@ def admin_dashboard(day: str | None = None, u=Depends(admin_user), con=Depends(g
     sched = rows(con.execute(SCHED_SQL + " WHERE s.date=? ORDER BY s.start", (day,)))
     now_m = datetime.now().hour * 60 + datetime.now().minute if day == date.today().isoformat() else (0 if day > date.today().isoformat() else 24 * 60)
     nxt = (date.today().replace(day=28) + timedelta(days=4)).strftime("%Y-%m")
+    rk = nxt if autoschedule.reg_mode(con) == "month" else autoschedule.next_week().isoformat()  # kỳ đang nhận đăng ký
     return {
         "day": day,
         "total": len(sched),
@@ -401,8 +407,9 @@ def admin_dashboard(day: str | None = None, u=Depends(admin_user), con=Depends(g
         "pending_days": len(pending_days(con)),
         "active_ctv": con.execute("SELECT COUNT(*) FROM users WHERE role='ctv' AND active=1").fetchone()[0],
         "next_month": nxt,
-        "availability_submitted": con.execute("SELECT COUNT(*) FROM availability WHERE ym=?", (autoschedule.next_week().isoformat(),)).fetchone()[0],
+        "availability_submitted": con.execute("SELECT COUNT(*) FROM availability WHERE ym=?", (rk,)).fetchone()[0],
         "reg_week": autoschedule.next_week().isoformat(),
+        "reg_key": rk,
         "schedule": sched,
     }
 
@@ -517,7 +524,8 @@ def admin_availability(ym: str, u=Depends(admin_user), con=Depends(get_con)):
         g = regs.get(x["id"])
         if g and g["source"] == "month":  # chưa đăng ký tuần → hiện lịch rảnh tháng
             x.update(slots=g["slots"], status=g["status"], updated_at=g["updated_at"], source="month")
-    return {"ym": ym, "open": reg_open(con, ym), "users": users}
+    return {"ym": ym, "open": reg_open(con, ym), "users": users,
+            "deadline": None if autoschedule.is_week_key(ym) else autoschedule.month_deadline(ym).strftime("%Y-%m-%d %H:%M")}
 
 
 @app.put("/api/admin/reg-month")
@@ -525,6 +533,16 @@ def set_reg_month(body: dict = Body(...), u=Depends(admin_user), con=Depends(get
     con.execute("INSERT OR REPLACE INTO reg_months(ym, open) VALUES (?,?)", (body["ym"], 1 if body.get("open") else 0))
     log(con, u, f"{'Mở' if body.get('open') else 'Đóng'} đăng ký lịch rảnh {'tuần' if autoschedule.is_week_key(body['ym']) else 'tháng'} {body['ym']}")
     return {"ok": True}
+
+
+@app.put("/api/admin/reg-mode")
+def set_reg_mode(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    mode = body.get("mode")
+    if mode not in ("week", "month"):
+        err("Chế độ không hợp lệ")
+    db.set_setting(con, "reg_mode", mode)
+    log(con, u, f"Chuyển đăng ký lịch rảnh sang theo {'tuần' if mode == 'week' else 'tháng'}")
+    return {"ok": True, "mode": mode}
 
 
 @app.post("/api/admin/availability/unlock")
@@ -794,12 +812,13 @@ def week_info(con, start: str) -> dict:
     except ValueError:
         err("Ngày không hợp lệ")
     key = ws.isoformat()
+    rk = autoschedule.reg_key(con, ws)
     st = autoschedule.statuses(con).get(key, {})
-    return {"week": key, "deadline": autoschedule.deadline(ws).strftime("%Y-%m-%d %H:%M"),
+    return {"week": key, "reg_mode": autoschedule.reg_mode(con), "reg_key": rk, "deadline": autoschedule.deadline(ws).strftime("%Y-%m-%d %H:%M"),
             "gen_time": autoschedule.gen_time(ws).strftime("%Y-%m-%d %H:%M"),
-            "reg_open": autoschedule.reg_open(con, key),
+            "reg_open": reg_open(con, rk),
             "registered": len(autoschedule.week_regs(con, key)),
-            "registered_week": con.execute("SELECT COUNT(*) FROM availability WHERE ym=?", (key,)).fetchone()[0],
+            "registered_week": con.execute("SELECT COUNT(*) FROM availability WHERE ym=?", (rk,)).fetchone()[0],
             "active_ctv": con.execute("SELECT COUNT(*) FROM users WHERE role='ctv' AND active=1").fetchone()[0],
             "auto_rows": con.execute("SELECT COUNT(*) FROM schedules WHERE date BETWEEN ? AND ? AND source='auto'",
                                      (key, (ws + timedelta(days=6)).isoformat())).fetchone()[0],
@@ -817,7 +836,7 @@ def admin_week_auto(body: dict = Body(...), u=Depends(admin_user), con=Depends(g
     ws = autoschedule.monday(date.fromisoformat(body["start"]))
     if autoschedule.statuses(con).get(ws.isoformat(), {}).get("approved_at"):
         err("Tuần này đã duyệt. Bỏ duyệt trước khi tự xếp lại.")
-    if not con.execute("SELECT 1 FROM availability WHERE ym=?", (ws.isoformat(),)).fetchone():
+    if not autoschedule.has_regs(con, ws):
         err("Chưa có CTV nào đăng ký lịch rảnh cho tuần này nên chưa tự xếp được")
     rep = autoschedule.generate(con, ws, u["name"])
     return rep
@@ -1406,6 +1425,37 @@ def save_crm_videos(body: dict = Body(...), u=Depends(admin_user), con=Depends(g
     db.set_setting(con, "crm_videos", dumps(out))
     log(con, u, f"Cập nhật video Thao tác ở CRM ({len(out)} link)")
     return {"ok": True}
+
+
+# ----- Video hướng dẫn PH thao tác (kênh YouTube)
+def ph_channel(con) -> str:
+    return db.get_setting(con, "ph_youtube_channel", "") or yt_videos.DEFAULT_CHANNEL
+
+
+@app.get("/api/ph-videos")
+def ph_video_list(refresh: bool = False, u=Depends(current_user), con=Depends(get_con)):
+    ch = ph_channel(con)
+    try:
+        return yt_videos.get(ch, refresh=refresh)
+    except yt_videos.YTError as e:
+        return {"channel": ch, "name": "", "groups": [], "error": str(e)}
+
+
+@app.get("/api/admin/ph-videos")
+def admin_ph_videos(u=Depends(admin_user), con=Depends(get_con)):
+    return {"channel": ph_channel(con)}
+
+
+@app.put("/api/admin/ph-videos")
+def save_ph_videos(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    try:
+        ch = yt_videos.normalize(str(body.get("channel") or ""))
+        data = yt_videos.get(ch, refresh=True)
+    except yt_videos.YTError as e:
+        err(str(e))
+    db.set_setting(con, "ph_youtube_channel", ch)
+    log(con, u, f"Đổi kênh YouTube video hướng dẫn PH: {ch}")
+    return {"ok": True, "count": sum(len(g["items"]) for g in data["groups"])}
 
 
 # ================================================================ pages

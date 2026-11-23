@@ -85,15 +85,52 @@ def reg_open(con, key: str, now: datetime | None = None) -> bool:
     return now < deadline(ws) and ws <= now.date() + timedelta(days=21)
 
 
+def reg_mode(con) -> str:
+    """Admin chọn CTV đăng ký lịch rảnh theo "week" (mặc định) hay "month"."""
+    return "month" if db.get_setting(con, "reg_mode", "week") == "month" else "week"
+
+
+def month_of_week(ws: date) -> str:
+    """Tháng chứa phần lớn ngày của tuần (tháng của ngày thứ 5), VD tuần 30/11–06/12 → tháng 12."""
+    return (ws + timedelta(days=3)).isoformat()[:7]
+
+
+def reg_key(con, ws: date) -> str:
+    """Khoá đăng ký dùng để xếp tuần ws: theo tháng → tháng của tuần, theo tuần → ngày thứ 2."""
+    return month_of_week(ws) if reg_mode(con) == "month" else ws.isoformat()
+
+
+def month_deadline(ym: str) -> datetime:
+    """Hạn đăng ký theo tháng: 19:00 ngày 29 của tháng trước (tháng 2 không có ngày 29 → ngày cuối tháng 2)."""
+    y, m = int(ym[:4]), int(ym[5:7])
+    py, pm = (y - 1, 12) if m == 1 else (y, m - 1)
+    last = (date(y, m, 1) - timedelta(days=1)).day
+    return datetime(py, pm, min(29, last), 19, 0)
+
+
+def month_reg_open(ym: str, now: datetime | None = None) -> bool:
+    """Mặc định chỉ mở 1 tháng: tháng gần nhất chưa qua hạn chót."""
+    now = now or datetime.now()
+    y, m = int(ym[:4]), int(ym[5:7])
+    before = f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
+    return month_deadline(before) <= now < month_deadline(ym)
+
+
+def has_regs(con, ws: date) -> bool:
+    return con.execute("SELECT 1 FROM availability WHERE ym=?", (reg_key(con, ws),)).fetchone() is not None
+
+
 def week_regs(con, key: str) -> dict:
-    """Đăng ký của tuần; CTV nào chưa đăng ký theo tuần thì dùng lịch rảnh theo tháng (cách cũ)
-    của tháng chứa ngày thứ 2 — để giai đoạn chuyển đổi không bị mất dữ liệu đăng ký."""
+    """Đăng ký dùng cho tuần `key` (ngày thứ 2). Ưu tiên kiểu đăng ký admin đang chọn (tuần/tháng);
+    CTV nào không có thì dùng kiểu còn lại để giai đoạn chuyển đổi không bị mất dữ liệu đăng ký."""
+    week, month = (key, "week"), (month_of_week(date.fromisoformat(key)), "month")
+    order = [month, week] if reg_mode(con) == "month" else [week, month]
     out = {}
-    for r in con.execute("SELECT user_id, slots, status, updated_at FROM availability WHERE ym=?", (key,)).fetchall():
-        out[r[0]] = {"slots": json.loads(r[1] or "{}"), "status": r[2], "updated_at": r[3], "source": "week"}
-    for r in con.execute("SELECT user_id, slots, status, updated_at FROM availability WHERE ym=?", (key[:7],)).fetchall():
-        if r[0] not in out and json.loads(r[1] or "{}"):
-            out[r[0]] = {"slots": json.loads(r[1] or "{}"), "status": r[2], "updated_at": r[3], "source": "month"}
+    for i, (k, src) in enumerate(order):
+        for r in con.execute("SELECT user_id, slots, status, updated_at FROM availability WHERE ym=?", (k,)).fetchall():
+            slots = json.loads(r[1] or "{}")
+            if r[0] not in out and (i == 0 or slots):
+                out[r[0]] = {"slots": slots, "status": r[2], "updated_at": r[3], "source": src}
     return out
 
 
@@ -237,8 +274,8 @@ def tick(now: datetime | None = None, force: bool = False):
         if st.get("generated_at") or st.get("approved_at"):
             _checked[ws] = "done"
             return None
-        # chưa ai đăng ký theo tuần (VD tuần xếp tay như trước) → không đụng tới, không ẩn lịch với CTV
-        if not con.execute("SELECT 1 FROM availability WHERE ym=?", (ws.isoformat(),)).fetchone():
+        # chưa ai đăng ký (VD tuần xếp tay như trước) → không đụng tới, không ẩn lịch với CTV
+        if not has_regs(con, ws):
             return None
         rep = generate(con, ws)
         con.commit()
