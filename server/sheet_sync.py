@@ -50,8 +50,7 @@ def read_layout(sheet_id: str):
     tab = next((t for t in tabs if handbook.fold(t["name"]).strip() == handbook.fold(TAB)), None)
     if not tab:
         raise SyncError(f"Không tìm thấy tab “{TAB}” trong sheet")
-    raw = handbook._get(f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={tab['gid']}")
-    rows = list(csv.reader(io.StringIO(raw.decode("utf-8") if isinstance(raw, bytes) else raw)))
+    rows = handbook.fetch_rows(sheet_id, tab["gid"])
     dates = {}
     for c, v in enumerate(rows[DATE_ROW - 1] if len(rows) >= DATE_ROW else []):
         m = re.fullmatch(r"(\d{1,2})/(\d{1,2})", v.strip())

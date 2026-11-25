@@ -1371,7 +1371,12 @@ def admin_handbook(u=Depends(admin_user), con=Depends(get_con)):
         error = warn
     except handbook.HandbookError as e:
         tabs, ts, error = [], None, str(e)
+    tok = db.get_setting(con, "hb_gas_token")
+    if not tok:
+        tok = secrets.token_urlsafe(18)
+        db.set_setting(con, "hb_gas_token", tok)
     return {"sheet_url": f"https://docs.google.com/spreadsheets/d/{sid}", "error": error,
+            "gas_url": db.get_setting(con, "hb_gas_url"), "gas_script": handbook.apps_script(tok),
             "fetched_at": fmt_ts(ts) if ts else None,
             "tabs": [{**t, "mode": "hidden" if t["gid"] in hidden else tab_mode(con, t)} for t in handbook.sort_tabs(tabs)]}
 
@@ -1386,6 +1391,13 @@ def save_handbook(body: dict = Body(...), u=Depends(admin_user), con=Depends(get
     modes = {str(g): m for g, m in (body.get("modes") or {}).items() if m in handbook.MODES}
     db.set_setting(con, "handbook_modes", dumps(modes))
     db.set_setting(con, "handbook_hidden", "[]")
+    if "gas_url" in body:
+        gas_url = (body.get("gas_url") or "").strip()
+        if gas_url and not re.match(r"^https://script\.google\.com/.+/exec$", gas_url):
+            err("URL phải là link ứng dụng web Apps Script (https://script.google.com/…/exec)")
+        db.set_setting(con, "hb_gas_url", gas_url)
+    con.commit()
+    handbook.reset_bridge()
     handbook.clear_cache()
     log(con, u, "Cập nhật cấu hình Cẩm nang")
     return {"ok": True}

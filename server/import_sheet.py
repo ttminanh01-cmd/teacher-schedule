@@ -32,8 +32,7 @@ SHIFT_BY_NAME = {"sang": "sang", "chieu": "chieu", "toi": "toi"}
 
 
 def fetch_csv(sheet_id: str, gid: str) -> list[list[str]]:
-    text = handbook._get(f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}")
-    return [[c.strip() for c in r] for r in csv.reader(io.StringIO(text))]
+    return [[c.strip() for c in r] for r in handbook.fetch_rows(sheet_id, gid)]
 
 
 def norm_user(cell: str) -> str:

@@ -35,8 +35,7 @@ def m2t(m: int) -> str:
 
 def read_tab(sid, name_part):
     tab = next(t for t in handbook.list_tabs(sid)[0] if name_part in handbook.fold(t["name"]))
-    raw = handbook._get(f"https://docs.google.com/spreadsheets/d/{sid}/export?format=csv&gid={tab['gid']}")
-    return list(csv.reader(io.StringIO(raw.decode("utf-8") if isinstance(raw, bytes) else raw)))
+    return handbook.fetch_rows(sid, tab["gid"])
 
 
 def norm_user(s: str) -> str:
