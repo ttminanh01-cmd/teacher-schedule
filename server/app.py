@@ -14,7 +14,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import autoschedule, crm_videos, db, docs, handbook, notify, sheet_sync, yt_videos
+from . import autoschedule, crm_videos, db, docs, handbook, ican, notify, sheet_sync, yt_videos
 from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -1474,7 +1474,12 @@ def doc_view(tid: str, refresh: bool = False, u=Depends(current_user), con=Depen
             blocks, ts, warn = handbook.get_blocks(sid, hb[1], refresh)
         except handbook.HandbookError as e:
             return {**base, "groups": [], "error": str(e)}
-        return {**base, "groups": [], "table": {"blocks": blocks, "fetched_at": fmt_ts(ts)}, "warning": warn}
+        # cột "Link profile" của bảng GV: lấy link theo tên từ icanconnect.vn (sheet có thể ghi sai)
+        blocks, ican_stat = ican.apply(blocks, t["name"], refresh)
+        out = {**base, "groups": [], "table": {"blocks": blocks, "fetched_at": fmt_ts(ts)}, "warning": warn}
+        if ican_stat and u["role"] == "admin":
+            out["ican"] = ican_stat
+        return out
     return {**docs.resolve(t, refresh=refresh), **base}
 
 
