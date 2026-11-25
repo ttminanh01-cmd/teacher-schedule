@@ -161,10 +161,13 @@ function sync() {{
     if (changed || fullCheck) {{
       sheets.forEach((sh, k) => {{
         if (tabs[k].rows.length > LINK_MAX_ROWS) return;
-        sh.getDataRange().getRichTextValues().forEach((r, i) => r.forEach((c, j) => {{
-          if (!c) return;
-          const a = c.getRuns().filter(x => x.getLinkUrl()).map(x => [x.getText().trim(), x.getLinkUrl()]);
-          if (!a.length && c.getLinkUrl()) a.push([c.getText().trim(), c.getLinkUrl()]);
+        const rg = sh.getDataRange(), formulas = rg.getFormulas();
+        rg.getRichTextValues().forEach((r, i) => r.forEach((c, j) => {{
+          let a = c ? c.getRuns().filter(x => x.getLinkUrl()).map(x => [x.getText().trim(), x.getLinkUrl()]) : [];
+          if (!a.length && c && c.getLinkUrl()) a.push([c.getText().trim(), c.getLinkUrl()]);
+          // ô dùng công thức =HYPERLINK("url"; "chữ") → lấy url từ công thức
+          const m = !a.length && /HYPERLINK\\(\\s*"([^"]+)"/i.exec(formulas[i][j] || '');
+          if (m) a.push([String(tabs[k].rows[i][j]).trim(), m[1]]);
           if (a.length) tabs[k].links.push([i, j, a]);
         }}));
       }});
