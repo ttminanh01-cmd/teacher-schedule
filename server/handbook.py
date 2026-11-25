@@ -2,7 +2,7 @@
 
 Hai cách đọc:
   - Đã cài Apps Script (Quản trị → Cẩm nang): script chạy bằng tài khoản công ty của admin tự GỬI sheet
-    sang portal 10 phút/lần (dùng cho sheet chỉ chia sẻ trong công ty).
+    sang portal ngay khi sửa (dự phòng mỗi 1 phút) (dùng cho sheet chỉ chia sẻ trong công ty).
   - Chưa cài: đọc sheet công khai ("Bất kỳ ai có link đều xem được").
 
 Mỗi tab của sheet là một mục. Dữ liệu được cache CACHE_TTL giây nên khi sheet
@@ -55,8 +55,8 @@ def _get(url: str) -> str:
 
 
 # ----- Apps Script gửi dữ liệu sang (sheet chỉ chia sẻ trong công ty, portal không tự đọc được)
-# Script chạy bằng tài khoản công ty của admin, trigger 10 phút/lần: đọc toàn bộ sheet, chỉ gửi khi có thay đổi,
-# không đổi thì gửi "ping" nhẹ. Bản nhận được lưu DB (settings.hb_snapshot) + giữ trong bộ nhớ, nên Neon chỉ bị
+# Script chạy bằng tài khoản công ty của admin: trigger khi sửa sheet + mỗi 1 phút, chỉ gửi khi có thay đổi,
+# không đổi thì 10 phút gửi "ping" nhẹ 1 lần. Bản nhận được lưu DB (settings.hb_snapshot) + giữ trong bộ nhớ, nên Neon chỉ bị
 # đánh thức khi sheet thực sự đổi (và 1 lần lúc khởi động).
 _snap: dict = {"loaded": False, "data": None, "token": "", "seen": None}
 
@@ -127,7 +127,7 @@ def push_status() -> dict:
 def apps_script(token: str, sheet_id: str, portal: str) -> str:
     return f"""// Cổng CTV ← Cẩm nang. Chạy bằng tài khoản công ty của bạn (sheet không cần công khai).
 // Cài: script.google.com → Dự án mới → dán code → 💾 Lưu → chọn hàm "setup" → ▶ Chạy → cho phép quyền.
-// Sau đó cứ 10 phút script tự gửi sheet sang portal (chỉ gửi khi sheet có thay đổi).
+// Sau đó: có người sửa sheet là gửi ngay (nếu Google cho gắn trigger "khi thay đổi"), và kiểm tra lại mỗi 1 phút.
 const PORTAL = '{portal}/api/handbook/push';
 const TOKEN = '{token}';
 const SHEET_ID = '{sheet_id}';
@@ -135,34 +135,57 @@ const LINK_MAX_ROWS = {LINK_MAX_ROWS};
 
 function setup() {{
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('sync').timeBased().everyMinutes(10).create();
-  PropertiesService.getScriptProperties().deleteProperty('hash');
+  ScriptApp.newTrigger('sync').timeBased().everyMinutes(1).create();
+  try {{
+    ScriptApp.newTrigger('sync').forSpreadsheet(SHEET_ID).onChange().create();
+    Logger.log('Đã bật cập nhật ngay khi sửa sheet + kiểm tra mỗi 1 phút');
+  }} catch (err) {{
+    Logger.log('Không gắn được trigger khi sửa sheet (' + err.message + ') → vẫn kiểm tra mỗi 1 phút');
+  }}
+  const p = PropertiesService.getScriptProperties();
+  p.deleteProperty('hash'); p.deleteProperty('full'); p.deleteProperty('ping');
   sync();
 }}
 
 function sync() {{
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  const tabs = ss.getSheets().map(sh => {{
-    const rg = sh.getDataRange(), rows = rg.getDisplayValues(), links = [];
-    if (rows.length <= LINK_MAX_ROWS) {{
-      rg.getRichTextValues().forEach((r, i) => r.forEach((c, j) => {{
-        if (!c) return;
-        const a = c.getRuns().filter(x => x.getLinkUrl()).map(x => [x.getText().trim(), x.getLinkUrl()]);
-        if (!a.length && c.getLinkUrl()) a.push([c.getText().trim(), c.getLinkUrl()]);
-        if (a.length) links.push([i, j, a]);
-      }}));
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return;  // đang gửi dở thì bỏ qua, lần sau sẽ bắt kịp
+  try {{
+    const p = PropertiesService.getScriptProperties(), now = Date.now();
+    const sheets = SpreadsheetApp.openById(SHEET_ID).getSheets();
+    const tabs = sheets.map(sh => ({{ gid: String(sh.getSheetId()), name: sh.getName(), rows: sh.getDataRange().getDisplayValues(), links: [] }}));
+    // so nội dung chữ mỗi lần; 30 phút/lần so cả link gắn trong chữ (đọc link chậm hơn)
+    const fullCheck = now - Number(p.getProperty('full') || 0) > 30 * 60 * 1000;
+    let hash = md5(JSON.stringify(tabs.map(t => [t.gid, t.name, t.rows])));
+    const changed = hash !== p.getProperty('hash');
+    if (changed || fullCheck) {{
+      sheets.forEach((sh, k) => {{
+        if (tabs[k].rows.length > LINK_MAX_ROWS) return;
+        sh.getDataRange().getRichTextValues().forEach((r, i) => r.forEach((c, j) => {{
+          if (!c) return;
+          const a = c.getRuns().filter(x => x.getLinkUrl()).map(x => [x.getText().trim(), x.getLinkUrl()]);
+          if (!a.length && c.getLinkUrl()) a.push([c.getText().trim(), c.getLinkUrl()]);
+          if (a.length) tabs[k].links.push([i, j, a]);
+        }}));
+      }});
+      p.setProperty('full', String(now));
     }}
-    return {{ gid: String(sh.getSheetId()), name: sh.getName(), rows: rows, links: links }};
-  }});
-  const data = JSON.stringify(tabs);
-  const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, data, Utilities.Charset.UTF_8));
-  const props = PropertiesService.getScriptProperties();
-  const same = props.getProperty('hash') === hash;
-  const body = same ? {{ token: TOKEN, sheet: SHEET_ID, ping: true }} : {{ token: TOKEN, sheet: SHEET_ID, tabs: tabs }};
-  const res = UrlFetchApp.fetch(PORTAL, {{ method: 'post', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }});
-  if (res.getResponseCode() !== 200) throw new Error('Portal báo lỗi ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
-  if (!same) props.setProperty('hash', hash);
-  Logger.log(same ? 'Sheet không đổi' : 'Đã gửi ' + tabs.length + ' tab sang portal');
+    const linksHash = (changed || fullCheck) ? md5(JSON.stringify(tabs.map(t => t.links))) : p.getProperty('links');
+    const send = changed || linksHash !== p.getProperty('links');
+    if (!send && now - Number(p.getProperty('ping') || 0) < 10 * 60 * 1000) return;  // không đổi: 10 phút báo "còn sống" 1 lần
+    const body = send ? {{ token: TOKEN, sheet: SHEET_ID, tabs: tabs }} : {{ token: TOKEN, sheet: SHEET_ID, ping: true }};
+    const res = UrlFetchApp.fetch(PORTAL, {{ method: 'post', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }});
+    if (res.getResponseCode() !== 200) throw new Error('Portal báo lỗi ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
+    p.setProperty('ping', String(now));
+    if (send) {{ p.setProperty('hash', hash); p.setProperty('links', linksHash); }}
+    Logger.log(send ? 'Đã gửi ' + tabs.length + ' tab sang portal' : 'Sheet không đổi');
+  }} finally {{
+    lock.releaseLock();
+  }}
+}}
+
+function md5(s) {{
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s, Utilities.Charset.UTF_8));
 }}
 """
 
