@@ -1251,10 +1251,11 @@ async function aDocs(v) {
     };
     const d = await api(`/docs/${t.id}`, { query: { refresh: 1 } });
     if (d.table) {
-      $('#dv', body).innerHTML = `<div class="card"><div class="card-head"><h2>CTV đang thấy</h2><span class="badge">Bảng ${Math.max(0, d.table.rows.length - 1)} dòng</span></div><div class="card-pad">
+      const bl = d.table.blocks || [];
+      $('#dv', body).innerHTML = `<div class="card"><div class="card-head"><h2>CTV đang thấy</h2><span class="badge">${bl.length} bảng</span></div><div class="card-pad">
         ${d.warning ? `<p><span class="badge red">${esc(d.warning)}</span></p>` : ''}
-        <p class="small muted">Tab này lấy từ file Cẩm nang, CTV xem dạng bảng có ô tìm kiếm. Cập nhật lúc ${d.table.fetched_at.slice(11, 16)}.</p>
-        <div class="small muted">${(d.table.rows.find(r => r.filter(Boolean).length >= 2) || []).filter(Boolean).map(esc).join(' · ')}</div></div></div>`;
+        <p class="small muted">Lấy từ file Cẩm nang, CTV xem dạng bảng có ô tìm kiếm (tìm theo mọi cột, VD tên hoặc mã). Cập nhật lúc ${d.table.fetched_at.slice(11, 16)}.</p>
+        ${bl.map(b => `<div style="margin-top:8px"><b>${esc(b.title || 'Bảng')}</b> <span class="small muted">${b.rows.length} dòng · cột: ${b.header.filter(Boolean).map(esc).join(', ')}</span></div>`).join('') || '<span class="muted">Chưa có nội dung</span>'}</div></div>`;
       return;
     }
     const n = d.groups.reduce((a, g) => a + g.items.length, 0);

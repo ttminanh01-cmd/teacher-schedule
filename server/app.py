@@ -1471,10 +1471,10 @@ def doc_view(tid: str, refresh: bool = False, u=Depends(current_user), con=Depen
     sid, _ = handbook_settings(con)
     if hb and hb[0] == sid:
         try:
-            rows, ts, warn = handbook.get_tab(sid, hb[1], refresh)
+            blocks, ts, warn = handbook.get_blocks(sid, hb[1], refresh)
         except handbook.HandbookError as e:
             return {**base, "groups": [], "error": str(e)}
-        return {**base, "groups": [], "table": {"rows": rows, "fetched_at": fmt_ts(ts)}, "warning": warn}
+        return {**base, "groups": [], "table": {"blocks": blocks, "fetched_at": fmt_ts(ts)}, "warning": warn}
     return {**docs.resolve(t, refresh=refresh), **base}
 
 

@@ -325,6 +325,34 @@ def get_tab(sheet_id: str, gid: str, refresh: bool = False):
     return _cached(f"tab:{sheet_id}:{gid}", load, refresh)
 
 
+def get_blocks(sheet_id: str, gid: str, refresh: bool = False):
+    """Tab có nhiều bảng đặt cạnh nhau (ngăn bởi cột trống) → [{title, header, rows}].
+    VD "Danh sách Profile Giáo viên": bảng GV nước ngoài | cột trống | bảng GV Việt Nam."""
+    def load():
+        raw = [[c.strip() for c in r] for r in fetch_rows(sheet_id, gid, links=True)]
+        width = max((len(r) for r in raw), default=0)
+        filled = [any(i < len(r) and r[i] for r in raw) for i in range(width)]
+        segs, start = [], None
+        for i in range(width + 1):
+            if i < width and filled[i]:
+                start = i if start is None else start
+            elif start is not None:
+                segs.append((start, i))
+                start = None
+        blocks = []
+        for a, b in segs:
+            part = [r[a:b] + [""] * (b - a - len(r[a:b])) for r in raw]
+            h = next((k for k, r in enumerate(part) if sum(1 for c in r if c) >= 2), -1)
+            if h < 0:
+                continue
+            title = " · ".join(t for t in (next((c for c in r if c), "") for r in part[:h]) if t)
+            rows = [r for r in part[h + 1:] if any(r)]
+            if rows:
+                blocks.append({"title": title, "header": part[h], "rows": rows})
+        return blocks
+    return _cached(f"blocks:{sheet_id}:{gid}", load, refresh)
+
+
 def sort_tabs(tabs: list) -> list:
     """Tab tên bắt đầu bằng số ("1. ...", "2. ...", "3.SCRIPT") lên đầu theo thứ tự số, còn lại giữ thứ tự sheet."""
     def key(item):

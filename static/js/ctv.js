@@ -862,20 +862,24 @@ async function pageDocs(v) {
   };
   /* tab trong file Cẩm nang: bảng + ô tìm (VD tra thông tin GV) */
   let tlimit = 200;
+  // mỗi tab có thể gồm nhiều bảng đặt cạnh nhau (VD GV nước ngoài | GV Việt Nam) → hiện từng bảng, tìm trong từng dòng của bảng
   const paintRows = () => {
-    const { titles, header, body } = splitSheet(d.table.rows);
-    const ws = words(q), list = ws.length ? body.filter(r => matches(r.join(' '), ws)) : body;
-    const t = titles.filter(Boolean).map(x => `<div class="hb-title">${esc(x)}</div>`).join('');
-    $('#doc-table').innerHTML = !header || !body.length ? emptyState('Tab này chưa có nội dung')
-      : !list.length ? emptyState(`Không có dòng nào chứa “${q}”`)
-      : (t && !q ? `<div class="hb-titles">${t}</div>` : '') + sheetTableHtml(header, list.slice(0, tlimit), q) +
-        (list.length > tlimit ? `<div class="hb-more"><span class="muted small">Đang hiện ${tlimit}/${list.length} dòng</span><button class="btn" data-tmore>Xem thêm</button></div>` : '');
-    $('#doc-count').textContent = ws.length ? `${list.length} dòng khớp` : `${body.length} dòng · cập nhật lúc ${d.table.fetched_at.slice(11, 16)}`;
+    const ws = words(q), blocks = d.table.blocks || [];
+    const total = blocks.reduce((a, b) => a + b.rows.length, 0);
+    const shown = blocks.map(b => ({ ...b, list: ws.length ? b.rows.filter(r => matches(r.join(' ').replace(LINK_RE, '$1'), ws)) : b.rows })).filter(b => b.list.length);
+    const hits = shown.reduce((a, b) => a + b.list.length, 0);
+    $('#doc-table').innerHTML = !total ? `<div class="card">${emptyState('Tab này chưa có nội dung')}</div>`
+      : !hits ? `<div class="card">${emptyState(`Không có dòng nào chứa “${q}”`)}</div>`
+      : shown.map(b => `<div class="card" style="margin-bottom:14px">
+          ${b.title || shown.length > 1 ? `<div class="card-head"><h2>${esc(b.title || 'Bảng')}</h2><span class="badge">${ws.length ? `${b.list.length} khớp` : `${b.rows.length} dòng`}</span></div>` : ''}
+          ${sheetTableHtml(b.header, b.list.slice(0, tlimit), q)}
+          ${b.list.length > tlimit ? `<div class="hb-more"><span class="muted small">Đang hiện ${tlimit}/${b.list.length} dòng</span><button class="btn" data-tmore>Xem thêm</button></div>` : ''}</div>`).join('');
+    $('#doc-count').textContent = ws.length ? `${hits} dòng khớp` : `${total} dòng · cập nhật lúc ${d.table.fetched_at.slice(11, 16)}`;
   };
   const paintTable = () => {
     tlimit = 200;
-    $('#doc-body').innerHTML = `<div class="search hb-search">${icon('search')}<input class="input full" id="doc-tq" placeholder="Tìm trong ${esc(d.name)} (bỏ dấu cũng được)" autocomplete="off" value="${esc(q)}"></div>
-      <div class="small muted" id="doc-count" style="margin:6px 2px 8px"></div><div class="card" id="doc-table"></div>`;
+    $('#doc-body').innerHTML = `<div class="search hb-search">${icon('search')}<input class="input full" id="doc-tq" placeholder="Tìm theo tên, mã… (VD: Melanie, TC015145 — gõ không dấu cũng được)" autocomplete="off" value="${esc(q)}"></div>
+      <div class="small muted" id="doc-count" style="margin:6px 2px 8px"></div><div id="doc-table"></div>`;
     paintRows();
     let timer;
     $('#doc-tq').oninput = e => { clearTimeout(timer); timer = setTimeout(() => { q = e.target.value.trim(); tlimit = 200; paintRows(); }, 150); };
