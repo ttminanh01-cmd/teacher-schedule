@@ -877,7 +877,7 @@ async function aQC(v) {
     title: r ? 'Sửa lỗi QC' : 'Ghi lỗi QC', wide: true,
     body: `<form id="qf">
       <div class="form-row"><div class="field"><label>CTV</label><select class="input" name="user_id" required><option value="">— Chọn CTV —</option>
-          ${users.filter(u => u.role === 'ctv' && (u.active || u.id === (r && r.user_id))).map(u => `<option value="${u.id}" ${r && r.user_id === u.id ? 'selected' : ''}>${esc(u.username)} · ${esc(u.name)}</option>`).join('')}</select></div>
+          ${users.filter(u => u.role === 'ctv').sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0)).map(u => `<option value="${u.id}" ${r && r.user_id === u.id ? 'selected' : ''}>${esc(u.username)} · ${esc(u.name)}${u.active ? '' : ' (đã nghỉ)'}</option>`).join('')}</select></div>
         <div class="form-row"><div class="field"><label>Ngày ghi lỗi</label><input class="input" type="date" name="date" value="${(r && r.date) || todayStr()}" required></div>
           <div class="field"><label>Tính vào lương tháng</label><input class="input" type="month" name="ym" value="${(r && r.ym) || ym}" required></div></div></div>
       <div class="field"><label>Lỗi</label><textarea class="input" name="error" rows="3" required>${esc((r && r.error) || '')}</textarea></div>
