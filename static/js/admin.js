@@ -1167,6 +1167,7 @@ const DOC_BUILTIN = [
 ];
 const DOC_KIND = url => {
   const u = (url || '').trim();
+  if (/docs\.google\.com\/spreadsheets\/.*[#&?]gid=\d+/.test(u)) return 'Tab Google Sheet (tab của file Cẩm nang sẽ hiện thành bảng tra cứu)';
   if (/docs\.google\.com\/(document|spreadsheets|presentation|forms)\//.test(u)) return 'Google Docs';
   if (/drive\.google\.com\/.*\/folders\//.test(u)) return 'Thư mục Drive';
   if (/drive\.google\.com/.test(u)) return 'Tệp Drive';
@@ -1200,7 +1201,20 @@ async function aDocs(v) {
         <div class="field"><label for="dt-url">Link tài liệu</label><input class="input" id="dt-url" required value="${esc(t ? t.url : '')}" placeholder="https://youtube.com/… hoặc https://drive.google.com/…">
           <span class="hint">Hỗ trợ: video / playlist / kênh YouTube · tệp hoặc thư mục Google Drive · Google Docs, Sheets, Slides. Link Drive phải chia sẻ “Bất kỳ ai có đường liên kết — Người xem”.</span>
           <span class="hint" id="dt-kind"></span></div>
+        <div class="field"><label for="dt-hb">Hoặc chọn 1 tab trong file Cẩm nang</label><select class="input" id="dt-hb"><option value="">Đang tải danh sách tab…</option></select>
+          <span class="hint">CTV xem tab đó dạng bảng có ô tìm kiếm ngay trên portal (VD tra thông tin GV), không cần quyền mở sheet. Dữ liệu cập nhật theo Cẩm nang.</span></div>
         <button class="btn btn-primary">${t ? 'Lưu' : 'Thêm tab'}</button></form>` });
+    api('/admin/handbook').then(h => {
+      const sel = $('#dt-hb'); if (!sel) return;
+      const base = h.sheet_url.replace(/\/+$/, '');
+      sel.innerHTML = `<option value="">— Chọn tab —</option>` + h.tabs.map(x => `<option value="${esc(x.gid)}" data-name="${esc(x.name)}" ${t && t.url === `${base}/edit#gid=${x.gid}` ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+      sel.onchange = () => {
+        const o = sel.selectedOptions[0]; if (!sel.value) return;
+        $('#dt-url').value = `${base}/edit#gid=${sel.value}`;
+        if (!$('#dt-name').value.trim()) $('#dt-name').value = o.dataset.name;
+        kind();
+      };
+    }).catch(() => { const sel = $('#dt-hb'); if (sel) sel.innerHTML = '<option value="">Chưa đọc được Cẩm nang</option>'; });
     const kind = () => { const k = DOC_KIND($('#dt-url').value); $('#dt-kind').textContent = k ? `Nhận dạng: ${k}` : ''; };
     $('#dt-url').oninput = kind; kind();
     $('#dt-name').focus();
@@ -1236,6 +1250,13 @@ async function aDocs(v) {
       run(a, async () => { await save(next); paint(); });
     };
     const d = await api(`/docs/${t.id}`, { query: { refresh: 1 } });
+    if (d.table) {
+      $('#dv', body).innerHTML = `<div class="card"><div class="card-head"><h2>CTV đang thấy</h2><span class="badge">Bảng ${Math.max(0, d.table.rows.length - 1)} dòng</span></div><div class="card-pad">
+        ${d.warning ? `<p><span class="badge red">${esc(d.warning)}</span></p>` : ''}
+        <p class="small muted">Tab này lấy từ file Cẩm nang, CTV xem dạng bảng có ô tìm kiếm. Cập nhật lúc ${d.table.fetched_at.slice(11, 16)}.</p>
+        <div class="small muted">${(d.table.rows.find(r => r.filter(Boolean).length >= 2) || []).filter(Boolean).map(esc).join(' · ')}</div></div></div>`;
+      return;
+    }
     const n = d.groups.reduce((a, g) => a + g.items.length, 0);
     $('#dv', body).innerHTML = `<div class="card"><div class="card-head"><h2>CTV đang thấy</h2><span class="badge">${n} mục</span></div><div class="card-pad">
       ${d.error ? `<p><span class="badge red">${esc(d.error)}</span></p>` : ''}${d.warning ? `<p><span class="badge red">${esc(d.warning)}</span></p>` : ''}

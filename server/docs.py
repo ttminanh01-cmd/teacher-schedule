@@ -1,5 +1,7 @@
 """Document: các tab tài liệu do admin tự thêm (Tên tab + 1 link YouTube / Google Drive).
 
+Link tới 1 tab của file Cẩm nang (…#gid=…) được app.py hiển thị thành bảng từ dữ liệu Cẩm nang.
+
 Link được nhận dạng và chuyển thành danh sách mục xem được ngay trên web:
 - Drive thư mục  → mọi video/tệp trong thư mục (dùng lại crm_videos)
 - Drive tệp      → trình phát /preview của Drive
@@ -53,6 +55,13 @@ def classify(url: str) -> tuple[str, str]:
             pass
         raise DocError("Link YouTube không hợp lệ (cần link video, playlist hoặc kênh)")
     raise DocError("Chỉ hỗ trợ link YouTube hoặc Google Drive / Docs")
+
+
+def sheet_tab(url: str):
+    """Link Google Sheet có chỉ rõ tab (…/spreadsheets/d/<id>/…#gid=<gid>) → (id, gid), không thì None."""
+    m = re.search(r"docs\.google\.com/spreadsheets/d/([\w-]{20,})", url or "")
+    g = re.search(r"[#&?]gid=(\d+)", url or "")
+    return (m.group(1), g.group(1)) if m and g else None
 
 
 def _drive_item(fid, title, kind="video"):

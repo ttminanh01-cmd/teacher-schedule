@@ -1465,7 +1465,17 @@ def doc_view(tid: str, refresh: bool = False, u=Depends(current_user), con=Depen
     t = next((t for t in doc_tabs(con) if t["id"] == tid), None)
     if not t:
         err("Không tìm thấy tab tài liệu", 404)
-    return {**docs.resolve(t, refresh=refresh), "id": t["id"], "name": t["name"], "url": t["url"]}
+    base = {"id": t["id"], "name": t["name"], "url": t["url"]}
+    # link tới 1 tab trong file Cẩm nang → hiện bảng từ dữ liệu Cẩm nang (CTV không cần quyền mở sheet)
+    hb = docs.sheet_tab(t["url"])
+    sid, _ = handbook_settings(con)
+    if hb and hb[0] == sid:
+        try:
+            rows, ts, warn = handbook.get_tab(sid, hb[1], refresh)
+        except handbook.HandbookError as e:
+            return {**base, "groups": [], "error": str(e)}
+        return {**base, "groups": [], "table": {"rows": rows, "fetched_at": fmt_ts(ts)}, "warning": warn}
+    return {**docs.resolve(t, refresh=refresh), **base}
 
 
 @app.get("/api/admin/docs")
