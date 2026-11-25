@@ -1083,18 +1083,18 @@ async function aHandbook(v) {
           <a class="btn" href="${esc(d.sheet_url)}" target="_blank" rel="noopener">Mở sheet</a></div>
         <span class="hint">Sheet chia sẻ “Bất kỳ ai có đường liên kết”, hoặc cài Apps Script bên dưới bằng tài khoản Google xem được sheet. Đổi link rồi bấm Lưu để tải danh sách tab mới.</span></div>
       ${d.error ? `<p style="margin-bottom:14px"><span class="badge red">${esc(d.error)}</span></p>` : ''}
-      <details class="field" ${d.gas_url ? '' : 'open'}><summary style="cursor:pointer"><b>Đọc sheet không công khai bằng tài khoản Google của bạn</b> ${d.gas_url ? '<span class="badge green">Đã cài</span>' : '<span class="muted small">(Apps Script — cài 1 lần)</span>'}</summary>
+      <details style="margin-bottom:16px" ${d.gas_url ? '' : 'open'}><summary style="cursor:pointer"><b>Đọc sheet không công khai bằng tài khoản Google của bạn</b> ${d.gas_url ? '<span class="badge green">Đã cài</span>' : '<span class="muted small">(Apps Script — cài 1 lần)</span>'}</summary>
         <ol class="small" style="margin:8px 0 8px 18px;line-height:1.7">
           <li>Đăng nhập Google bằng tài khoản <b>xem được sheet Cẩm nang</b> → mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Dự án mới</a>.</li>
           <li>Xoá code mẫu, dán đoạn code bên dưới → bấm 💾 Lưu.</li>
           <li><b>Triển khai → Tùy chọn triển khai mới</b> → loại <b>Ứng dụng web</b>; Thực thi với tư cách: <b>Tôi</b>; Người có quyền truy cập: <b>Bất kỳ ai</b> → Triển khai → cho phép quyền.</li>
           <li>Sao chép <b>URL ứng dụng web</b> (dạng https://script.google.com/macros/s/…/exec) dán vào ô dưới → bấm <b>Lưu</b>.</li>
         </ol>
-        <div style="position:relative"><textarea class="input mono" rows="6" readonly style="font-size:11.5px">${esc(d.gas_script)}</textarea>
+        <div style="position:relative;display:block;width:100%"><textarea class="input mono" rows="6" readonly style="font-size:11.5px;display:block;width:100%;box-sizing:border-box">${esc(d.gas_script)}</textarea>
           <button type="button" class="btn btn-sm" id="hb-copy" style="position:absolute;right:8px;top:8px">${icon('copy')} Sao chép</button></div>
-        <label for="hb-gas" style="margin-top:10px">URL ứng dụng web (để trống = chỉ đọc sheet công khai)</label>
-        <input class="input" id="hb-gas" value="${esc(d.gas_url)}" placeholder="https://script.google.com/macros/s/…/exec">
-        <span class="hint">Mã bảo mật trong code là riêng của portal — không chia sẻ code ra ngoài. Nếu tài khoản này mất quyền xem sheet, Cẩm nang sẽ không cập nhật được.</span></details>
+        <div class="field" style="margin-top:12px;width:100%"><label for="hb-gas">Dán URL ứng dụng web (…/exec) vào đây</label>
+          <input class="input" id="hb-gas" style="width:100%;box-sizing:border-box" value="${esc(d.gas_url)}" placeholder="https://script.google.com/macros/s/…/exec">
+          <span class="hint">Để trống = chỉ đọc sheet công khai. Mã bảo mật trong code là riêng của portal — không chia sẻ code ra ngoài. Nếu tài khoản này mất quyền xem sheet, Cẩm nang sẽ không cập nhật được.</span></div></details>
       <div class="field"><label>Cách hiển thị từng mục khi CTV tìm kiếm</label>
         <span class="hint" style="margin-bottom:6px">Hiện sẵn: hiện ngay các dòng khớp (VD Script, Template, Kho ticket) · Gợi ý: danh sách gọn, bấm để xem chi tiết (VD Tra cứu nghiệp vụ) · Khác: thu gọn cuối trang · Ẩn: CTV không thấy mục này.</span>
         ${d.tabs.length ? `<div style="border:1px solid var(--border);border-radius:8px">${d.tabs.map(t => `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border)">
