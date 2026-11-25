@@ -10,7 +10,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta
 
-from fastapi import Body, Depends, FastAPI, Header, HTTPException
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -1364,7 +1364,7 @@ def start_handbook_warmer():
 
 
 @app.get("/api/admin/handbook")
-def admin_handbook(u=Depends(admin_user), con=Depends(get_con)):
+def admin_handbook(request: Request, u=Depends(admin_user), con=Depends(get_con)):
     sid, hidden = handbook_settings(con)
     try:
         tabs, ts, warn = handbook.list_tabs(sid, refresh=True)
@@ -1375,10 +1375,25 @@ def admin_handbook(u=Depends(admin_user), con=Depends(get_con)):
     if not tok:
         tok = secrets.token_urlsafe(18)
         db.set_setting(con, "hb_gas_token", tok)
+        handbook.set_push_token(tok)
+    st = handbook.push_status()
+    portal = f"{request.headers.get('x-forwarded-proto') or request.url.scheme}://{request.headers.get('host') or request.url.netloc}"
     return {"sheet_url": f"https://docs.google.com/spreadsheets/d/{sid}", "error": error,
-            "gas_url": db.get_setting(con, "hb_gas_url"), "gas_script": handbook.apps_script(tok),
+            "gas_script": handbook.apps_script(tok, sid, portal),
+            "push": {"data_at": fmt_ts(st["data_at"]) if st["data_at"] else None,
+                     "seen_at": fmt_ts(st["seen_at"]) if st["seen_at"] else None,
+                     "other_sheet": bool(st["data_sheet"] and st["data_sheet"] != sid)},
             "fetched_at": fmt_ts(ts) if ts else None,
             "tabs": [{**t, "mode": "hidden" if t["gid"] in hidden else tab_mode(con, t)} for t in handbook.sort_tabs(tabs)]}
+
+
+@app.post("/api/handbook/push")
+def handbook_push(body: dict = Body(...), con=Depends(get_con)):
+    """Apps Script (chạy bằng tài khoản công ty của admin) gửi nội dung sheet Cẩm nang sang."""
+    try:
+        return handbook.receive(con, body)
+    except handbook.HandbookError as e:
+        err(str(e), 403 if "mã bảo mật" in str(e) else 400)
 
 
 @app.put("/api/admin/handbook")
@@ -1391,13 +1406,6 @@ def save_handbook(body: dict = Body(...), u=Depends(admin_user), con=Depends(get
     modes = {str(g): m for g, m in (body.get("modes") or {}).items() if m in handbook.MODES}
     db.set_setting(con, "handbook_modes", dumps(modes))
     db.set_setting(con, "handbook_hidden", "[]")
-    if "gas_url" in body:
-        gas_url = (body.get("gas_url") or "").strip()
-        if gas_url and not re.match(r"^https://script\.google\.com/.+/exec$", gas_url):
-            err("URL phải là link ứng dụng web Apps Script (https://script.google.com/…/exec)")
-        db.set_setting(con, "hb_gas_url", gas_url)
-    con.commit()
-    handbook.reset_bridge()
     handbook.clear_cache()
     log(con, u, "Cập nhật cấu hình Cẩm nang")
     return {"ok": True}

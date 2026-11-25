@@ -1081,20 +1081,20 @@ async function aHandbook(v) {
       <div class="field"><label for="hb-sheet">Link Google Sheet</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" style="flex:1;min-width:260px" id="hb-sheet" value="${esc(d.sheet_url)}">
           <a class="btn" href="${esc(d.sheet_url)}" target="_blank" rel="noopener">Mở sheet</a></div>
-        <span class="hint">Sheet chia sẻ “Bất kỳ ai có đường liên kết”, hoặc cài Apps Script bên dưới bằng tài khoản Google xem được sheet. Đổi link rồi bấm Lưu để tải danh sách tab mới.</span></div>
+        <span class="hint">Sheet chia sẻ “Bất kỳ ai có đường liên kết”, hoặc cài Apps Script bên dưới (cho sheet chỉ chia sẻ trong công ty). Đổi link rồi bấm Lưu để tải danh sách tab mới.</span></div>
       ${d.error ? `<p style="margin-bottom:14px"><span class="badge red">${esc(d.error)}</span></p>` : ''}
-      <details style="margin-bottom:16px" ${d.gas_url ? '' : 'open'}><summary style="cursor:pointer"><b>Đọc sheet không công khai bằng tài khoản Google của bạn</b> ${d.gas_url ? '<span class="badge green">Đã cài</span>' : '<span class="muted small">(Apps Script — cài 1 lần)</span>'}</summary>
+      <details style="margin-bottom:16px" ${d.push.data_at ? '' : 'open'}><summary style="cursor:pointer"><b>Sheet chỉ chia sẻ trong công ty? Cài Apps Script để tự gửi sang portal</b> ${d.push.data_at ? '<span class="badge green">Đã cài</span>' : '<span class="muted small">(cài 1 lần)</span>'}</summary>
+        ${d.push.data_at ? `<p class="small" style="margin:8px 0">Dữ liệu sheet nhận lúc <b>${hm(d.push.data_at)} ${fmtDate(d.push.data_at.slice(0, 10))}</b>${d.push.seen_at ? ` · Apps Script gửi kiểm tra gần nhất lúc ${hm(d.push.seen_at)} ${fmtDate(d.push.seen_at.slice(0, 10))}` : ''}. Sheet đổi thì tối đa ~10 phút sau portal cập nhật.</p>` : ''}
+        ${d.push.other_sheet ? '<p style="margin:8px 0"><span class="badge amber">Apps Script đang gửi một sheet khác link ở trên — sao chép lại code bên dưới, dán đè rồi chạy lại setup</span></p>' : ''}
         <ol class="small" style="margin:8px 0 8px 18px;line-height:1.7">
-          <li>Đăng nhập Google bằng tài khoản <b>xem được sheet Cẩm nang</b> → mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Dự án mới</a>.</li>
-          <li>Xoá code mẫu, dán đoạn code bên dưới → bấm 💾 Lưu.</li>
-          <li><b>Triển khai → Tùy chọn triển khai mới</b> → loại <b>Ứng dụng web</b>; Thực thi với tư cách: <b>Tôi</b>; Người có quyền truy cập: <b>Bất kỳ ai</b> → Triển khai → cho phép quyền.</li>
-          <li>Sao chép <b>URL ứng dụng web</b> (dạng https://script.google.com/macros/s/…/exec) dán vào ô dưới → bấm <b>Lưu</b>.</li>
+          <li>Đăng nhập Google bằng tài khoản <b>công ty xem được sheet Cẩm nang</b> → mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Dự án mới</a>.</li>
+          <li>Xoá code mẫu, dán đoạn code bên dưới → bấm 💾 <b>Lưu</b>.</li>
+          <li>Trên thanh công cụ, ô chọn hàm chọn <b>setup</b> → bấm <b>▶ Chạy</b> → <b>Xem xét quyền</b> → chọn tài khoản → <b>Cho phép</b>.</li>
+          <li>Nhật ký hiện “Đã gửi … tab sang portal” là xong → tải lại trang này. <b>Không cần</b> bấm Triển khai.</li>
         </ol>
         <div style="position:relative;display:block;width:100%"><textarea class="input mono" rows="6" readonly style="font-size:11.5px;display:block;width:100%;box-sizing:border-box">${esc(d.gas_script)}</textarea>
           <button type="button" class="btn btn-sm" id="hb-copy" style="position:absolute;right:8px;top:8px">${icon('copy')} Sao chép</button></div>
-        <div class="field" style="margin-top:12px;width:100%"><label for="hb-gas">Dán URL ứng dụng web (…/exec) vào đây</label>
-          <input class="input" id="hb-gas" style="width:100%;box-sizing:border-box" value="${esc(d.gas_url)}" placeholder="https://script.google.com/macros/s/…/exec">
-          <span class="hint">Để trống = chỉ đọc sheet công khai. Mã bảo mật trong code là riêng của portal — không chia sẻ code ra ngoài. Nếu tài khoản này mất quyền xem sheet, Cẩm nang sẽ không cập nhật được.</span></div></details>
+        <span class="hint">Đổi link sheet ở trên thì bấm Lưu, sao chép lại code và chạy lại setup. Mã bảo mật trong code là riêng của portal — không chia sẻ ra ngoài. Tài khoản chạy script mất quyền xem sheet thì Cẩm nang giữ bản cũ, không cập nhật nữa.</span></details>
       <div class="field"><label>Cách hiển thị từng mục khi CTV tìm kiếm</label>
         <span class="hint" style="margin-bottom:6px">Hiện sẵn: hiện ngay các dòng khớp (VD Script, Template, Kho ticket) · Gợi ý: danh sách gọn, bấm để xem chi tiết (VD Tra cứu nghiệp vụ) · Khác: thu gọn cuối trang · Ẩn: CTV không thấy mục này.</span>
         ${d.tabs.length ? `<div style="border:1px solid var(--border);border-radius:8px">${d.tabs.map(t => `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border)">
@@ -1106,7 +1106,7 @@ async function aHandbook(v) {
   $('#hb-form').onsubmit = e => {
     e.preventDefault();
     const modes = Object.fromEntries($$('#hb-form select[data-gid]').map(sel => [sel.dataset.gid, sel.value]));
-    run(e.submitter, async () => { await api('/admin/handbook', { method: 'PUT', body: { sheet: $('#hb-sheet').value, modes, gas_url: $('#hb-gas').value } }); toast('Đã lưu'); aHandbook(v); });
+    run(e.submitter, async () => { await api('/admin/handbook', { method: 'PUT', body: { sheet: $('#hb-sheet').value, modes } }); toast('Đã lưu'); aHandbook(v); });
   };
   $('#hb-copy').onclick = () => navigator.clipboard.writeText(d.gas_script).then(() => toast('Đã sao chép code'));
 }

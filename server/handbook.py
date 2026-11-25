@@ -1,10 +1,9 @@
 """Cẩm nang: đọc trực tiếp Google Sheet.
 
 Hai cách đọc:
-  - Đã cài Apps Script (Quản trị → Cẩm nang): đọc qua web app chạy bằng tài khoản Google
-    của người triển khai → đọc được cả sheet KHÔNG công khai mà tài khoản đó xem được.
+  - Đã cài Apps Script (Quản trị → Cẩm nang): script chạy bằng tài khoản công ty của admin tự GỬI sheet
+    sang portal 10 phút/lần (dùng cho sheet chỉ chia sẻ trong công ty).
   - Chưa cài: đọc sheet công khai ("Bất kỳ ai có link đều xem được").
-Nếu Apps Script lỗi thì thử lại kiểu công khai.
 
 Mỗi tab của sheet là một mục. Dữ liệu được cache CACHE_TTL giây nên khi sheet
 thay đổi, web sẽ tự cập nhật theo sau tối đa CACHE_TTL giây (hoặc bấm "Làm mới").
@@ -55,107 +54,117 @@ def _get(url: str) -> str:
     return body
 
 
-# ----- Apps Script: đọc bằng quyền tài khoản Google của người triển khai
-_bridge_cache: tuple = (0.0, None)
+# ----- Apps Script gửi dữ liệu sang (sheet chỉ chia sẻ trong công ty, portal không tự đọc được)
+# Script chạy bằng tài khoản công ty của admin, trigger 10 phút/lần: đọc toàn bộ sheet, chỉ gửi khi có thay đổi,
+# không đổi thì gửi "ping" nhẹ. Bản nhận được lưu DB (settings.hb_snapshot) + giữ trong bộ nhớ, nên Neon chỉ bị
+# đánh thức khi sheet thực sự đổi (và 1 lần lúc khởi động).
+_snap: dict = {"loaded": False, "data": None, "token": "", "seen": None}
 
 
-def bridge():
-    """(url, token) của Apps Script nếu đã cài. Lấy từ biến môi trường GAS_URL/GAS_TOKEN hoặc cài đặt trong DB."""
-    global _bridge_cache
-    ts, val = _bridge_cache
-    if time.time() - ts < 1800:  # đọc DB 30 phút/lần để Neon được ngủ; lưu cài đặt thì reset_bridge() ngay
-        return val
-    url, tok = os.environ.get("GAS_URL", ""), os.environ.get("GAS_TOKEN", "")
-    if not url:
+def _load_snapshot():
+    if _snap["loaded"]:
+        return
+    try:
+        from . import db
+        con = db.connect()
         try:
-            from . import db
-            con = db.connect()
-            try:
-                url, tok = db.get_setting(con, "hb_gas_url"), db.get_setting(con, "hb_gas_token")
-            finally:
-                con.close()
-        except Exception:  # noqa: BLE001 — không đọc được DB thì coi như chưa cài
-            url = ""
-    val = (url, tok) if url and tok else None
-    _bridge_cache = (time.time(), val)
-    return val
+            raw = db.get_setting(con, "hb_snapshot")
+            _snap["token"] = db.get_setting(con, "hb_gas_token")
+        finally:
+            con.close()
+        _snap["data"] = json.loads(raw) if raw else None
+    except Exception:  # noqa: BLE001 — không đọc được DB thì coi như chưa có
+        _snap["data"] = None
+    _snap["loaded"] = True
 
 
-def reset_bridge():
-    global _bridge_cache
-    _bridge_cache = (0.0, None)
+def snapshot(sheet_id: str | None = None):
+    """Bản sheet do Apps Script gửi (nếu có, và đúng sheet đang cấu hình)."""
+    _load_snapshot()
+    d = _snap["data"]
+    if d and (sheet_id is None or d.get("sheet") == sheet_id):
+        return d
+    return None
 
 
-def apps_script(token: str) -> str:
-    return f"""// Cổng CTV → đọc Cẩm nang bằng quyền tài khoản Google của bạn (sheet không cần công khai).
-// Tạo tại script.google.com → Dự án mới, dán code này, Triển khai → Ứng dụng web (Thực thi: Tôi, Truy cập: Bất kỳ ai).
+def push_token() -> str:
+    _load_snapshot()
+    return _snap["token"]
+
+
+def set_push_token(tok: str):
+    _snap["token"] = tok
+
+
+def receive(con, body: dict) -> dict:
+    """Apps Script gọi vào. body: {token, sheet, ping?} hoặc {token, sheet, tabs: [{gid, name, rows, links}]}."""
+    from . import db
+    tok = push_token()
+    if not tok or body.get("token") != tok:
+        raise HandbookError("Sai mã bảo mật")
+    now = time.time()
+    _snap["seen"] = now
+    if body.get("ping"):
+        return {"ok": True, "changed": False}
+    tabs = body.get("tabs")
+    if not isinstance(tabs, list) or not body.get("sheet"):
+        raise HandbookError("Dữ liệu không hợp lệ")
+    data = {"sheet": str(body["sheet"]), "at": now,
+            "tabs": [{"gid": str(t["gid"]), "name": str(t["name"]), "rows": t.get("rows") or [],
+                      "links": t.get("links") or []} for t in tabs]}
+    db.set_setting(con, "hb_snapshot", json.dumps(data, ensure_ascii=False))
+    _snap["data"] = data
+    clear_cache()
+    return {"ok": True, "changed": True, "tabs": len(data["tabs"])}
+
+
+def push_status() -> dict:
+    d = snapshot()
+    return {"data_at": d["at"] if d else None, "data_sheet": d["sheet"] if d else None,
+            "seen_at": _snap["seen"]}
+
+
+def apps_script(token: str, sheet_id: str, portal: str) -> str:
+    return f"""// Cổng CTV ← Cẩm nang. Chạy bằng tài khoản công ty của bạn (sheet không cần công khai).
+// Cài: script.google.com → Dự án mới → dán code → 💾 Lưu → chọn hàm "setup" → ▶ Chạy → cho phép quyền.
+// Sau đó cứ 10 phút script tự gửi sheet sang portal (chỉ gửi khi sheet có thay đổi).
+const PORTAL = '{portal}/api/handbook/push';
 const TOKEN = '{token}';
+const SHEET_ID = '{sheet_id}';
+const LINK_MAX_ROWS = {LINK_MAX_ROWS};
 
-function doGet(e) {{
-  const p = e.parameter;
-  if (p.token !== TOKEN) return out({{ ok: false, error: 'Sai mã bảo mật' }});
-  try {{
-    const ss = SpreadsheetApp.openById(p.id);
-    if (p.action === 'tabs') {{
-      return out({{ ok: true, tabs: ss.getSheets().map(s => ({{ gid: String(s.getSheetId()), name: s.getName() }})) }});
-    }}
-    if (p.action === 'values') {{
-      const sh = ss.getSheets().find(s => String(s.getSheetId()) === String(p.gid));
-      if (!sh) return out({{ ok: false, error: 'Không thấy tab gid ' + p.gid }});
-      const rg = sh.getDataRange(), rows = rg.getDisplayValues(), links = [];
-      if (rows.length <= Number(p.links || 0)) {{
-        rg.getRichTextValues().forEach((r, i) => r.forEach((c, j) => {{
-          if (!c) return;
-          const a = c.getRuns().filter(x => x.getLinkUrl()).map(x => [x.getText().trim(), x.getLinkUrl()]);
-          if (!a.length && c.getLinkUrl()) a.push([c.getText().trim(), c.getLinkUrl()]);
-          if (a.length) links.push([i, j, a]);
-        }}));
-      }}
-      return out({{ ok: true, rows: rows, links: links }});
-    }}
-    return out({{ ok: false, error: 'Thao tác không hợp lệ' }});
-  }} catch (err) {{
-    return out({{ ok: false, error: 'Tài khoản chạy Apps Script không mở được sheet: ' + err.message }});
-  }}
+function setup() {{
+  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('sync').timeBased().everyMinutes(10).create();
+  PropertiesService.getScriptProperties().deleteProperty('hash');
+  sync();
 }}
 
-function out(o) {{
-  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+function sync() {{
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const tabs = ss.getSheets().map(sh => {{
+    const rg = sh.getDataRange(), rows = rg.getDisplayValues(), links = [];
+    if (rows.length <= LINK_MAX_ROWS) {{
+      rg.getRichTextValues().forEach((r, i) => r.forEach((c, j) => {{
+        if (!c) return;
+        const a = c.getRuns().filter(x => x.getLinkUrl()).map(x => [x.getText().trim(), x.getLinkUrl()]);
+        if (!a.length && c.getLinkUrl()) a.push([c.getText().trim(), c.getLinkUrl()]);
+        if (a.length) links.push([i, j, a]);
+      }}));
+    }}
+    return {{ gid: String(sh.getSheetId()), name: sh.getName(), rows: rows, links: links }};
+  }});
+  const data = JSON.stringify(tabs);
+  const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, data, Utilities.Charset.UTF_8));
+  const props = PropertiesService.getScriptProperties();
+  const same = props.getProperty('hash') === hash;
+  const body = same ? {{ token: TOKEN, sheet: SHEET_ID, ping: true }} : {{ token: TOKEN, sheet: SHEET_ID, tabs: tabs }};
+  const res = UrlFetchApp.fetch(PORTAL, {{ method: 'post', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }});
+  if (res.getResponseCode() !== 200) throw new Error('Portal báo lỗi ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
+  if (!same) props.setProperty('hash', hash);
+  Logger.log(same ? 'Sheet không đổi' : 'Đã gửi ' + tabs.length + ' tab sang portal');
 }}
 """
-
-
-def gas(action: str, **params) -> dict:
-    url, tok = bridge() or ("", "")
-    if not url:
-        raise HandbookError("Chưa cài Apps Script")
-    q = urllib.parse.urlencode({"action": action, "token": tok, **params})
-    req = urllib.request.Request(f"{url}?{q}", headers={"User-Agent": "ctv-portal"})
-    try:
-        with urllib.request.urlopen(req, timeout=90) as r:
-            body = r.read().decode("utf-8", "replace")
-    except Exception as e:  # noqa: BLE001
-        raise HandbookError(f"Không gọi được Apps Script ({e.__class__.__name__})")
-    try:
-        res = json.loads(body)
-    except ValueError:
-        raise HandbookError("Apps Script trả về không đúng — kiểm tra URL (…/exec), code đã dán đúng và triển khai Truy cập: Bất kỳ ai")
-    if not res.get("ok"):
-        raise HandbookError(res.get("error") or "Apps Script báo lỗi")
-    return res
-
-
-def _via(bridged, public):
-    """Ưu tiên Apps Script; lỗi thì thử kiểu công khai, vẫn lỗi thì báo lỗi của Apps Script."""
-    if not bridge():
-        return public()
-    try:
-        return bridged()
-    except HandbookError as e:
-        try:
-            return public()
-        except HandbookError:
-            raise e
 
 
 def _cached(key: str, loader, refresh: bool):
@@ -194,9 +203,12 @@ def list_tabs(sheet_id: str, refresh: bool = False):
             raise HandbookError("Không đọc được danh sách tab — sheet không công khai và chưa cài Apps Script")
         return tabs
 
-    def bridged():
-        return [{"gid": str(t["gid"]), "name": t["name"]} for t in gas("tabs", id=sheet_id)["tabs"]]
-    return _cached(f"tabs:{sheet_id}", lambda: _via(bridged, public), refresh)
+    def load():
+        snap = snapshot(sheet_id)
+        if snap:
+            return [{"gid": t["gid"], "name": t["name"]} for t in snap["tabs"]]
+        return public()
+    return _cached(f"tabs:{sheet_id}", load, refresh)
 
 
 LINK_MAX_ROWS = 2000  # sheet lớn hơn (VD CSS ~10k dòng) bỏ qua bước lấy link để không chậm
@@ -266,14 +278,17 @@ def fetch_rows(sheet_id: str, gid: str, links: bool = False) -> list[list[str]]:
             rows = attach_links(sheet_id, gid, [[c.strip() for c in r] for r in rows])
         return rows
 
-    def bridged():
-        res = gas("values", id=sheet_id, gid=gid, links=LINK_MAX_ROWS if links else 0)
-        rows = [[str(c) for c in r] for r in res["rows"]]
-        for r, c, anchors in res.get("links") or []:
-            if r < len(rows) and c < len(rows[r]):
-                rows[r][c] = wrap_links(rows[r][c].strip(), anchors)
-        return rows
-    return _via(bridged, public)
+    snap = snapshot(sheet_id)
+    if not snap:
+        return public()
+    tab = next((t for t in snap["tabs"] if t["gid"] == str(gid)), None)
+    if not tab:
+        raise HandbookError("Không thấy tab này trong dữ liệu Apps Script gửi sang")
+    rows = [[str(c) for c in r] for r in tab["rows"]]
+    for r, c, anchors in (tab.get("links") or []) if links else []:
+        if r < len(rows) and c < len(rows[r]):
+            rows[r][c] = wrap_links(rows[r][c].strip(), anchors)
+    return rows
 
 
 def get_tab(sheet_id: str, gid: str, refresh: bool = False):
