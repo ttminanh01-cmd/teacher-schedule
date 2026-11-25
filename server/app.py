@@ -1474,7 +1474,7 @@ def doc_view(tid: str, refresh: bool = False, u=Depends(current_user), con=Depen
             blocks, ts, warn = handbook.get_blocks(sid, hb[1], refresh)
         except handbook.HandbookError as e:
             return {**base, "groups": [], "error": str(e)}
-        # cột "Link profile" của bảng GV: lấy link theo tên từ icanconnect.vn (sheet có thể ghi sai)
+        # cột "Link teacher site" của bảng GV: lấy link theo tên từ icanconnect.vn (sheet có thể ghi sai)
         blocks, ican_stat = ican.apply(blocks, t["name"], refresh)
         out = {**base, "groups": [], "table": {"blocks": blocks, "fetched_at": fmt_ts(ts)}, "warning": warn}
         if ican_stat and u["role"] == "admin":

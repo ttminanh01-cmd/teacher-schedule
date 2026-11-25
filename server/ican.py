@@ -2,8 +2,8 @@
 
 Trang (Next.js) nhúng sẵn toàn bộ danh sách GV trong __NEXT_DATA__: tên, slug, "Giáo viên giảng dạy tại …".
 Link hồ sơ = https://www.icanconnect.vn/giao-vien/<slug>. Không có mã GV → khớp theo tên.
-Dùng cho bảng tra cứu GV ở mục Tài liệu: cột "Link profile" lấy link từ đây (sheet có thể ghi sai),
-không tìm thấy tên thì giữ link trong sheet.
+Dùng cho bảng tra cứu GV ở mục Tài liệu: cột "Link teacher site" lấy link từ đây (sheet có thể ghi sai),
+không tìm thấy tên thì giữ link trong sheet. Cột "Link profile" giữ nguyên theo sheet.
 """
 import json
 import re
@@ -102,61 +102,42 @@ def find(name: str, brand: str, lst: list):
 LINK = re.compile(r"⟦([^⟦⟧|]*)\|([^⟧]*)⟧")
 
 
-def _url(cell: str) -> str:
-    m = LINK.search(cell or "")
-    if m:
-        return m.group(2).strip()
-    m = re.search(r"https?://\S+", cell or "")
-    return m.group(0) if m else ""
-
-
 def _label(cell: str) -> str:
-    return LINK.sub(r"\1", cell or "").strip() or "Link"
-
-
-def is_profile(url: str) -> bool:
-    return "icanconnect.vn/giao-vien/" in (url or "")
+    return LINK.sub(lambda m: m.group(1), cell or "").strip() or "Link"
 
 
 def apply(blocks: list, tab_name: str, refresh: bool = False) -> tuple[list, dict]:
-    """Bảng GV: cột "Link profile" = link icanconnect khớp theo cột "Tên"; cột "Link teacher site" = link không phải
-    icanconnect (sửa các dòng sheet ghi nhầm 2 cột cho nhau). Không sửa blocks gốc (đang cache).
-    → (blocks mới, {matched, missing: [tên], swapped: [tên], error})"""
+    """Bảng GV: cột "Link teacher site" = trang GV trên icanconnect khớp theo cột "Tên" (sheet có thể ghi sai);
+    không thấy tên trên web thì giữ link sheet. Cột "Link profile" giữ nguyên theo sheet.
+    Không sửa blocks gốc (đang cache). → (blocks mới, {matched, missing: [tên], error})"""
     targets = []
     for b in blocks:
         h = [_fold(c) for c in b["header"]]
-        li = next((i for i, c in enumerate(h) if c == "link profile"), -1)
         ti = next((i for i, c in enumerate(h) if "teacher site" in c), -1)
         ni = next((i for i, c in enumerate(h) if c in ("ten", "ten gv", "ho ten", "ten giao vien")), -1)
-        targets.append((li, ti, ni))
-    if all(li < 0 or ni < 0 for li, _, ni in targets):
+        targets.append((ti, ni))
+    if all(ti < 0 or ni < 0 for ti, ni in targets):
         return blocks, {}
     lst = teachers(refresh)
-    stat = {"matched": 0, "missing": [], "swapped": [], "error": last_error()}
+    stat = {"matched": 0, "missing": [], "error": last_error()}
+    if not lst:
+        return blocks, stat
     out = []
-    for b, (li, ti, ni) in zip(blocks, targets):
-        if li < 0 or ni < 0:
+    for b, (ti, ni) in zip(blocks, targets):
+        if ti < 0 or ni < 0:
             out.append(b)
             continue
         brand = brand_of(b.get("title") or "") or brand_of(tab_name)
         rows = []
         for r in b["rows"]:
-            r = list(r) + [""] * (max(li, ti, ni) + 1 - len(r))
+            r = list(r) + [""] * (max(ti, ni) + 1 - len(r))
             name = r[ni].strip()
-            p_url, t_url = _url(r[li]), _url(r[ti]) if ti >= 0 else ""
-            # link teacher site = link KHÔNG phải trang icanconnect, ở cột nào cũng được
-            site = t_url if t_url and not is_profile(t_url) else p_url if p_url and not is_profile(p_url) else ""
-            web = find(name, brand, lst) if lst else None
-            prof = web or (p_url if is_profile(p_url) else t_url if is_profile(t_url) else p_url if p_url != site else "")
-            if web:
+            url = find(name, brand, lst)
+            if url:
+                r[ti] = f"⟦{_label(r[ti])}|{url}⟧"
                 stat["matched"] += 1
             elif name:
                 stat["missing"].append(name)
-            if ti >= 0 and (is_profile(t_url) or (p_url and not is_profile(p_url) and site == p_url)):
-                stat["swapped"].append(name)
-            r[li] = f"⟦{_label(r[li])}|{prof}⟧" if prof else ("" if p_url else r[li])
-            if ti >= 0:
-                r[ti] = f"⟦{_label(r[ti])}|{site}⟧" if site else ""
             rows.append(r)
         out.append({**b, "rows": rows})
     return out, stat
