@@ -445,7 +445,7 @@ function sheetTableHtml(header, body, q = '') {
   const cell = c => {
     if (!c) return '';
     const html = `<div class="hb-cell">${mark(linkify(c), q)}</div>`;
-    return c.length > 80 ? html + `<button class="btn btn-sm btn-ghost hb-copy" data-copy>${icon('copy')} Sao chép</button>` : html;
+    return c.replace(LINK_RE, '$1').length > 80 ? html + `<button class="btn btn-sm btn-ghost hb-copy" data-copy>${icon('copy')} Sao chép</button>` : html;
   };
   return `<div class="table-wrap hb-wrap"><table class="table hb-table">
     ${header.some(Boolean) ? `<thead><tr>${header.map((c, i) => `<th class="${widths[i]}">${esc(c)}</th>`).join('')}</tr></thead>` : ''}
@@ -872,7 +872,7 @@ async function pageDocs(v) {
       : !hits ? `<div class="card">${emptyState(`Không có dòng nào chứa “${q}”`)}</div>`
       : shown.map(b => `<div class="card" style="margin-bottom:14px">
           ${b.title || shown.length > 1 ? `<div class="card-head"><h2>${esc(b.title || 'Bảng')}</h2><span class="badge">${ws.length ? `${b.list.length} khớp` : `${b.rows.length} dòng`}</span></div>` : ''}
-          ${sheetTableHtml(b.header, b.list.slice(0, tlimit), q)}
+          ${sheetTableHtml(b.header, b.list.slice(0, tlimit))}
           ${b.list.length > tlimit ? `<div class="hb-more"><span class="muted small">Đang hiện ${tlimit}/${b.list.length} dòng</span><button class="btn" data-tmore>Xem thêm</button></div>` : ''}</div>`).join('');
     $('#doc-count').textContent = ws.length ? `${hits} dòng khớp` : `${total} dòng · cập nhật lúc ${d.table.fetched_at.slice(11, 16)}`;
   };
