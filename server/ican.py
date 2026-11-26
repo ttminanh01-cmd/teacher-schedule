@@ -16,6 +16,7 @@ URL = "https://www.icanconnect.vn/giao-vien"
 TTL = 6 * 3600
 _lock = threading.Lock()
 _cache = {"at": 0.0, "list": None, "error": None}
+_refreshing = threading.Event()
 
 
 def _fold(s: str) -> str:
@@ -57,24 +58,57 @@ def _fetch() -> list:
     return out
 
 
-def teachers(refresh: bool = False) -> list:
-    """Danh sách GV (cache TTL; refresh chỉ tải lại nếu bản cũ hơn 10 phút). Lỗi mạng → dùng bản cũ / []."""
-    with _lock:
-        age = time.time() - _cache["at"]
-        if _cache["list"] is not None and (age < TTL and not (refresh and age > 600)):
-            return _cache["list"]
+def _index(lst: list) -> dict:
+    """Tra tên nhanh: {(cách chuẩn hoá, tên đã chuẩn hoá): [GV]} — khỏi so từng dòng với cả nghìn GV."""
+    idx = {}
+    for t in lst:
+        for kind, norm in (("exact", _exact), ("fold", _fold)):
+            idx.setdefault((kind, norm(t["name"])), []).append(t)
+    return idx
+
+
+def _load() -> list:
     try:
         lst, err = _fetch(), None
     except Exception as e:  # noqa: BLE001
         lst, err = None, f"Không tải được danh sách GV từ icanconnect.vn ({e.__class__.__name__})"
     with _lock:
         if lst is not None:
-            _cache.update(at=time.time(), list=lst, error=None)
+            _cache.update(at=time.time(), list=lst, index=_index(lst), error=None)
         else:
             _cache.update(at=time.time() - TTL + 600, error=err)  # thử lại sau 10 phút
-            if _cache["list"] is None:
-                return []
+        return _cache["list"] or []
+
+
+def _refresh_bg():
+    if _refreshing.is_set():
+        return
+    _refreshing.set()
+
+    def run():
+        try:
+            _load()
+        finally:
+            _refreshing.clear()
+    threading.Thread(target=run, daemon=True).start()
+
+
+def warm():
+    """Gọi lúc server khởi động: tải sẵn để người mở tab đầu tiên không phải chờ."""
+    _refresh_bg()
+
+
+def teachers(refresh: bool = False) -> list:
+    """Danh sách GV. Có bản cũ thì trả ngay, hết hạn (TTL) / bấm Làm mới (bản > 10 phút) thì tải lại ngầm.
+    Chưa có bản nào thì tải luôn. Lỗi mạng → dùng bản cũ / []."""
+    with _lock:
+        age = time.time() - _cache["at"]
+        have = _cache["list"] is not None
+    if have:
+        if age >= TTL or (refresh and age > 600):
+            _refresh_bg()
         return _cache["list"]
+    return _load()
 
 
 def last_error():
@@ -86,9 +120,11 @@ def find(name: str, brand: str, lst: list):
     → bỏ dấu, cùng các bước trên. Trả về url hoặc None."""
     if not name.strip():
         return None
-    for norm in (_exact, _fold):
-        key = norm(name)
-        hits = [t for t in lst if norm(t["name"]) == key]
+    idx = _cache.get("index") if lst is _cache["list"] else None
+    if idx is None:
+        idx = _index(lst)
+    for kind, norm in (("exact", _exact), ("fold", _fold)):
+        hits = idx.get((kind, norm(name)), [])
         if not hits:
             continue
         same = [t for t in hits if brand and t["brand"] == brand]
@@ -144,7 +180,7 @@ def apply(blocks: list, tab_name: str, refresh: bool = False) -> tuple[list, dic
 
 
 SPW_TEACHER = "https://speakwell.ican.vn/teachers/"
-CODE = re.compile(r"\bTC\d{4,}\b", re.I)
+CODE = re.compile(r"\bTC[A-Z]*\d{4,}\b", re.I)  # TC015922, TCICL260080
 
 
 def add_spw_schedule(blocks: list, tab_name: str) -> list:

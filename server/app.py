@@ -10,6 +10,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta
 
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +20,7 @@ from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
 app = FastAPI(title="Cổng CTV")
+app.add_middleware(GZipMiddleware, minimum_size=2000)  # bảng Tài liệu vài trăm dòng → nén cho tải nhanh
 db.init_db()
 
 
@@ -1424,6 +1426,12 @@ def start_week_scheduler():
 def start_telegram_webhook():
     if os.environ.get("TELEGRAM_WEBHOOK", "1") == "1":
         notify.ensure_webhook_async()
+
+
+@app.on_event("startup")
+def start_ican_warmer():
+    if os.environ.get("HANDBOOK_WARM", "1") == "1":
+        ican.warm()
 
 
 @app.on_event("startup")
