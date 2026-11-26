@@ -71,11 +71,20 @@ def _rec(src: str, row, name, email, phone, **extra) -> dict:
 KEYS = ("s1", "s2", "vh")
 
 
+FORMAT = 2  # đổi định dạng dữ liệu → bản lưu cũ bỏ đi, Apps Script tự gửi lại
+
+
+def _cell(r, i) -> str:
+    return str(r[i + 1]).strip() if i + 1 < len(r) else ""
+
+
 def _make(src: str, r) -> dict:
-    if src == "s1":    # [dòng, ngày bàn giao, tên, SĐT, email]
-        return _rec("s1", r[0], r[2], r[4], r[3], date=str(r[1]))
-    if src == "s2":    # [dòng, CreatedAt, PaymentDate, tên, email, SĐT]
-        return _rec("s2", r[0], r[3], r[4], r[5], created=str(r[1]), paid=str(r[2]))
+    """s1 / s2: [dòng, ...toàn bộ ô của dòng (A, B, C…)]. vh: các cột đã chọn."""
+    if src == "s1":    # A ngày bàn giao, D tên, E SĐT, F email
+        return _rec("s1", int(r[0]), _cell(r, 3), _cell(r, 5), _cell(r, 4), date=_cell(r, 0), cells=r[1:])
+    if src == "s2":    # B CreatedAt, K tên, N email, O SĐT, AH PaymentDate
+        return _rec("s2", int(r[0]), _cell(r, 10), _cell(r, 13), _cell(r, 14), created=_cell(r, 1), paid=_cell(r, 33),
+                    cells=r[1:])
     # vh: [dòng, tên, email, SĐT, ngày TT, username, password, cấp TK, mail]
     return _rec("vh", r[0], r[1], r[2], r[3], paid=str(r[4]), username=str(r[5]).strip(), password=str(r[6]).strip(),
                 granted=str(r[7]).strip().upper() == "TRUE", mail=str(r[8]).strip())
@@ -100,7 +109,9 @@ def _archive(con=None) -> dict:
                 arc = json.loads(zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
             except Exception:  # noqa: BLE001
                 arc = None
-        _state["archive"] = arc or {"cursor": {k: 0 for k in KEYS}, "rows": {k: [] for k in KEYS}}
+        if not arc or arc.get("v") != FORMAT:
+            arc = {"v": FORMAT, "cursor": {k: 0 for k in KEYS}, "rows": {k: [] for k in KEYS}, "headers": {}}
+        _state["archive"] = arc
     return _state["archive"]
 
 
@@ -144,11 +155,16 @@ def receive(con, body: dict) -> dict:
     now = time.time()
     _state["seen"] = now
     op = body.get("op")
+    if op in ("archive", "live") and body.get("v") != FORMAT:
+        raise MiloError("Code Apps Script đã cũ — sao chép lại code mới ở trang Quản trị → Document → TK Milo, dán đè rồi chạy miloSetup")
     arc = _archive(con)
+    for k, h in (body.get("headers") or {}).items():  # tiêu đề cột của file gốc
+        if k in ("s1", "s2") and isinstance(h, list):
+            arc.setdefault("headers", {})[k] = [str(x).strip() for x in h]
     if op == "state":
         return {"ok": True, "archive": arc["cursor"], "hash": _state["hash"] if _state.get("live") is not None else None}
     if op == "reset":
-        _state["archive"] = {"cursor": {k: 0 for k in KEYS}, "rows": {k: [] for k in KEYS}}
+        _state["archive"] = {"v": FORMAT, "cursor": {k: 0 for k in KEYS}, "rows": {k: [] for k in KEYS}, "headers": {}}
         _save_archive(con)
         _state.update(live=None, hash=None)
         _rebuild()
@@ -196,6 +212,45 @@ def status() -> dict:
     at = _state["at"] or ((_state.get("archive") or {}).get("at") if d else None)
     return {"data_at": at, "seen_at": _state["seen"],
             "count": {s: sum(r["src"] == s for r in d["recs"]) for s in ("s1", "s2", "vh")} if d else None}
+
+
+# tóm tắt "bàn giao lúc nào, ai bàn giao" — tìm cột theo tiêu đề (bỏ dấu, chữ thường)
+SUMMARY = {
+    "s1": [("Bàn giao lúc", ("ngay ban giao",)), ("Người bàn giao", ("email ng ban giao", "email nguoi ban giao")),
+           ("Team", ("team sales", "team")), ("Sản phẩm", ("ten san pham", "product name")), ("Mã đơn", ("ma don hang",))],
+    "s2": [("Tạo lúc", ("createdat",)), ("Thanh toán", ("paymentdate",)), ("Người tạo", ("creatoremail",)),
+           ("Team", ("team",)), ("Curriculum", ("curriculum",)), ("Bill", ("billid",))],
+}
+
+
+def _col_letter(i: int) -> str:
+    s = ""
+    i += 1
+    while i:
+        i, m = divmod(i - 1, 26)
+        s = chr(65 + m) + s
+    return s
+
+
+def _public(r: dict) -> dict:
+    out = {k: v for k, v in r.items() if k not in ("e", "p", "f", "cells")}
+    if r["src"] in ("s1", "s2"):
+        heads = (_state["archive"] or {}).get("headers", {}).get(r["src"], [])
+        cells = [str(c).strip() for c in r.get("cells") or []]
+        fields = []
+        for i, c in enumerate(cells):
+            h = heads[i] if i < len(heads) and heads[i] else f"Cột {_col_letter(i)}"
+            if c and c.lower() not in ("nan", "1970-01-01 0:00:00", "1970-01-01 00:00:00"):
+                fields.append([h, c])
+        out["fields"] = fields
+        fh = [fold(h) for h, _ in fields]
+        summ = []
+        for label, keys in SUMMARY[r["src"]]:
+            j = next((j for j, h in enumerate(fh) if h in keys), -1)
+            if j >= 0:
+                summ.append([label, fields[j][1]])
+        out["summary"] = summ
+    return out
 
 
 def search(q: str, limit: int = 20) -> dict:
@@ -251,7 +306,7 @@ def search(q: str, limit: int = 20) -> dict:
     students = []
     for idx in groups.values():
         rs = [recs[i] for i in sorted(idx, key=lambda i: (recs[i]["src"], recs[i]["row"]))]
-        clean = lambda r: {k: v for k, v in r.items() if k not in ("e", "p", "f")}
+        clean = lambda r: _public(r)
         vh = [clean(r) for r in rs if r["src"] == "vh"]
         s1 = [clean(r) for r in rs if r["src"] == "s1"]
         s2 = [clean(r) for r in rs if r["src"] == "s2"]
@@ -277,7 +332,8 @@ def apps_script(token: str, portal: str, ids: dict) -> str:
     return f"""// Cổng CTV ← dữ liệu tài khoản Milo (tab "TK Milo" trong Tài liệu). Chạy bằng tài khoản công ty xem được 3 file.
 // Cài: dán vào project Apps Script (có thể chung project với script Cẩm nang) → 💾 Lưu → chọn hàm "miloSetup" → ▶ Chạy → cho phép quyền.
 // Mọi tên đều có tiền tố MILO_/milo để không trùng với code Cẩm nang trong cùng project.
-// Chỉ lấy dòng có khoá "English Adventure with Milo" (Format: cột G/H · data_handover: cột S); file VH lấy mọi dòng có tên/email/SĐT.
+// Chỉ lấy dòng có khoá "English Adventure with Milo" (Format: cột G/H · data_handover: cột S) — gửi đủ mọi cột của dòng đó
+// để tra được bàn giao lúc nào, ai bàn giao…; file VH lấy mọi dòng có tên/email/SĐT.
 // Dòng cũ gửi 1 lần rồi portal lưu lại; mỗi 10 phút chỉ đọc ~200 dòng cuối mỗi file (dòng mới / đang sửa), đổi mới gửi.
 // Lần đầu đọc toàn bộ lịch sử theo từng đợt (mỗi lần chạy tối đa ~4 phút, chưa xong thì lần sau làm tiếp).
 const MILO_PORTAL = '{portal}/api/milo/push';
@@ -285,8 +341,8 @@ const MILO_TOKEN = '{token}';
 const MILO_PRODUCT = 'english adventure with milo';
 const MILO_KEEP = 200, MILO_CHUNK = 5000, MILO_BUDGET_MS = 4 * 60 * 1000;
 const MILO_SRC = {{
-  s1: {{ id: '{ids["s1"]}', sheet: 'Format', start: 4 }},               // ICC_Bàn giao học viên
-  s2: {{ id: '{ids["s2"]}', sheet: 'ICC_15052024', start: 2 }},         // data_handover
+  s1: {{ id: '{ids["s1"]}', sheet: 'Format', start: 4, head: 3 }},               // ICC_Bàn giao học viên (tiêu đề dòng 3)
+  s2: {{ id: '{ids["s2"]}', sheet: 'ICC_15052024', start: 2, head: 1 }},         // data_handover (tiêu đề dòng 1)
   vh: {{ id: '{ids["vh"]}', sheet: 'File làm việc Milo', start: 2 }},   // File làm việc Milo (VH)
 }};
 
@@ -308,23 +364,30 @@ function miloSheet_(k) {{
 
 function miloCol_(sh, from, c, n) {{ return sh.getRange(from, c, n, 1).getDisplayValues().map(r => r[0]); }}
 
+// số cột thật của file gốc = tới cột tiêu đề cuối cùng có chữ
+function miloWidth_(k, sh) {{
+  const h = sh.getRange(MILO_SRC[k].head, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
+  let w = h.length; while (w > 1 && !String(h[w - 1]).trim()) w--;
+  return {{ width: w, headers: h.slice(0, w) }};
+}}
+
 // Đọc các dòng [from, to) của 1 nguồn → mảng dòng đã lọc
 function miloRead_(k, sh, from, to) {{
   const n = to - from, out = [];
   if (n <= 0) return out;
-  if (k === 's1') {{  // A ngày bàn giao, D tên, E SĐT, F email, G trình độ, H sản phẩm
-    sh.getRange(from, 1, n, 8).getDisplayValues().forEach((r, i) => {{
+  if (k === 's1') {{  // lọc theo G trình độ / H sản phẩm; cần có D tên / E SĐT / F email
+    sh.getRange(from, 1, n, MILO_W[k].width).getDisplayValues().forEach((r, i) => {{
       if ((r[6] + ' ' + r[7]).toLowerCase().indexOf(MILO_PRODUCT) < 0) return;
       if (!r[3] && !r[4] && !r[5]) return;
-      out.push([from + i, r[0], r[3], r[4], r[5]]);
+      out.push([from + i].concat(r));
     }});
-  }} else if (k === 's2') {{  // S curriculum (lọc trước), B CreatedAt, K tên, N email, O SĐT, AH PaymentDate
+  }} else if (k === 's2') {{  // lọc theo S curriculum trước (đọc 1 cột cho nhanh), có dòng Milo mới đọc cả dòng
     const cur = miloCol_(sh, from, 19, n), idx = [];
     cur.forEach((c, i) => {{ if (String(c).toLowerCase().indexOf(MILO_PRODUCT) >= 0) idx.push(i); }});
     if (!idx.length) return out;
-    const b = miloCol_(sh, from, 2, n), k2 = miloCol_(sh, from, 11, n), nn = miloCol_(sh, from, 14, n),
-          o = miloCol_(sh, from, 15, n), ah = miloCol_(sh, from, 34, n);
-    idx.forEach(i => {{ if (k2[i] || nn[i] || o[i]) out.push([from + i, b[i], ah[i], k2[i], nn[i], o[i]]); }});
+    const lo = idx[0], hi = idx[idx.length - 1];
+    const rows = sh.getRange(from + lo, 1, hi - lo + 1, MILO_W[k].width).getDisplayValues();
+    idx.forEach(i => {{ const r = rows[i - lo]; if (r[10] || r[13] || r[14]) out.push([from + i].concat(r)); }});
   }} else {{  // VH: F tên, G email, H SĐT, J ngày TT, L UsernameIms, M PasswordIms, N cấp TK, O mail
     sh.getRange(from, 6, n, 10).getDisplayValues().forEach((r, i) => {{
       if (!r[0] && !r[1] && !r[2]) return;
@@ -334,8 +397,11 @@ function miloRead_(k, sh, from, to) {{
   return out;
 }}
 
+let MILO_W = {{}};
+
 function miloPost_(body) {{
   body.token = MILO_TOKEN;
+  body.v = 2;
   const res = UrlFetchApp.fetch(MILO_PORTAL, {{ method: 'post', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }});
   if (res.getResponseCode() !== 200) throw new Error('Portal báo lỗi ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
   return JSON.parse(res.getContentText());
@@ -350,8 +416,10 @@ function miloSync() {{
     const st = miloPost_({{ op: 'state' }});
     const sheets = {{}}, last = {{}}, target = {{}};
     let done = true;
+    const headers = {{}};
     Object.keys(MILO_SRC).forEach(k => {{
       sheets[k] = miloSheet_(k);
+      if (MILO_SRC[k].head) {{ MILO_W[k] = miloWidth_(k, sheets[k]); headers[k] = MILO_W[k].headers; }}
       last[k] = sheets[k].getLastRow() + 1;  // dòng sau dòng cuối
       // mốc lưu: giữ ~MILO_KEEP dòng cuối là "đang làm"; dồn mốc khi phần đang làm dài gấp đôi
       let tg = Number(p.getProperty('milo_t_' + k) || MILO_SRC[k].start);
@@ -363,7 +431,7 @@ function miloSync() {{
       while (from < target[k]) {{
         if (Date.now() - t0 > MILO_BUDGET_MS) {{ done = false; break; }}
         const to = Math.min(from + MILO_CHUNK, target[k]);
-        miloPost_({{ op: 'archive', src: k, from: from, to: to, rows: miloRead_(k, sheets[k], from, to) }});
+        miloPost_({{ op: 'archive', src: k, from: from, to: to, rows: miloRead_(k, sheets[k], from, to), headers: headers }});
         Logger.log('Đã lưu ' + MILO_SRC[k].sheet + ' dòng ' + from + '–' + (to - 1));
         from = to;
       }}
@@ -372,9 +440,9 @@ function miloSync() {{
     // phần đang làm: từ mốc lưu tới cuối file
     const live = {{}};
     Object.keys(MILO_SRC).forEach(k => {{ live[k] = miloRead_(k, sheets[k], target[k], last[k]); }});
-    const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([target, live]), Utilities.Charset.UTF_8));
+    const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([target, live, headers]), Utilities.Charset.UTF_8));
     if (hash === st.hash) {{ Logger.log('Không đổi (' + Math.round((Date.now() - t0) / 1000) + 's)'); return; }}
-    const r = miloPost_(Object.assign({{ op: 'live', hash: hash }}, live));
+    const r = miloPost_(Object.assign({{ op: 'live', hash: hash, headers: headers }}, live));
     const c = r.count || {{}};
     Logger.log('Đã gửi sang portal: nguồn 1 ' + c.s1 + ' · nguồn 2 ' + c.s2 + ' · file VH ' + c.vh + ' dòng (' + Math.round((Date.now() - t0) / 1000) + 's)');
   }} finally {{

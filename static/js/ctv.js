@@ -898,8 +898,12 @@ async function pageDocs(v) {
   const MILO_ST = { granted: 'green', created: 'blue', in_vh: 'amber', handed: 'amber', none: 'red' };
   const miloCard = s => {
     const yes = t => `<span class="badge green">✓</span> ${t}`, no = t => `<span class="muted">${t}</span>`;
-    const s1 = s.s1.length ? yes(s.s1.map(r => `dòng ${r.row}${r.date ? ` · bàn giao ${esc(r.date)}` : ''}`).join('<br>')) : no('Không thấy');
-    const s2 = s.s2.length ? yes(s.s2.map(r => `dòng ${r.row}${r.created ? ` · tạo ${esc(r.created)}` : ''}${r.paid ? ` · TT ${esc(r.paid)}` : ''}`).join('<br>')) : no('Không thấy');
+    // mỗi lần bàn giao: tóm tắt (lúc nào, ai bàn giao, team…) + bấm xem đủ mọi cột có dữ liệu của dòng gốc
+    const handover = list => list.length ? list.map(r => `<div style="margin-bottom:6px"><span class="badge green">✓</span> <b>dòng ${r.row}</b>
+        ${(r.summary || []).map(([k, v]) => `<span class="small"> · ${esc(k)}: <b>${esc(v)}</b></span>`).join('')}
+        ${(r.fields || []).length ? `<details style="margin-top:4px"><summary class="small" style="cursor:pointer">Xem đầy đủ ${r.fields.length} cột</summary>
+          <div class="table-wrap" style="margin-top:6px"><table class="table"><tbody>${r.fields.map(([k, v]) => `<tr><td class="small muted nowrap" style="width:1%">${esc(k)}</td><td class="small" style="word-break:break-word">${esc(v)}</td></tr>`).join('')}</tbody></table></div></details>` : ''}</div>`).join('') : no('Không thấy');
+    const s1 = handover(s.s1), s2 = handover(s.s2);
     const cp = v => v ? `<b class="mono">${esc(v)}</b> <button class="btn btn-sm btn-ghost" data-copyval="${esc(v)}" title="Sao chép">${icon('copy')}</button>` : '<span class="muted">—</span>';
     const vh = s.vh.length ? s.vh.map(r => `<dl class="kv" style="margin-top:6px">
         <dt>Dòng</dt><dd>${r.row}${r.name ? ` · ${esc(r.name)}` : ''}${r.paid ? ` · TT ${esc(r.paid)}` : ''}</dd>
