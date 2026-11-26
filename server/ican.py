@@ -141,3 +141,27 @@ def apply(blocks: list, tab_name: str, refresh: bool = False) -> tuple[list, dic
             rows.append(r)
         out.append({**b, "rows": rows})
     return out, stat
+
+
+SPW_TEACHER = "https://speakwell.ican.vn/teachers/"
+CODE = re.compile(r"\bTC\d{4,}\b", re.I)
+
+
+def add_spw_schedule(blocks: list, tab_name: str) -> list:
+    """Bảng GV SpeakWell: thêm cột "Check lịch rảnh GV" = trang GV trên speakwell.ican.vn/teachers/<Mã gv>
+    (ở đó chọn "Đăng ký theo buổi" để xem lịch rảnh). Không sửa blocks gốc."""
+    out = []
+    for b in blocks:
+        h = [_fold(c) for c in b["header"]]
+        ci = next((i for i, c in enumerate(h) if c in ("ma gv", "ma giao vien", "ma")), -1)
+        if ci < 0 or (brand_of(b.get("title") or "") or brand_of(tab_name)) != "spw" or "check lich ranh gv" in h:
+            out.append(b)
+            continue
+        n = len(b["header"])
+        rows = []
+        for r in b["rows"]:
+            r = list(r) + [""] * (n - len(r))
+            m = CODE.search(LINK.sub(lambda x: x.group(1), r[ci] or ""))
+            rows.append(r + ([f"⟦Check lịch|{SPW_TEACHER}{m.group(0).upper()}⟧"] if m else [""]))
+        out.append({**b, "header": list(b["header"]) + ["Check lịch rảnh GV"], "rows": rows})
+    return out

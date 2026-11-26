@@ -1545,6 +1545,7 @@ def doc_view(tid: str, refresh: bool = False, u=Depends(current_user), con=Depen
             return {**base, "groups": [], "error": str(e)}
         # cột "Link teacher site" của bảng GV: lấy link theo tên từ icanconnect.vn (sheet có thể ghi sai)
         blocks, ican_stat = ican.apply(blocks, t["name"], refresh)
+        blocks = ican.add_spw_schedule(blocks, t["name"])  # cột link xem lịch rảnh GV trên speakwell.ican.vn
         out = {**base, "groups": [], "table": {"blocks": blocks, "fetched_at": fmt_ts(ts)}, "warning": warn}
         if ican_stat and u["role"] == "admin":
             out["ican"] = ican_stat
