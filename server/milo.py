@@ -349,6 +349,15 @@ const MILO_SRC = {{
 
 // Chạy 1 lần (hoặc chạy lại để gửi lại toàn bộ lịch sử nếu dòng cũ có sửa)
 function miloSetup() {{
+  miloTriggers();
+  const p = PropertiesService.getScriptProperties();
+  ['milo_hash', 'milo_t_s1', 'milo_t_s2', 'milo_t_vh'].forEach(k => p.deleteProperty(k));
+  miloPost_({{ op: 'reset' }});
+  miloSync();
+}}
+
+// Chỉ đặt lại lịch chạy (khi file VH đổi + 5 phút/lần), không gửi lại lịch sử
+function miloTriggers() {{
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'miloSync').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('miloSync').timeBased().everyMinutes(5).create();
   try {{
@@ -357,10 +366,6 @@ function miloSetup() {{
   }} catch (err) {{
     Logger.log('Không gắn được trigger khi file VH thay đổi (' + err.message + ') → vẫn kiểm tra 5 phút/lần');
   }}
-  const p = PropertiesService.getScriptProperties();
-  ['milo_hash', 'milo_t_s1', 'milo_t_s2', 'milo_t_vh'].forEach(k => p.deleteProperty(k));
-  miloPost_({{ op: 'reset' }});
-  miloSync();
 }}
 
 function miloSheet_(k) {{
