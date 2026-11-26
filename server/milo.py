@@ -4,8 +4,8 @@
   - Nguồn 1 "ICC_Bàn giao học viên" / tab Format: dòng có Trình độ (G) hoặc Sản phẩm (H) chứa "English Adventure with Milo"
   - Nguồn 2 "data_handover" / tab ICC_15052024: dòng có Curriculum (S) chứa "English Adventure with Milo"
   - File VH "File làm việc Milo": họ tên, email, SĐT, ngày TT, UsernameIms, PasswordIms, tình trạng cấp TK, mail
-Dữ liệu chỉ giữ trong bộ nhớ (không ghi DB → Neon không phải thức dậy). Server khởi động lại thì lần chạy kế tiếp của
-Apps Script thấy server chưa có bản (so mã hash) và gửi lại toàn bộ.
+Dòng cũ gửi 1 lần và lưu DB (nén, chỉ ghi khi có thêm dòng cũ); mỗi 10 phút Apps Script chỉ đọc ~200 dòng cuối mỗi file
+(phần đang được thêm / sửa) và gửi khi đổi — phần này chỉ giữ trong bộ nhớ.
 Khớp học viên giữa các file theo email / SĐT (chuẩn hoá giống script đồng bộ Milo: email chữ thường, SĐT 84… → 0…).
 """
 import re
@@ -14,7 +14,7 @@ import time
 import unicodedata
 
 _lock = threading.Lock()
-_state = {"data": None, "hash": None, "at": None, "seen": None, "token": None}
+_state = {"data": None, "hash": None, "at": None, "seen": None, "token": None, "archive": None, "live": None}
 
 
 class MiloError(Exception):
@@ -68,27 +68,59 @@ def _rec(src: str, row, name, email, phone, **extra) -> dict:
             "f": fold(f"{name} {email}"), **extra}
 
 
-def receive(con, body: dict) -> dict:
-    """body: {token, hash, ping: true} hoặc {token, hash, s1, s2, vh}. Trả need_full nếu server chưa có bản này."""
-    tok = _token(con)
-    if not tok or body.get("token") != tok:
-        raise MiloError("Sai mã bảo mật")
-    now = time.time()
-    _state["seen"] = now
-    h = str(body.get("hash") or "")
-    if body.get("ping"):
-        return {"ok": True, "need_full": h != _state["hash"]}
+KEYS = ("s1", "s2", "vh")
+
+
+def _make(src: str, r) -> dict:
+    if src == "s1":    # [dòng, ngày bàn giao, tên, SĐT, email]
+        return _rec("s1", r[0], r[2], r[4], r[3], date=str(r[1]))
+    if src == "s2":    # [dòng, CreatedAt, PaymentDate, tên, email, SĐT]
+        return _rec("s2", r[0], r[3], r[4], r[5], created=str(r[1]), paid=str(r[2]))
+    # vh: [dòng, tên, email, SĐT, ngày TT, username, password, cấp TK, mail]
+    return _rec("vh", r[0], r[1], r[2], r[3], paid=str(r[4]), username=str(r[5]).strip(), password=str(r[6]).strip(),
+                granted=str(r[7]).strip().upper() == "TRUE", mail=str(r[8]).strip())
+
+
+# Dòng cũ (bản lưu): gửi 1 lần, lưu DB (nén) — chỉ ghi lại khi thêm dòng cũ (hiếm).
+# Dòng mới (live): ~200 dòng cuối mỗi file, Apps Script gửi khi đổi, chỉ giữ trong bộ nhớ.
+def _archive(con=None) -> dict:
+    if _state.get("archive") is None:
+        import base64, json, zlib
+        from . import db
+        own = con is None
+        con = con or db.connect()
+        try:
+            raw = db.get_setting(con, "milo_archive")
+        finally:
+            if own:
+                con.close()
+        arc = None
+        if raw:
+            try:
+                arc = json.loads(zlib.decompress(base64.b64decode(raw)).decode("utf-8"))
+            except Exception:  # noqa: BLE001
+                arc = None
+        _state["archive"] = arc or {"cursor": {k: 0 for k in KEYS}, "rows": {k: [] for k in KEYS}}
+    return _state["archive"]
+
+
+def _save_archive(con):
+    import base64, json, zlib
+    from . import db
+    _state["archive"]["at"] = time.time()
+    raw = base64.b64encode(zlib.compress(json.dumps(_state["archive"], ensure_ascii=False).encode("utf-8"), 9)).decode()
+    db.set_setting(con, "milo_archive", raw)
+
+
+def _rebuild():
+    arc, live = _state["archive"], _state.get("live") or {k: [] for k in KEYS}
+    recs = []
     try:
-        recs = []
-        for r in body.get("s1") or []:   # [dòng, ngày bàn giao, tên, SĐT, email]
-            recs.append(_rec("s1", r[0], r[2], r[4], r[3], date=str(r[1])))
-        for r in body.get("s2") or []:   # [dòng, CreatedAt, PaymentDate, tên, email, SĐT]
-            recs.append(_rec("s2", r[0], r[3], r[4], r[5], created=str(r[1]), paid=str(r[2])))
-        for r in body.get("vh") or []:   # [dòng, tên, email, SĐT, ngày TT, username, password, cấp TK, mail]
-            recs.append(_rec("vh", r[0], r[1], r[2], r[3], paid=str(r[4]), username=str(r[5]).strip(),
-                             password=str(r[6]).strip(), granted=str(r[7]).strip().upper() == "TRUE",
-                             mail=str(r[8]).strip()))
-    except (IndexError, TypeError) as e:
+        for k in KEYS:
+            cur = arc["cursor"].get(k, 0)
+            recs += [_make(k, r) for r in arc["rows"].get(k, [])]
+            recs += [_make(k, r) for r in live.get(k, []) if int(r[0]) >= cur]
+    except (IndexError, TypeError, ValueError) as e:
         raise MiloError(f"Dữ liệu không hợp lệ ({e.__class__.__name__})")
     by_e, by_p = {}, {}
     for i, r in enumerate(recs):
@@ -97,17 +129,77 @@ def receive(con, body: dict) -> dict:
         if r["p"]:
             by_p.setdefault(r["p"], []).append(i)
     with _lock:
-        _state.update(data={"recs": recs, "by_e": by_e, "by_p": by_p}, hash=h, at=now)
-    return {"ok": True, "need_full": False, "count": {s: sum(r["src"] == s for r in recs) for s in ("s1", "s2", "vh")}}
+        _state["data"] = {"recs": recs, "by_e": by_e, "by_p": by_p}
+
+
+def receive(con, body: dict) -> dict:
+    """Apps Script gọi vào, body.op:
+      state   → {archive: {nguồn: dòng đã lưu tới (không gồm)}, hash: mã bản live đang có}
+      reset   → xoá bản lưu (chạy lại miloSetup)
+      archive → {src, from, to, rows}: lưu các dòng Milo trong [from, to) của 1 nguồn
+      live    → {hash, s1, s2, vh}: các dòng từ chỗ đã lưu tới cuối file"""
+    tok = _token(con)
+    if not tok or body.get("token") != tok:
+        raise MiloError("Sai mã bảo mật")
+    now = time.time()
+    _state["seen"] = now
+    op = body.get("op")
+    arc = _archive(con)
+    if op == "state":
+        return {"ok": True, "archive": arc["cursor"], "hash": _state["hash"] if _state.get("live") is not None else None}
+    if op == "reset":
+        _state["archive"] = {"cursor": {k: 0 for k in KEYS}, "rows": {k: [] for k in KEYS}}
+        _save_archive(con)
+        _state.update(live=None, hash=None)
+        _rebuild()
+        return {"ok": True}
+    if op == "archive":
+        src = body.get("src")
+        if src not in KEYS:
+            raise MiloError("Nguồn không hợp lệ")
+        try:
+            lo, hi = int(body["from"]), int(body["to"])
+            rows = [list(r) for r in body.get("rows") or [] if lo <= int(r[0]) < hi]
+            for r in rows:
+                _make(src, r)  # kiểm tra định dạng
+        except (KeyError, IndexError, TypeError, ValueError) as e:
+            raise MiloError(f"Dữ liệu không hợp lệ ({e.__class__.__name__})")
+        arc["rows"][src] = [r for r in arc["rows"][src] if not lo <= int(r[0]) < hi] + rows
+        arc["cursor"][src] = max(arc["cursor"].get(src, 0), hi)
+        _save_archive(con)
+        _state["at"] = now
+        _rebuild()
+        return {"ok": True, "archive": arc["cursor"]}
+    if op == "live":
+        _state["live"] = {k: [list(r) for r in body.get(k) or []] for k in KEYS}
+        _state["hash"] = str(body.get("hash") or "")
+        _state["at"] = now
+        _rebuild()
+        return {"ok": True, "count": status()["count"]}
+    raise MiloError("Thao tác không hợp lệ — sao chép lại code Apps Script mới ở trang Quản trị")
+
+
+def _ensure_loaded():
+    """Sau khi server khởi động lại: nạp bản lưu từ DB (dòng cũ) để tra cứu được ngay."""
+    if _state["data"] is None and _state.get("archive") is None:
+        try:
+            _archive()
+            if any(_state["archive"]["cursor"].values()):
+                _rebuild()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def status() -> dict:
+    _ensure_loaded()
     d = _state["data"]
-    return {"data_at": _state["at"], "seen_at": _state["seen"],
+    at = _state["at"] or ((_state.get("archive") or {}).get("at") if d else None)
+    return {"data_at": at, "seen_at": _state["seen"],
             "count": {s: sum(r["src"] == s for r in d["recs"]) for s in ("s1", "s2", "vh")} if d else None}
 
 
 def search(q: str, limit: int = 20) -> dict:
+    _ensure_loaded()
     d = _state["data"]
     if not d:
         return {"ready": False, "students": []}
@@ -185,76 +277,106 @@ def apps_script(token: str, portal: str, ids: dict) -> str:
     return f"""// Cổng CTV ← dữ liệu tài khoản Milo (tab "TK Milo" trong Tài liệu). Chạy bằng tài khoản công ty xem được 3 file.
 // Cài: dán vào project Apps Script (có thể chung project với script Cẩm nang) → 💾 Lưu → chọn hàm "miloSetup" → ▶ Chạy → cho phép quyền.
 // Mọi tên đều có tiền tố MILO_/milo để không trùng với code Cẩm nang trong cùng project.
-// Sau đó script tự chạy 10 phút/lần: chỉ gửi khi dữ liệu đổi (hoặc portal vừa khởi động lại, chưa có dữ liệu).
+// Chỉ lấy dòng có khoá "English Adventure with Milo" (Format: cột G/H · data_handover: cột S); file VH lấy mọi dòng có tên/email/SĐT.
+// Dòng cũ gửi 1 lần rồi portal lưu lại; mỗi 10 phút chỉ đọc ~200 dòng cuối mỗi file (dòng mới / đang sửa), đổi mới gửi.
+// Lần đầu đọc toàn bộ lịch sử theo từng đợt (mỗi lần chạy tối đa ~4 phút, chưa xong thì lần sau làm tiếp).
 const MILO_PORTAL = '{portal}/api/milo/push';
 const MILO_TOKEN = '{token}';
 const MILO_PRODUCT = 'english adventure with milo';
-const MILO_SRC1_ID = '{ids["s1"]}', MILO_SRC1_SHEET = 'Format', MILO_SRC1_START = 4;               // ICC_Bàn giao học viên
-const MILO_SRC2_ID = '{ids["s2"]}', MILO_SRC2_SHEET = 'ICC_15052024', MILO_SRC2_START = 2;         // data_handover
-const MILO_VH_ID = '{ids["vh"]}', MILO_VH_SHEET = 'File làm việc Milo', MILO_VH_START = 2;        // File làm việc Milo
+const MILO_KEEP = 200, MILO_CHUNK = 5000, MILO_BUDGET_MS = 4 * 60 * 1000;
+const MILO_SRC = {{
+  s1: {{ id: '{ids["s1"]}', sheet: 'Format', start: 4 }},               // ICC_Bàn giao học viên
+  s2: {{ id: '{ids["s2"]}', sheet: 'ICC_15052024', start: 2 }},         // data_handover
+  vh: {{ id: '{ids["vh"]}', sheet: 'File làm việc Milo', start: 2 }},   // File làm việc Milo (VH)
+}};
 
+// Chạy 1 lần (hoặc chạy lại để gửi lại toàn bộ lịch sử nếu dòng cũ có sửa)
 function miloSetup() {{
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'miloSync').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('miloSync').timeBased().everyMinutes(10).create();
-  PropertiesService.getScriptProperties().deleteProperty('milo_hash');
-  miloSync(true);
+  const p = PropertiesService.getScriptProperties();
+  ['milo_hash', 'milo_t_s1', 'milo_t_s2', 'milo_t_vh'].forEach(k => p.deleteProperty(k));
+  miloPost_({{ op: 'reset' }});
+  miloSync();
 }}
 
-function miloCol_(sh, start, c, n) {{ return sh.getRange(start, c, n, 1).getDisplayValues().map(r => r[0]); }}
+function miloSheet_(k) {{
+  const sh = SpreadsheetApp.openById(MILO_SRC[k].id).getSheetByName(MILO_SRC[k].sheet);
+  if (!sh) throw new Error('Không thấy tab ' + MILO_SRC[k].sheet);
+  return sh;
+}}
 
-function miloCollect_() {{
-  // Nguồn 1: A ngày bàn giao, D tên, E SĐT, F email, G trình độ, H sản phẩm
-  const sh1 = SpreadsheetApp.openById(MILO_SRC1_ID).getSheetByName(MILO_SRC1_SHEET);
-  if (!sh1) throw new Error('Không thấy tab ' + MILO_SRC1_SHEET);
-  const s1 = [], n1 = sh1.getLastRow() - MILO_SRC1_START + 1;
-  if (n1 > 0) sh1.getRange(MILO_SRC1_START, 1, n1, 8).getDisplayValues().forEach((r, i) => {{
-    if ((r[6] + ' ' + r[7]).toLowerCase().indexOf(MILO_PRODUCT) < 0) return;
-    if (!r[3] && !r[4] && !r[5]) return;
-    s1.push([MILO_SRC1_START + i, r[0], r[3], r[4], r[5]]);
-  }});
-  // Nguồn 2: B CreatedAt, K tên, N email, O SĐT, S curriculum, AH PaymentDate (đọc từng cột cho nhanh)
-  const sh2 = SpreadsheetApp.openById(MILO_SRC2_ID).getSheetByName(MILO_SRC2_SHEET);
-  if (!sh2) throw new Error('Không thấy tab ' + MILO_SRC2_SHEET);
-  const s2 = [], n2 = sh2.getLastRow() - MILO_SRC2_START + 1;
-  if (n2 > 0) {{
-    const cur = miloCol_(sh2, MILO_SRC2_START, 19, n2), b = miloCol_(sh2, MILO_SRC2_START, 2, n2), k = miloCol_(sh2, MILO_SRC2_START, 11, n2),
-          nn = miloCol_(sh2, MILO_SRC2_START, 14, n2), o = miloCol_(sh2, MILO_SRC2_START, 15, n2), ah = miloCol_(sh2, MILO_SRC2_START, 34, n2);
-    cur.forEach((c, i) => {{
-      if (String(c).toLowerCase().indexOf(MILO_PRODUCT) < 0) return;
-      if (!k[i] && !nn[i] && !o[i]) return;
-      s2.push([MILO_SRC2_START + i, b[i], ah[i], k[i], nn[i], o[i]]);
+function miloCol_(sh, from, c, n) {{ return sh.getRange(from, c, n, 1).getDisplayValues().map(r => r[0]); }}
+
+// Đọc các dòng [from, to) của 1 nguồn → mảng dòng đã lọc
+function miloRead_(k, sh, from, to) {{
+  const n = to - from, out = [];
+  if (n <= 0) return out;
+  if (k === 's1') {{  // A ngày bàn giao, D tên, E SĐT, F email, G trình độ, H sản phẩm
+    sh.getRange(from, 1, n, 8).getDisplayValues().forEach((r, i) => {{
+      if ((r[6] + ' ' + r[7]).toLowerCase().indexOf(MILO_PRODUCT) < 0) return;
+      if (!r[3] && !r[4] && !r[5]) return;
+      out.push([from + i, r[0], r[3], r[4], r[5]]);
+    }});
+  }} else if (k === 's2') {{  // S curriculum (lọc trước), B CreatedAt, K tên, N email, O SĐT, AH PaymentDate
+    const cur = miloCol_(sh, from, 19, n), idx = [];
+    cur.forEach((c, i) => {{ if (String(c).toLowerCase().indexOf(MILO_PRODUCT) >= 0) idx.push(i); }});
+    if (!idx.length) return out;
+    const b = miloCol_(sh, from, 2, n), k2 = miloCol_(sh, from, 11, n), nn = miloCol_(sh, from, 14, n),
+          o = miloCol_(sh, from, 15, n), ah = miloCol_(sh, from, 34, n);
+    idx.forEach(i => {{ if (k2[i] || nn[i] || o[i]) out.push([from + i, b[i], ah[i], k2[i], nn[i], o[i]]); }});
+  }} else {{  // VH: F tên, G email, H SĐT, J ngày TT, L UsernameIms, M PasswordIms, N cấp TK, O mail
+    sh.getRange(from, 6, n, 10).getDisplayValues().forEach((r, i) => {{
+      if (!r[0] && !r[1] && !r[2]) return;
+      out.push([from + i, r[0], r[1], r[2], r[4], r[6], r[7], r[8], r[9]]);
     }});
   }}
-  // File VH: F tên, G email, H SĐT, J ngày TT, L UsernameIms, M PasswordIms, N cấp TK (ô tích), O tình trạng mail
-  const sh3 = SpreadsheetApp.openById(MILO_VH_ID).getSheetByName(MILO_VH_SHEET);
-  if (!sh3) throw new Error('Không thấy tab ' + MILO_VH_SHEET);
-  const vh = [], n3 = sh3.getLastRow() - MILO_VH_START + 1;
-  if (n3 > 0) sh3.getRange(MILO_VH_START, 6, n3, 10).getDisplayValues().forEach((r, i) => {{
-    if (!r[0] && !r[1] && !r[2]) return;
-    vh.push([MILO_VH_START + i, r[0], r[1], r[2], r[4], r[6], r[7], r[8], r[9]]);
-  }});
-  return {{ s1: s1, s2: s2, vh: vh }};
+  return out;
 }}
 
 function miloPost_(body) {{
+  body.token = MILO_TOKEN;
   const res = UrlFetchApp.fetch(MILO_PORTAL, {{ method: 'post', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }});
   if (res.getResponseCode() !== 200) throw new Error('Portal báo lỗi ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
   return JSON.parse(res.getContentText());
 }}
 
-function miloSync(force) {{
+function miloSync() {{
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) return;
+  const t0 = Date.now();
   try {{
     const p = PropertiesService.getScriptProperties();
-    const data = miloCollect_();
-    const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(data), Utilities.Charset.UTF_8));
-    let send = force === true || hash !== p.getProperty('milo_hash');
-    if (!send) send = miloPost_({{ token: MILO_TOKEN, hash: hash, ping: true }}).need_full;  // portal khởi động lại → gửi lại
-    if (!send) {{ Logger.log('Không đổi'); return; }}
-    const r = miloPost_(Object.assign({{ token: MILO_TOKEN, hash: hash }}, data));
-    p.setProperty('milo_hash', hash);
-    Logger.log('Đã gửi sang portal: nguồn 1 ' + data.s1.length + ' · nguồn 2 ' + data.s2.length + ' · file VH ' + data.vh.length + ' dòng');
+    const st = miloPost_({{ op: 'state' }});
+    const sheets = {{}}, last = {{}}, target = {{}};
+    let done = true;
+    Object.keys(MILO_SRC).forEach(k => {{
+      sheets[k] = miloSheet_(k);
+      last[k] = sheets[k].getLastRow() + 1;  // dòng sau dòng cuối
+      // mốc lưu: giữ ~MILO_KEEP dòng cuối là "đang làm"; dồn mốc khi phần đang làm dài gấp đôi
+      let tg = Number(p.getProperty('milo_t_' + k) || MILO_SRC[k].start);
+      if (last[k] - tg > 2 * MILO_KEEP) tg = last[k] - MILO_KEEP;
+      target[k] = Math.max(tg, MILO_SRC[k].start);
+      p.setProperty('milo_t_' + k, String(target[k]));
+      // gửi phần lưu còn thiếu theo từng đợt
+      let from = Math.max(Number(st.archive[k] || 0), MILO_SRC[k].start);
+      while (from < target[k]) {{
+        if (Date.now() - t0 > MILO_BUDGET_MS) {{ done = false; break; }}
+        const to = Math.min(from + MILO_CHUNK, target[k]);
+        miloPost_({{ op: 'archive', src: k, from: from, to: to, rows: miloRead_(k, sheets[k], from, to) }});
+        Logger.log('Đã lưu ' + MILO_SRC[k].sheet + ' dòng ' + from + '–' + (to - 1));
+        from = to;
+      }}
+    }});
+    if (!done) {{ Logger.log('Chưa lưu hết lịch sử, lần chạy sau (10 phút) làm tiếp'); return; }}
+    // phần đang làm: từ mốc lưu tới cuối file
+    const live = {{}};
+    Object.keys(MILO_SRC).forEach(k => {{ live[k] = miloRead_(k, sheets[k], target[k], last[k]); }});
+    const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([target, live]), Utilities.Charset.UTF_8));
+    if (hash === st.hash) {{ Logger.log('Không đổi (' + Math.round((Date.now() - t0) / 1000) + 's)'); return; }}
+    const r = miloPost_(Object.assign({{ op: 'live', hash: hash }}, live));
+    const c = r.count || {{}};
+    Logger.log('Đã gửi sang portal: nguồn 1 ' + c.s1 + ' · nguồn 2 ' + c.s2 + ' · file VH ' + c.vh + ' dòng (' + Math.round((Date.now() - t0) / 1000) + 's)');
   }} finally {{
     lock.releaseLock();
   }}

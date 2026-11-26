@@ -1181,12 +1181,12 @@ async function aMilo(body) {
       <ol class="small" style="margin:8px 0 8px 18px;line-height:1.7">
         <li>Đăng nhập Google bằng tài khoản <b>công ty xem được cả 3 file</b> → mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Dự án mới</a>.</li>
         <li>Xoá code mẫu, dán đoạn code bên dưới → bấm 💾 <b>Lưu</b>.</li>
-        <li>Ô chọn hàm chọn <b>setup</b> → <b>▶ Chạy</b> → <b>Xem xét quyền</b> → chọn tài khoản → <b>Cho phép</b>.</li>
-        <li>Nhật ký hiện “Đã gửi sang portal …” là xong → tải lại trang này. Sau đó script tự chạy 10 phút/lần, chỉ gửi khi dữ liệu thay đổi.</li>
+        <li>Ô chọn hàm chọn <b>miloSetup</b> → <b>▶ Chạy</b> → <b>Xem xét quyền</b> → chọn tài khoản → <b>Cho phép</b>.</li>
+        <li>Nhật ký hiện “Đã gửi sang portal …” là xong → tải lại trang này. Lần đầu đọc toàn bộ lịch sử (có thể cần 2–3 lượt, mỗi lượt cách 10 phút). Sau đó mỗi 10 phút chỉ đọc khoảng 200 dòng cuối mỗi file, đổi mới gửi.</li>
       </ol>
       <div style="position:relative;display:block;width:100%"><textarea class="input mono" rows="6" readonly style="font-size:11.5px;display:block;width:100%;box-sizing:border-box">${esc(d.gas_script)}</textarea>
         <button type="button" class="btn btn-sm" id="milo-copy" style="position:absolute;right:8px;top:8px">${icon('copy')} Sao chép</button></div>
-      <span class="hint">Đổi link file thì bấm Lưu, sao chép lại code, dán đè rồi chạy lại setup. Mã bảo mật trong code là riêng của portal — không chia sẻ ra ngoài.</span></details>` : ''}
+      <span class="hint">Đổi link file, hoặc sửa dòng cũ trong sheet, thì bấm Lưu → sao chép lại code → dán đè → chạy lại miloSetup (gửi lại toàn bộ lịch sử). Mã bảo mật trong code là riêng của portal — không chia sẻ ra ngoài.</span></details>` : ''}
   </div></div>`;
   $('#milo-form', body).onsubmit = e => {
     e.preventDefault();
