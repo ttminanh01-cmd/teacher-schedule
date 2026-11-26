@@ -281,9 +281,12 @@ def team_day(day: str, team_id: int | None = None, u=Depends(current_user), con=
 # ----- đổi ca
 SWAP_SQL = """
 SELECT w.*, s.date, s.start, s."end", s.shift_code, p.name AS position,
-       fu.username AS from_username, fu.name AS from_name, tu.username AS to_username, tu.name AS to_name
+       fu.username AS from_username, fu.name AS from_name, tu.username AS to_username, tu.name AS to_name,
+       s2.start AS swap_start, s2."end" AS swap_end, p2.name AS swap_position
 FROM swaps w JOIN schedules s ON s.id=w.schedule_id
 LEFT JOIN positions p ON p.id=s.position_id
+LEFT JOIN schedules s2 ON s2.id=w.swap_schedule_id
+LEFT JOIN positions p2 ON p2.id=s2.position_id
 JOIN users fu ON fu.id=w.from_user JOIN users tu ON tu.id=w.to_user
 """
 
@@ -293,14 +296,55 @@ def my_swaps(u=Depends(current_user), con=Depends(get_con)):
     return rows(con.execute(SWAP_SQL + " WHERE w.from_user=? OR w.to_user=? ORDER BY w.id DESC", (u["id"], u["id"])))
 
 
+def _overlap(a, b):
+    return a["start"] < b["end"] and b["start"] < a["end"]
+
+
+def _in_pending_swap(con, sched_id: int) -> bool:
+    return bool(con.execute("SELECT 1 FROM swaps WHERE status='pending' AND (schedule_id=? OR swap_schedule_id=?)",
+                            (sched_id, sched_id)).fetchone())
+
+
+def swap_problem(con, s, to_user: int, t=None, from_name="Bạn", to_name="Người nhận"):
+    """Lý do không đổi được (None = hợp lệ). s = ca của người xin; t = ca của người nhận khi đổi chéo (None = làm thay)."""
+    day = rows(con.execute(SCHED_SQL + " WHERE s.date=? AND s.user_id IN (?,?)", (s["date"], s["user_id"], to_user)))
+    if any(x["user_id"] == to_user and (not t or x["id"] != t["id"]) and _overlap(x, s) for x in day):
+        return f"{to_name} đã có ca khác trùng giờ"
+    if t:
+        if t["approved_at"]:
+            return f"Ca của {to_name} đã được chấm công"
+        if any(x["user_id"] == s["user_id"] and x["id"] != s["id"] and _overlap(x, t) for x in day):
+            return f"{from_name} đã có ca khác trùng giờ với ca nhận về"
+    return None
+
+
 @app.get("/api/ctv/swap-candidates")
 def swap_candidates(schedule_id: int, u=Depends(current_user), con=Depends(get_con)):
+    """Người làm thay (rảnh khung giờ này) + người có ca cùng ngày để đổi chéo (VD ca full <-> ca gãy)."""
     s = own_schedule(con, u, schedule_id)
-    busy = {r["user_id"] for r in con.execute(
-        'SELECT user_id FROM schedules WHERE date=? AND start < ? AND "end" > ?', (s["date"], s["end"], s["start"]))}
     cands = rows(con.execute("SELECT id, username, name FROM users WHERE role='ctv' AND active=1 AND id<>? ORDER BY username",
                              (u["id"],)))
-    return [c for c in cands if c["id"] not in busy]
+    day = {}
+    for x in rows(con.execute(SCHED_SQL + " WHERE s.date=? ORDER BY s.start", (s["date"],))):
+        day.setdefault(x["user_id"], []).append(x)
+    mine = [x for x in day.get(u["id"], []) if x["id"] != s["id"]]
+    pending = {r[0] for r in con.execute("SELECT schedule_id FROM swaps WHERE status='pending'")} | \
+              {r[0] for r in con.execute("SELECT swap_schedule_id FROM swaps WHERE status='pending' AND swap_schedule_id IS NOT NULL")}
+    out = []
+    for c in cands:
+        theirs = day.get(c["id"], [])
+        if not any(_overlap(x, s) for x in theirs):
+            out.append({**c, "swap_schedule_id": None})
+        for t in theirs:
+            if (t["start"], t["end"], t["position_id"]) == (s["start"], s["end"], s["position_id"]):
+                continue  # ca y hệt, đổi cũng như không
+            if t["approved_at"] or t["id"] in pending:
+                continue
+            if any(_overlap(x, s) for x in theirs if x["id"] != t["id"]) or any(_overlap(x, t) for x in mine):
+                continue
+            out.append({**c, "swap_schedule_id": t["id"], "start": t["start"], "end": t["end"],
+                        "shift_name": t["shift_name"], "position": t["position"]})
+    return out
 
 
 @app.post("/api/ctv/swaps")
@@ -308,16 +352,27 @@ def create_swap(body: dict = Body(...), u=Depends(current_user), con=Depends(get
     s = own_schedule(con, u, int(body["schedule_id"]))
     if s["date"] < date.today().isoformat() or s["approved_at"]:
         err("Không thể đổi ca đã qua hoặc đã chấm công")
-    if con.execute("SELECT 1 FROM swaps WHERE schedule_id=? AND status='pending'", (s["id"],)).fetchone():
+    if _in_pending_swap(con, s["id"]):
         err("Ca này đã có phiếu đang chờ duyệt")
     to = row(con.execute("SELECT * FROM users WHERE id=? AND role='ctv' AND active=1", (body.get("to_user"),)))
-    if not to:
+    if not to or to["id"] == u["id"]:
         err("Vui lòng chọn người làm thay")
+    t = None
+    if body.get("swap_schedule_id"):
+        t = row(con.execute(SCHED_SQL + " WHERE s.id=?", (int(body["swap_schedule_id"]),)))
+        if not t or t["user_id"] != to["id"] or t["date"] != s["date"]:
+            err("Không tìm thấy ca muốn đổi")
+        if _in_pending_swap(con, t["id"]):
+            err(f"Ca của {to['username']} đã có phiếu đang chờ duyệt")
+    p = swap_problem(con, s, to["id"], t, "Bạn", to["username"])
+    if p:
+        err(p)
     reason = body.get("reason", "").strip()
-    con.execute("INSERT INTO swaps(schedule_id, from_user, to_user, reason, created_at) VALUES (?,?,?,?,?)",
-                (s["id"], u["id"], to["id"], reason, now_str()))
+    con.execute("INSERT INTO swaps(schedule_id, from_user, to_user, reason, created_at, swap_schedule_id) VALUES (?,?,?,?,?,?)",
+                (s["id"], u["id"], to["id"], reason, now_str(), t["id"] if t else None))
     sw_id = con.execute("SELECT id FROM swaps WHERE schedule_id=? AND status='pending'", (s["id"],)).fetchone()[0]
-    log(con, u, f"Gửi phiếu đổi ca {s['date']} ({s['start']}-{s['end']}) cho {to['username']}")
+    log(con, u, f"Gửi phiếu đổi ca {s['date']} ({s['start']}-{s['end']}) cho {to['username']}"
+                + (f", nhận lại ca {t['start']}-{t['end']}" if t else ""))
     d = date.fromisoformat(s["date"])
     dow = "CN" if d.weekday() == 6 else f"T{d.weekday() + 2}"
     e = notify.esc
@@ -325,6 +380,8 @@ def create_swap(body: dict = Body(...), u=Depends(current_user), con=Depends(get
         "🔄 <b>Phiếu đổi ca mới</b>",
         f"<b>{e(u['name'])}</b> ({e(u['username'])}) → <b>{e(to['name'])}</b> ({e(to['username'])})",
         f"Ca: {dow} {d:%d/%m/%Y}, {e(s['start'])}–{e(s['end'])}" + (f" · {e(s['position'])}" if s["position"] else ""),
+        (f"🔁 Đổi chéo: {e(u['username'])} nhận lại ca {e(t['start'])}–{e(t['end'])}"
+         + (f" · {e(t['position'])}" if t["position"] else "") + f" của {e(to['username'])}") if t else "",
         f"Lý do: {e(reason)}" if reason else "",
         f"Web: {notify.PUBLIC_URL}/admin#swaps",
     ])), buttons=[[{"text": "✅ Duyệt", "callback_data": f"sw:{sw_id}:approve"},
@@ -884,14 +941,26 @@ def handle_swap(sid: int, action: str, u=Depends(admin_user), con=Depends(get_co
     if action == "approve" and con.execute("SELECT approved_at FROM schedules WHERE id=?", (w["schedule_id"],)).fetchone()[0]:
         err("Ca này đã được chấm công, sửa PIC ở mục Chấm công")
     if action == "approve":
-        if con.execute('SELECT 1 FROM schedules WHERE user_id=? AND date=? AND start < ? AND "end" > ?',
-                       (w["to_user"], w["date"], w["end"], w["start"])).fetchone():
-            err(f"{w['to_username']} đã có ca trùng giờ, không thể duyệt")
         sc = row(con.execute(SCHED_SQL + " WHERE s.id=?", (w["schedule_id"],)))
-        plan = sc["plan"] or dumps({"user_id": sc["user_id"], "username": sc["username"], "start": sc["start"], "end": sc["end"],
-                                     "position_id": sc["position_id"], "position": sc["position"]})
-        note = f"Đổi ca: {w['from_username']} → {w['to_username']}" + (f" · {sc['note']}" if sc["note"] else "")
-        con.execute("UPDATE schedules SET user_id=?, plan=?, note=? WHERE id=?", (w["to_user"], plan, note, w["schedule_id"]))
+        if sc["user_id"] != w["from_user"]:
+            err("Ca này đã đổi người, không thể duyệt")
+        t = None
+        if w["swap_schedule_id"]:
+            t = row(con.execute(SCHED_SQL + " WHERE s.id=?", (w["swap_schedule_id"],)))
+            if not t or t["user_id"] != w["to_user"]:
+                err(f"Ca của {w['to_username']} đã thay đổi, không thể duyệt")
+        p = swap_problem(con, sc, w["to_user"], t, w["from_username"], w["to_username"])
+        if p:
+            err(f"{p}, không thể duyệt")
+
+        def move(x, to_id, frm, to):
+            plan = x["plan"] or dumps({"user_id": x["user_id"], "username": x["username"], "start": x["start"], "end": x["end"],
+                                       "position_id": x["position_id"], "position": x["position"]})
+            note = f"Đổi ca: {frm} → {to}" + (f" · {x['note']}" if x["note"] else "")
+            con.execute("UPDATE schedules SET user_id=?, plan=?, note=? WHERE id=?", (to_id, plan, note, x["id"]))
+        move(sc, w["to_user"], w["from_username"], w["to_username"])
+        if t:  # đổi chéo: ca của người nhận chuyển về người xin
+            move(t, w["from_user"], w["to_username"], w["from_username"])
         status = "approved"
     elif action == "reject":
         status = "rejected"

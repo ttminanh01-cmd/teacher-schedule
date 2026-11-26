@@ -56,16 +56,25 @@ async function swapDialog(s, reload) {
   modal({
     title: 'Xin đổi ca',
     body: `<p class="muted" style="margin-bottom:14px">${dowOf(s.date)} ${fmtDate(s.date)} · ${s.start}–${s.end} · ${esc(s.position || '')}</p>
-      <div class="field"><label>Người làm thay</label>
-        <select class="input" id="sw-to">${cands.length ? '<option value="">— Chọn CTV đang rảnh —</option>' + cands.map(c => `<option value="${c.id}">${esc(c.username)} · ${esc(c.name)}</option>`).join('') : '<option value="">Không có CTV nào rảnh khung giờ này</option>'}</select>
-        <span class="hint">Gõ vài ký tự tên / username để tìm · chỉ gợi ý những người chưa có ca trùng giờ (${cands.length} người)</span></div>
+      <div class="field"><label>Người làm thay / đổi ca với</label>
+        <select class="input" id="sw-to">${cands.length ? '<option value="">— Chọn người —</option>' + cands.map((c, i) => `<option value="${i}">${esc(c.username)} · ${esc(c.name)}${c.swap_schedule_id ? ` — đổi lấy ca ${c.start}–${c.end}${c.position ? ' · ' + esc(c.position) : ''}` : ' — làm thay'}</option>`).join('') : '<option value="">Không có ai làm thay hoặc đổi ca được</option>'}</select>
+        <span class="hint">Gõ vài ký tự tên / username để tìm · <b>làm thay</b>: người đó nhận ca của bạn · <b>đổi lấy ca …</b>: hai bạn đổi ca cho nhau (VD ca full ↔ ca gãy)</span></div>
+      <p class="small" id="sw-info" style="margin-top:-6px"></p>
       <div class="field"><label>Lý do</label><textarea class="input" rows="3" id="sw-reason" placeholder="VD: Trùng lịch thi"></textarea></div>`,
     footer: `<button class="btn" data-close>Huỷ</button><button class="btn btn-primary" id="sw-ok">Gửi phiếu</button>`,
     onOpen(el, close) {
-      if (cands.length) searchSelect($('#sw-to', el), { placeholder: 'Tìm người làm thay (VD: ha, ctv.dung…)' });
+      const pick = () => cands[$('#sw-to', el).value];
+      $('#sw-to', el).addEventListener('change', () => {
+        const c = pick();
+        $('#sw-info', el).innerHTML = !c ? '' : c.swap_schedule_id
+          ? `Sau khi duyệt: <b>${esc(c.username)}</b> làm ca ${s.start}–${s.end} của bạn, <b>bạn</b> làm ca ${c.start}–${c.end} của ${esc(c.username)}.`
+          : `Sau khi duyệt: <b>${esc(c.username)}</b> làm ca ${s.start}–${s.end} thay bạn.`;
+      });
+      if (cands.length) searchSelect($('#sw-to', el), { placeholder: 'Tìm người (VD: ha, ctv.dung…)' });
       $('#sw-ok', el).onclick = e => run(e.currentTarget, async () => {
-        if (!$('#sw-to', el).value) throw new Error('Vui lòng chọn người làm thay');
-        await api('/ctv/swaps', { method: 'POST', body: { schedule_id: s.id, to_user: +$('#sw-to', el).value, reason: $('#sw-reason', el).value } });
+        const c = pick();
+        if (!c) throw new Error('Vui lòng chọn người làm thay / đổi ca');
+        await api('/ctv/swaps', { method: 'POST', body: { schedule_id: s.id, to_user: c.id, swap_schedule_id: c.swap_schedule_id, reason: $('#sw-reason', el).value } });
         close(); toast('Đã gửi phiếu, chờ quản lý duyệt'); reload && reload();
       });
     },
@@ -352,6 +361,7 @@ async function pageTeam(v) {
 /* =========================================================
    5. Phiếu đổi ca
    ========================================================= */
+const swapBack = r => r.swap_schedule_id ? `<br><span class="small muted">🔁 đổi lấy ca ${r.swap_start || '?'}–${r.swap_end || '?'}${r.swap_position ? ' · ' + esc(r.swap_position) : ''}</span>` : '';
 const SWAP_STATUS = { pending: ['Chờ duyệt', 'amber'], approved: ['Đã duyệt', 'green'], rejected: ['Từ chối', 'red'] };
 async function pageSwaps(v) {
   let status = 'all', dir = 'all', rows = [];
@@ -368,7 +378,7 @@ async function pageSwaps(v) {
     dataTable($('#body'), list, [
       { label: 'Ca', render: r => `<b>${fmtDate(r.date)}</b><br><span class="muted small">${r.start}–${r.end} · ${esc(r.position || '')}</span>` },
       { label: 'Người xin đổi', render: r => r.from_user === me ? '<b>Tôi</b>' : esc(r.from_username) },
-      { label: 'Người làm thay', render: r => r.to_user === me ? '<b>Tôi</b>' : esc(r.to_username) },
+      { label: 'Người làm thay', render: r => (r.to_user === me ? '<b>Tôi</b>' : esc(r.to_username)) + swapBack(r) },
       { label: 'Lý do', render: r => `<span class="muted">${esc(r.reason || '—')}</span>` },
       { label: 'Trạng thái', render: r => `<span class="badge ${SWAP_STATUS[r.status][1]}">${SWAP_STATUS[r.status][0]}</span>${r.handled_by ? `<br><span class="small muted">${esc(r.handled_by)}</span>` : ''}` },
       { label: '', cls: 'right', render: r => r.status === 'pending' && r.from_user === me ? `<button class="btn btn-sm btn-danger" data-cancel="${r.id}">Huỷ</button>` : '' },

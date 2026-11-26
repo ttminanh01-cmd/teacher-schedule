@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS swaps (
   id INTEGER PRIMARY KEY, schedule_id INTEGER NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
   from_user INTEGER NOT NULL, to_user INTEGER NOT NULL, reason TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL,
-  handled_by TEXT, handled_at TEXT);
+  handled_by TEXT, handled_at TEXT, swap_schedule_id INTEGER);
 CREATE TABLE IF NOT EXISTS salaries (
   user_id INTEGER NOT NULL, ym TEXT NOT NULL, bonus INTEGER NOT NULL DEFAULT 0,
   deduction INTEGER NOT NULL DEFAULT 0, note TEXT DEFAULT '', PRIMARY KEY (user_id, ym));
@@ -129,6 +129,8 @@ def migrate(con):
         con.execute("ALTER TABLE shift_types ADD COLUMN need_max INTEGER NOT NULL DEFAULT 0")
         for code, lo, hi in (("sang", 2, 2), ("chieu", 3, 3), ("toi", 5, 6)):
             con.execute("UPDATE shift_types SET need_min=?, need_max=? WHERE code=?", (lo, hi, code))
+    if "swap_schedule_id" not in {r[1] for r in con.execute("PRAGMA table_info(swaps)")}:
+        con.execute("ALTER TABLE swaps ADD COLUMN swap_schedule_id INTEGER")  # đổi chéo: ca của người nhận chuyển lại cho người xin
     cols = {r[1] for r in con.execute("PRAGMA table_info(schedules)")}
     if "approved_at" not in cols:
         for c in ("note TEXT DEFAULT ''", "plan TEXT", "approved_at TEXT", "approved_by TEXT"):

@@ -569,7 +569,7 @@ async function aSwaps(v) {
       .map(([k, l]) => `<button class="${status === k ? 'active' : ''}" data-s="${k}">${l} <span class="n">${c[k]}</span></button>`).join('');
     dataTable($('#body'), rows.filter(r => status === 'all' || r.status === status), [
       { label: 'Ca', render: r => `<b>${dowOf(r.date)} ${fmtDate(r.date)}</b><br><span class="small muted">${r.start}–${r.end} · ${esc(r.position || '')}</span>` },
-      { label: 'Người xin đổi → làm thay', render: r => `${esc(r.from_username)} → <b>${esc(r.to_username)}</b>` },
+      { label: 'Người xin đổi → làm thay', render: r => `${esc(r.from_username)} → <b>${esc(r.to_username)}</b>${r.swap_schedule_id ? `<br><span class="small muted">🔁 Đổi chéo: ${esc(r.from_username)} nhận ca ${r.swap_start || '?'}–${r.swap_end || '?'}${r.swap_position ? ' · ' + esc(r.swap_position) : ''} của ${esc(r.to_username)}</span>` : ''}` },
       { label: 'Lý do', render: r => `<span class="muted">${esc(r.reason || '—')}</span>` },
       { label: 'Gửi lúc', render: r => `<span class="small muted nowrap">${fmtDate(r.created_at.slice(0, 10))} ${r.created_at.slice(11, 16)}</span>` },
       { label: 'Trạng thái', render: r => `<span class="badge ${ST[r.status][1]}">${ST[r.status][0]}</span>${r.handled_by ? `<br><span class="small muted">${esc(r.handled_by)}</span>` : ''}` },
