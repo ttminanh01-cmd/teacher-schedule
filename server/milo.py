@@ -183,76 +183,77 @@ def search(q: str, limit: int = 20) -> dict:
 
 def apps_script(token: str, portal: str, ids: dict) -> str:
     return f"""// Cổng CTV ← dữ liệu tài khoản Milo (tab "TK Milo" trong Tài liệu). Chạy bằng tài khoản công ty xem được 3 file.
-// Cài: script.google.com → Dự án mới → dán code → 💾 Lưu → chọn hàm "setup" → ▶ Chạy → cho phép quyền.
+// Cài: dán vào project Apps Script (có thể chung project với script Cẩm nang) → 💾 Lưu → chọn hàm "miloSetup" → ▶ Chạy → cho phép quyền.
+// Mọi tên đều có tiền tố MILO_/milo để không trùng với code Cẩm nang trong cùng project.
 // Sau đó script tự chạy 10 phút/lần: chỉ gửi khi dữ liệu đổi (hoặc portal vừa khởi động lại, chưa có dữ liệu).
-const PORTAL = '{portal}/api/milo/push';
-const TOKEN = '{token}';
-const MILO = 'english adventure with milo';
-const SRC1_ID = '{ids["s1"]}', SRC1_SHEET = 'Format', SRC1_START = 4;               // ICC_Bàn giao học viên
-const SRC2_ID = '{ids["s2"]}', SRC2_SHEET = 'ICC_15052024', SRC2_START = 2;         // data_handover
-const VH_ID = '{ids["vh"]}', VH_SHEET = 'File làm việc Milo', VH_START = 2;        // File làm việc Milo
+const MILO_PORTAL = '{portal}/api/milo/push';
+const MILO_TOKEN = '{token}';
+const MILO_PRODUCT = 'english adventure with milo';
+const MILO_SRC1_ID = '{ids["s1"]}', MILO_SRC1_SHEET = 'Format', MILO_SRC1_START = 4;               // ICC_Bàn giao học viên
+const MILO_SRC2_ID = '{ids["s2"]}', MILO_SRC2_SHEET = 'ICC_15052024', MILO_SRC2_START = 2;         // data_handover
+const MILO_VH_ID = '{ids["vh"]}', MILO_VH_SHEET = 'File làm việc Milo', MILO_VH_START = 2;        // File làm việc Milo
 
-function setup() {{
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sync').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('sync').timeBased().everyMinutes(10).create();
-  PropertiesService.getScriptProperties().deleteProperty('hash');
-  sync(true);
+function miloSetup() {{
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'miloSync').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('miloSync').timeBased().everyMinutes(10).create();
+  PropertiesService.getScriptProperties().deleteProperty('milo_hash');
+  miloSync(true);
 }}
 
-function col_(sh, start, c, n) {{ return sh.getRange(start, c, n, 1).getDisplayValues().map(r => r[0]); }}
+function miloCol_(sh, start, c, n) {{ return sh.getRange(start, c, n, 1).getDisplayValues().map(r => r[0]); }}
 
-function collect_() {{
+function miloCollect_() {{
   // Nguồn 1: A ngày bàn giao, D tên, E SĐT, F email, G trình độ, H sản phẩm
-  const sh1 = SpreadsheetApp.openById(SRC1_ID).getSheetByName(SRC1_SHEET);
-  if (!sh1) throw new Error('Không thấy tab ' + SRC1_SHEET);
-  const s1 = [], n1 = sh1.getLastRow() - SRC1_START + 1;
-  if (n1 > 0) sh1.getRange(SRC1_START, 1, n1, 8).getDisplayValues().forEach((r, i) => {{
-    if ((r[6] + ' ' + r[7]).toLowerCase().indexOf(MILO) < 0) return;
+  const sh1 = SpreadsheetApp.openById(MILO_SRC1_ID).getSheetByName(MILO_SRC1_SHEET);
+  if (!sh1) throw new Error('Không thấy tab ' + MILO_SRC1_SHEET);
+  const s1 = [], n1 = sh1.getLastRow() - MILO_SRC1_START + 1;
+  if (n1 > 0) sh1.getRange(MILO_SRC1_START, 1, n1, 8).getDisplayValues().forEach((r, i) => {{
+    if ((r[6] + ' ' + r[7]).toLowerCase().indexOf(MILO_PRODUCT) < 0) return;
     if (!r[3] && !r[4] && !r[5]) return;
-    s1.push([SRC1_START + i, r[0], r[3], r[4], r[5]]);
+    s1.push([MILO_SRC1_START + i, r[0], r[3], r[4], r[5]]);
   }});
   // Nguồn 2: B CreatedAt, K tên, N email, O SĐT, S curriculum, AH PaymentDate (đọc từng cột cho nhanh)
-  const sh2 = SpreadsheetApp.openById(SRC2_ID).getSheetByName(SRC2_SHEET);
-  if (!sh2) throw new Error('Không thấy tab ' + SRC2_SHEET);
-  const s2 = [], n2 = sh2.getLastRow() - SRC2_START + 1;
+  const sh2 = SpreadsheetApp.openById(MILO_SRC2_ID).getSheetByName(MILO_SRC2_SHEET);
+  if (!sh2) throw new Error('Không thấy tab ' + MILO_SRC2_SHEET);
+  const s2 = [], n2 = sh2.getLastRow() - MILO_SRC2_START + 1;
   if (n2 > 0) {{
-    const cur = col_(sh2, SRC2_START, 19, n2), b = col_(sh2, SRC2_START, 2, n2), k = col_(sh2, SRC2_START, 11, n2),
-          nn = col_(sh2, SRC2_START, 14, n2), o = col_(sh2, SRC2_START, 15, n2), ah = col_(sh2, SRC2_START, 34, n2);
+    const cur = miloCol_(sh2, MILO_SRC2_START, 19, n2), b = miloCol_(sh2, MILO_SRC2_START, 2, n2), k = miloCol_(sh2, MILO_SRC2_START, 11, n2),
+          nn = miloCol_(sh2, MILO_SRC2_START, 14, n2), o = miloCol_(sh2, MILO_SRC2_START, 15, n2), ah = miloCol_(sh2, MILO_SRC2_START, 34, n2);
     cur.forEach((c, i) => {{
-      if (String(c).toLowerCase().indexOf(MILO) < 0) return;
+      if (String(c).toLowerCase().indexOf(MILO_PRODUCT) < 0) return;
       if (!k[i] && !nn[i] && !o[i]) return;
-      s2.push([SRC2_START + i, b[i], ah[i], k[i], nn[i], o[i]]);
+      s2.push([MILO_SRC2_START + i, b[i], ah[i], k[i], nn[i], o[i]]);
     }});
   }}
   // File VH: F tên, G email, H SĐT, J ngày TT, L UsernameIms, M PasswordIms, N cấp TK (ô tích), O tình trạng mail
-  const sh3 = SpreadsheetApp.openById(VH_ID).getSheetByName(VH_SHEET);
-  if (!sh3) throw new Error('Không thấy tab ' + VH_SHEET);
-  const vh = [], n3 = sh3.getLastRow() - VH_START + 1;
-  if (n3 > 0) sh3.getRange(VH_START, 6, n3, 10).getDisplayValues().forEach((r, i) => {{
+  const sh3 = SpreadsheetApp.openById(MILO_VH_ID).getSheetByName(MILO_VH_SHEET);
+  if (!sh3) throw new Error('Không thấy tab ' + MILO_VH_SHEET);
+  const vh = [], n3 = sh3.getLastRow() - MILO_VH_START + 1;
+  if (n3 > 0) sh3.getRange(MILO_VH_START, 6, n3, 10).getDisplayValues().forEach((r, i) => {{
     if (!r[0] && !r[1] && !r[2]) return;
-    vh.push([VH_START + i, r[0], r[1], r[2], r[4], r[6], r[7], r[8], r[9]]);
+    vh.push([MILO_VH_START + i, r[0], r[1], r[2], r[4], r[6], r[7], r[8], r[9]]);
   }});
   return {{ s1: s1, s2: s2, vh: vh }};
 }}
 
-function post_(body) {{
-  const res = UrlFetchApp.fetch(PORTAL, {{ method: 'post', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }});
+function miloPost_(body) {{
+  const res = UrlFetchApp.fetch(MILO_PORTAL, {{ method: 'post', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }});
   if (res.getResponseCode() !== 200) throw new Error('Portal báo lỗi ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
   return JSON.parse(res.getContentText());
 }}
 
-function sync(force) {{
+function miloSync(force) {{
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(1000)) return;
+  if (!lock.tryLock(30000)) return;
   try {{
     const p = PropertiesService.getScriptProperties();
-    const data = collect_();
+    const data = miloCollect_();
     const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(data), Utilities.Charset.UTF_8));
-    let send = force === true || hash !== p.getProperty('hash');
-    if (!send) send = post_({{ token: TOKEN, hash: hash, ping: true }}).need_full;  // portal khởi động lại → gửi lại
+    let send = force === true || hash !== p.getProperty('milo_hash');
+    if (!send) send = miloPost_({{ token: MILO_TOKEN, hash: hash, ping: true }}).need_full;  // portal khởi động lại → gửi lại
     if (!send) {{ Logger.log('Không đổi'); return; }}
-    const r = post_(Object.assign({{ token: TOKEN, hash: hash }}, data));
-    p.setProperty('hash', hash);
+    const r = miloPost_(Object.assign({{ token: MILO_TOKEN, hash: hash }}, data));
+    p.setProperty('milo_hash', hash);
     Logger.log('Đã gửi sang portal: nguồn 1 ' + data.s1.length + ' · nguồn 2 ' + data.s2.length + ' · file VH ' + data.vh.length + ' dòng');
   }} finally {{
     lock.releaseLock();

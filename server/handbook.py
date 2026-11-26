@@ -134,7 +134,7 @@ const SHEET_ID = '{sheet_id}';
 const LINK_MAX_ROWS = {LINK_MAX_ROWS};
 
 function setup() {{
-  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sync').forEach(t => ScriptApp.deleteTrigger(t));  // giữ trigger của script khác trong cùng project (VD miloSync)
   ScriptApp.newTrigger('sync').timeBased().everyMinutes(1).create();
   try {{
     ScriptApp.newTrigger('sync').forSpreadsheet(SHEET_ID).onChange().create();
