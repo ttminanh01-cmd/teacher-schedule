@@ -15,7 +15,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import autoschedule, crm_videos, db, docs, handbook, ican, notify, sheet_sync, yt_videos
+from . import autoschedule, crm_videos, db, docs, handbook, ican, milo, notify, sheet_sync, yt_videos
 from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -1534,11 +1534,72 @@ def doc_tabs(con) -> list:
 
 @app.get("/api/docs")
 def doc_list(u=Depends(current_user), con=Depends(get_con)):
-    return [{"id": t["id"], "name": t["name"]} for t in doc_tabs(con)]
+    out = [{"id": t["id"], "name": t["name"]} for t in doc_tabs(con)]
+    if milo.enabled(con):
+        out.append({"id": "milo", "name": "TK Milo"})
+    return out
+
+
+# ----- tab "TK Milo": tra học viên đã bàn giao / đã có trong file VH / tài khoản được tạo
+MILO_KEYS = ("s1", "s2", "vh")
+
+
+def milo_sources(con) -> dict:
+    try:
+        d = json.loads(db.get_setting(con, "milo_sources", "{}")) or {}
+    except ValueError:
+        d = {}
+    return {k: d.get(k, "") for k in MILO_KEYS}
+
+
+@app.post("/api/milo/push")
+def milo_push(body: dict = Body(...), con=Depends(get_con)):
+    """Apps Script (tài khoản công ty của admin) gửi các dòng Milo của 3 file sang."""
+    try:
+        return milo.receive(con, body)
+    except milo.MiloError as e:
+        err(str(e), 403 if "mã bảo mật" in str(e) else 400)
+
+
+@app.get("/api/milo/search")
+def milo_search(q: str = "", u=Depends(current_user)):
+    if len(q.strip()) < 2:
+        return {"ready": milo.status()["data_at"] is not None, "students": []}
+    return milo.search(q)
+
+
+@app.get("/api/admin/milo")
+def admin_milo(request: Request, u=Depends(admin_user), con=Depends(get_con)):
+    tok = milo.ensure_token(con)
+    src = milo_sources(con)
+    portal = f"{request.headers.get('x-forwarded-proto') or request.url.scheme}://{request.headers.get('host') or request.url.netloc}"
+    st = milo.status()
+    return {"sources": {k: f"https://docs.google.com/spreadsheets/d/{v}" if v else "" for k, v in src.items()},
+            "ready": all(src.values()),
+            "gas_script": milo.apps_script(tok, portal, src) if all(src.values()) else "",
+            "data_at": fmt_ts(st["data_at"]) if st["data_at"] else None,
+            "seen_at": fmt_ts(st["seen_at"]) if st["seen_at"] else None, "count": st["count"]}
+
+
+@app.put("/api/admin/milo")
+def save_admin_milo(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    src = {}
+    for k in MILO_KEYS:
+        try:
+            src[k] = handbook.parse_sheet_id(str(body.get(k, "")))
+        except handbook.HandbookError:
+            err("Link Google Sheet không hợp lệ")
+    db.set_setting(con, "milo_sources", dumps(src))
+    log(con, u, "Cập nhật nguồn dữ liệu TK Milo")
+    return {"ok": True}
 
 
 @app.get("/api/docs/{tid}")
 def doc_view(tid: str, refresh: bool = False, u=Depends(current_user), con=Depends(get_con)):
+    if tid == "milo" and milo.enabled(con):
+        st = milo.status()
+        return {"id": "milo", "name": "TK Milo", "milo": True, "ready": st["data_at"] is not None,
+                "data_at": fmt_ts(st["data_at"]) if st["data_at"] else None}
     t = next((t for t in doc_tabs(con) if t["id"] == tid), None)
     if not t:
         err("Không tìm thấy tab tài liệu", 404)

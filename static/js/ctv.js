@@ -894,9 +894,48 @@ async function pageDocs(v) {
     let timer;
     $('#doc-tq').oninput = e => { clearTimeout(timer); timer = setTimeout(() => { q = e.target.value.trim(); tlimit = 200; paintRows(); }, 150); };
   };
+  /* tab TK Milo: tra học viên đã bàn giao chưa, đã vào file VH chưa, tài khoản được tạo là gì */
+  const MILO_ST = { granted: 'green', created: 'blue', in_vh: 'amber', handed: 'amber', none: 'red' };
+  const miloCard = s => {
+    const yes = t => `<span class="badge green">✓</span> ${t}`, no = t => `<span class="muted">${t}</span>`;
+    const s1 = s.s1.length ? yes(s.s1.map(r => `dòng ${r.row}${r.date ? ` · bàn giao ${esc(r.date)}` : ''}`).join('<br>')) : no('Không thấy');
+    const s2 = s.s2.length ? yes(s.s2.map(r => `dòng ${r.row}${r.created ? ` · tạo ${esc(r.created)}` : ''}${r.paid ? ` · TT ${esc(r.paid)}` : ''}`).join('<br>')) : no('Không thấy');
+    const cp = v => v ? `<b class="mono">${esc(v)}</b> <button class="btn btn-sm btn-ghost" data-copyval="${esc(v)}" title="Sao chép">${icon('copy')}</button>` : '<span class="muted">—</span>';
+    const vh = s.vh.length ? s.vh.map(r => `<dl class="kv" style="margin-top:6px">
+        <dt>Dòng</dt><dd>${r.row}${r.name ? ` · ${esc(r.name)}` : ''}${r.paid ? ` · TT ${esc(r.paid)}` : ''}</dd>
+        <dt>Username</dt><dd>${cp(r.username)}</dd>
+        <dt>Password</dt><dd>${cp(r.password)}</dd>
+        <dt>Cấp tài khoản</dt><dd>${r.granted ? '<span class="badge green">Đã tích</span>' : '<span class="badge amber">Chưa tích</span>'}</dd>
+        <dt>Mail</dt><dd>${r.mail ? esc(r.mail) : '<span class="muted">—</span>'}</dd></dl>`).join('<hr style="border:0;border-top:1px solid var(--border);margin:8px 0">') : no('Chưa có trong file VH');
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-head"><h2>${esc(s.name || '(không tên)')}</h2><span class="badge ${MILO_ST[s.status]}">${esc(s.status_label)}</span></div>
+      <div class="card-pad"><div class="small muted" style="margin-bottom:10px">${[...s.emails, ...s.phones].map(esc).join(' · ') || '—'}</div>
+        <dl class="kv"><dt>Bàn giao (ICC – Format)</dt><dd>${s1}</dd><dt>Bàn giao (data_handover)</dt><dd>${s2}</dd><dt>File VH (tạo TK)</dt><dd>${vh}</dd></dl></div></div>`;
+  };
+  const paintMilo = () => {
+    $('#doc-body').innerHTML = `<div class="search hb-search">${icon('search')}<input class="input full" id="milo-q" placeholder="Tìm học viên Milo theo tên, email hoặc SĐT (gõ không dấu cũng được)" autocomplete="off" value="${esc(q)}"></div>
+      <div class="small muted" id="milo-count" style="margin:6px 2px 8px">${d.ready ? `Dữ liệu cập nhật lúc ${d.data_at.slice(11, 16)} ${fmtDate(d.data_at.slice(0, 10))} · gõ ít nhất 2 ký tự` : 'Đang chờ dữ liệu từ Google Sheet (tối đa ~10 phút)…'}</div><div id="milo-res"></div>`;
+    let timer, seq = 0;
+    const go = async () => {
+      const my = ++seq, text = q;
+      if (text.length < 2) { $('#milo-res').innerHTML = ''; return; }
+      $('#milo-res').innerHTML = loading();
+      const r = await api('/milo/search', { query: { q: text } }).catch(e => ({ error: e.message }));
+      if (my !== seq) return;
+      if (r.error) { $('#milo-res').innerHTML = `<div class="card">${emptyState(r.error)}</div>`; return; }
+      if (!r.ready) { $('#milo-res').innerHTML = `<div class="card">${emptyState('Portal chưa nhận được dữ liệu Milo, thử lại sau vài phút')}</div>`; return; }
+      $('#milo-res').innerHTML = r.students.length
+        ? r.students.map(miloCard).join('') + (r.more ? '<p class="small muted">Còn nữa — gõ cụ thể hơn để thu hẹp</p>' : '')
+        : `<div class="card">${emptyState(`Không thấy học viên nào khớp “${text}” trong 2 file bàn giao và file VH`)}</div>`;
+    };
+    $('#milo-q').oninput = e => { clearTimeout(timer); timer = setTimeout(() => { q = e.target.value.trim(); go(); }, 300); };
+    $('#milo-q').focus();
+    go();
+  };
   const paint = () => {
     const body = $('#doc-body');
     if (d.error) { body.innerHTML = `<div class="card">${emptyState(d.error)}</div>`; return; }
+    if (d.milo) { paintMilo(); return; }
     if (d.table) { paintTable(); return; }
     if (d.single) { body.innerHTML = `<div class="card doc-single">${player(all()[0])}</div>`; return; }
     if (!all().some(x => x.id === cur)) cur = (all().find(x => x.kind === 'video') || all()[0] || {}).id;
@@ -925,6 +964,7 @@ async function pageDocs(v) {
   $('.doc-tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === tid) return; tid = b.dataset.tab; store.set('doc_tab', tid); load(false).catch(er => { $('#doc-body').innerHTML = `<div class="card">${emptyState(er.message)}</div>`; }); };
   $('#doc-body').addEventListener('click', e => {
     const c = e.target.closest('[data-copylink]'); if (c) copy(c.dataset.copylink, 'Đã sao chép link');
+    const cv = e.target.closest('[data-copyval]'); if (cv) copy(cv.dataset.copyval, 'Đã sao chép');
     const cc = e.target.closest('[data-copy]'); if (cc) { e.preventDefault(); copy(cc.previousElementSibling.innerText, 'Đã sao chép'); }
     if (e.target.closest('[data-tmore]')) { tlimit += 200; paintRows(); }
   });

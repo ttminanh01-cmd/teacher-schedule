@@ -1164,7 +1164,37 @@ const DOC_DESC = 'Tài liệu cho CTV: Cẩm nang, video thao tác CRM và các 
 const DOC_BUILTIN = [
   { id: 'handbook', name: 'Cẩm nang', render: aHandbook },
   { id: 'crm', name: 'Video thao tác CRM', render: aCRM },
+  { id: 'milo', name: 'TK Milo', render: aMilo },
 ];
+/* tab TK Milo: 3 file nguồn (chỉ chia sẻ trong công ty) → Apps Script gửi các dòng Milo sang portal */
+async function aMilo(body) {
+  body.innerHTML = loading();
+  const d = await api('/admin/milo');
+  const L = { s1: ['File ICC_Bàn giao học viên (tab Format)', 'https://docs.google.com/spreadsheets/d/…'], s2: ['File data_handover (tab ICC_15052024)', 'https://docs.google.com/spreadsheets/d/…'], vh: ['File làm việc Milo của VH (tab File làm việc Milo)', 'https://docs.google.com/spreadsheets/d/…'] };
+  const c = d.count;
+  body.innerHTML = `<div class="card"><div class="card-pad">
+    <p class="small muted" style="margin-bottom:12px">CTV vào <b>Tài liệu → TK Milo</b>, tìm học viên theo tên / email / SĐT để xem: đã bàn giao ở 2 file nguồn chưa, đã có trong file VH chưa, username / password được tạo và tình trạng cấp tài khoản. Khớp học viên giữa các file theo email hoặc SĐT.</p>
+    ${d.data_at ? `<p class="small" style="margin-bottom:12px"><span class="badge green">Đang nhận dữ liệu</span> Cập nhật lúc <b>${hm(d.data_at)} ${fmtDate(d.data_at.slice(0, 10))}</b>${c ? ` · nguồn 1: ${c.s1} dòng Milo · nguồn 2: ${c.s2} · file VH: ${c.vh}` : ''}${d.seen_at ? ` · Apps Script kiểm tra gần nhất ${hm(d.seen_at)}` : ''}</p>` : '<p class="small" style="margin-bottom:12px"><span class="badge amber">Chưa nhận dữ liệu</span> Dán link 3 file → Lưu → cài Apps Script bên dưới.</p>'}
+    <form id="milo-form">${Object.entries(L).map(([k, [lb, ph]]) => `<div class="field"><label>${lb}</label><input class="input" name="${k}" required value="${esc(d.sources[k])}" placeholder="${ph}"></div>`).join('')}
+      <button class="btn btn-primary">Lưu</button></form>
+    ${d.gas_script ? `<details style="margin-top:16px" ${d.data_at ? '' : 'open'}><summary style="cursor:pointer"><b>Cài Apps Script để tự gửi dữ liệu sang portal</b> ${d.data_at ? '<span class="badge green">Đã cài</span>' : '<span class="muted small">(cài 1 lần)</span>'}</summary>
+      <ol class="small" style="margin:8px 0 8px 18px;line-height:1.7">
+        <li>Đăng nhập Google bằng tài khoản <b>công ty xem được cả 3 file</b> → mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Dự án mới</a>.</li>
+        <li>Xoá code mẫu, dán đoạn code bên dưới → bấm 💾 <b>Lưu</b>.</li>
+        <li>Ô chọn hàm chọn <b>setup</b> → <b>▶ Chạy</b> → <b>Xem xét quyền</b> → chọn tài khoản → <b>Cho phép</b>.</li>
+        <li>Nhật ký hiện “Đã gửi sang portal …” là xong → tải lại trang này. Sau đó script tự chạy 10 phút/lần, chỉ gửi khi dữ liệu thay đổi.</li>
+      </ol>
+      <div style="position:relative;display:block;width:100%"><textarea class="input mono" rows="6" readonly style="font-size:11.5px;display:block;width:100%;box-sizing:border-box">${esc(d.gas_script)}</textarea>
+        <button type="button" class="btn btn-sm" id="milo-copy" style="position:absolute;right:8px;top:8px">${icon('copy')} Sao chép</button></div>
+      <span class="hint">Đổi link file thì bấm Lưu, sao chép lại code, dán đè rồi chạy lại setup. Mã bảo mật trong code là riêng của portal — không chia sẻ ra ngoài.</span></details>` : ''}
+  </div></div>`;
+  $('#milo-form', body).onsubmit = e => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    run(e.submitter, async () => { await api('/admin/milo', { method: 'PUT', body: Object.fromEntries(f) }); toast('Đã lưu'); aMilo(body); });
+  };
+  const cb = $('#milo-copy', body); if (cb) cb.onclick = () => navigator.clipboard.writeText(d.gas_script).then(() => toast('Đã sao chép code'));
+}
 const DOC_KIND = url => {
   const u = (url || '').trim();
   if (/docs\.google\.com\/spreadsheets\/.*[#&?]gid=\d+/.test(u)) return 'Tab Google Sheet (tab của file Cẩm nang sẽ hiện thành bảng tra cứu)';
