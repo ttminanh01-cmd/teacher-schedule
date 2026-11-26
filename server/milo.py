@@ -210,7 +210,7 @@ def status() -> dict:
     _ensure_loaded()
     d = _state["data"]
     at = _state["at"] or ((_state.get("archive") or {}).get("at") if d else None)
-    return {"data_at": at, "seen_at": _state["seen"],
+    return {"data_at": at, "seen_at": _state["seen"], "partial": _state.get("live") is None,
             "count": {s: sum(r["src"] == s for r in d["recs"]) for s in ("s1", "s2", "vh")} if d else None}
 
 
@@ -274,7 +274,7 @@ def search(q: str, limit: int = 20) -> dict:
         if ws:
             hits = {i for i, r in enumerate(recs) if all(w in r["f"] for w in ws)}
     if not hits:
-        return {"ready": True, "students": [], "more": False}
+        return {"ready": True, "students": [], "more": False, "partial": _state.get("live") is None}
     # gom các bản ghi cùng email / SĐT thành 1 học viên (union-find)
     parent = {}
 
@@ -325,7 +325,7 @@ def search(q: str, limit: int = 20) -> dict:
                          "phones": sorted({r["phone"] for r in rs if r["phone"]}), "status": st[0], "status_label": st[1],
                          "s1": s1, "s2": s2, "vh": vh, "direct": any(i in hits for i in idx)})
     students.sort(key=lambda s: (not s["direct"], fold(s["name"])))
-    return {"ready": True, "students": students[:limit], "more": len(students) > limit}
+    return {"ready": True, "students": students[:limit], "more": len(students) > limit, "partial": _state.get("live") is None}
 
 
 def apps_script(token: str, portal: str, ids: dict) -> str:

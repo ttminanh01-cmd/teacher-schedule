@@ -918,7 +918,7 @@ async function pageDocs(v) {
   };
   const paintMilo = () => {
     $('#doc-body').innerHTML = `<div class="search hb-search">${icon('search')}<input class="input full" id="milo-q" placeholder="Tìm học viên Milo theo tên, email hoặc SĐT (gõ không dấu cũng được)" autocomplete="off" value="${esc(q)}"></div>
-      <div class="small muted" id="milo-count" style="margin:6px 2px 8px">${d.ready ? `Dữ liệu cập nhật lúc ${d.data_at.slice(11, 16)} ${fmtDate(d.data_at.slice(0, 10))} · gõ ít nhất 2 ký tự` : 'Đang chờ dữ liệu từ Google Sheet (tối đa ~10 phút)…'}</div><div id="milo-res"></div>`;
+      <div class="small muted" id="milo-count" style="margin:6px 2px 8px">${d.ready ? `Dữ liệu cập nhật lúc ${d.data_at.slice(11, 16)} ${fmtDate(d.data_at.slice(0, 10))} · gõ ít nhất 2 ký tự` : 'Đang chờ dữ liệu từ Google Sheet (tối đa ~10 phút)…'}${d.partial && d.ready ? ' · <span class="badge amber">Đang tải lịch sử lần đầu — chưa có ~200 dòng mới nhất mỗi file, chờ thêm 10–20 phút</span>' : ''}</div><div id="milo-res"></div>`;
     let timer, seq = 0;
     const go = async () => {
       const my = ++seq, text = q;
@@ -930,7 +930,7 @@ async function pageDocs(v) {
       if (!r.ready) { $('#milo-res').innerHTML = `<div class="card">${emptyState('Portal chưa nhận được dữ liệu Milo, thử lại sau vài phút')}</div>`; return; }
       $('#milo-res').innerHTML = r.students.length
         ? r.students.map(miloCard).join('') + (r.more ? '<p class="small muted">Còn nữa — gõ cụ thể hơn để thu hẹp</p>' : '')
-        : `<div class="card">${emptyState(`Không thấy học viên nào khớp “${text}” trong 2 file bàn giao và file VH`)}</div>`;
+        : `<div class="card">${emptyState(r.partial ? `Chưa thấy “${text}” — portal đang tải lịch sử lần đầu, các dòng mới nhất chưa về. Thử lại sau 10–20 phút.` : `Không thấy học viên nào khớp “${text}” trong 2 file bàn giao và file VH`)}</div>`;
     };
     $('#milo-q').oninput = e => { clearTimeout(timer); timer = setTimeout(() => { q = e.target.value.trim(); go(); }, 300); };
     $('#milo-q').focus();

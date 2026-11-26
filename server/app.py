@@ -1598,7 +1598,7 @@ def save_admin_milo(body: dict = Body(...), u=Depends(admin_user), con=Depends(g
 def doc_view(tid: str, refresh: bool = False, u=Depends(current_user), con=Depends(get_con)):
     if tid == "milo" and milo.enabled(con):
         st = milo.status()
-        return {"id": "milo", "name": "TK Milo", "milo": True, "ready": st["data_at"] is not None,
+        return {"id": "milo", "name": "TK Milo", "milo": True, "ready": st["data_at"] is not None, "partial": st["partial"],
                 "data_at": fmt_ts(st["data_at"]) if st["data_at"] else None}
     t = next((t for t in doc_tabs(con) if t["id"] == tid), None)
     if not t:
