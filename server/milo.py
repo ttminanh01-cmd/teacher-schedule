@@ -334,8 +334,9 @@ def apps_script(token: str, portal: str, ids: dict) -> str:
 // Mọi tên đều có tiền tố MILO_/milo để không trùng với code Cẩm nang trong cùng project.
 // Chỉ lấy dòng có khoá "English Adventure with Milo" (Format: cột G/H · data_handover: cột S) — gửi đủ mọi cột của dòng đó
 // để tra được bàn giao lúc nào, ai bàn giao…; file VH lấy mọi dòng có tên/email/SĐT.
-// Dòng cũ gửi 1 lần rồi portal lưu lại; mỗi 10 phút chỉ đọc ~200 dòng cuối mỗi file (dòng mới / đang sửa), đổi mới gửi.
-// Lần đầu đọc toàn bộ lịch sử theo từng đợt (mỗi lần chạy tối đa ~4 phút, chưa xong thì lần sau làm tiếp).
+// Dòng cũ gửi 1 lần rồi portal lưu lại; mỗi lần chạy chỉ đọc ~200 dòng cuối mỗi file (dòng mới / đang sửa), đổi mới gửi.
+// Chạy khi file VH có thay đổi (gần như ngay) + 5 phút/lần (2 file bàn giao chỉ có quyền xem nên không gắn được "khi thay đổi").
+// Lần đầu đọc toàn bộ lịch sử theo từng đợt (mỗi lần chạy tối đa ~4 phút, chưa xong thì lần sau làm tiếp); dòng mới nhất luôn gửi trước.
 const MILO_PORTAL = '{portal}/api/milo/push';
 const MILO_TOKEN = '{token}';
 const MILO_PRODUCT = 'english adventure with milo';
@@ -349,7 +350,13 @@ const MILO_SRC = {{
 // Chạy 1 lần (hoặc chạy lại để gửi lại toàn bộ lịch sử nếu dòng cũ có sửa)
 function miloSetup() {{
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'miloSync').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('miloSync').timeBased().everyMinutes(10).create();
+  ScriptApp.newTrigger('miloSync').timeBased().everyMinutes(5).create();
+  try {{
+    ScriptApp.newTrigger('miloSync').forSpreadsheet(MILO_SRC.vh.id).onChange().create();
+    Logger.log('Đã bật cập nhật ngay khi file VH thay đổi + kiểm tra 5 phút/lần');
+  }} catch (err) {{
+    Logger.log('Không gắn được trigger khi file VH thay đổi (' + err.message + ') → vẫn kiểm tra 5 phút/lần');
+  }}
   const p = PropertiesService.getScriptProperties();
   ['milo_hash', 'milo_t_s1', 'milo_t_s2', 'milo_t_vh'].forEach(k => p.deleteProperty(k));
   miloPost_({{ op: 'reset' }});
@@ -409,7 +416,7 @@ function miloPost_(body) {{
 
 function miloSync() {{
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) return;
+  if (!lock.tryLock(5000)) return;  // đang chạy dở thì bỏ qua, lần sau bắt kịp
   const t0 = Date.now();
   try {{
     const p = PropertiesService.getScriptProperties();
@@ -426,7 +433,18 @@ function miloSync() {{
       if (last[k] - tg > 2 * MILO_KEEP) tg = last[k] - MILO_KEEP;
       target[k] = Math.max(tg, MILO_SRC[k].start);
       p.setProperty('milo_t_' + k, String(target[k]));
-      // gửi phần lưu còn thiếu theo từng đợt
+    }});
+    // 1) phần đang làm (mốc lưu → cuối file): gửi trước để dòng mới nhất luôn có ngay
+    const live = {{}};
+    Object.keys(MILO_SRC).forEach(k => {{ live[k] = miloRead_(k, sheets[k], target[k], last[k]); }});
+    const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([target, live, headers]), Utilities.Charset.UTF_8));
+    if (hash !== st.hash) {{
+      const r = miloPost_(Object.assign({{ op: 'live', hash: hash, headers: headers }}, live));
+      const c = r.count || {{}};
+      Logger.log('Đã gửi sang portal: nguồn 1 ' + c.s1 + ' · nguồn 2 ' + c.s2 + ' · file VH ' + c.vh + ' dòng (' + Math.round((Date.now() - t0) / 1000) + 's)');
+    }}
+    // 2) dòng cũ còn thiếu trong bản lưu: gửi theo từng đợt
+    Object.keys(MILO_SRC).forEach(k => {{
       let from = Math.max(Number(st.archive[k] || 0), MILO_SRC[k].start);
       while (from < target[k]) {{
         if (Date.now() - t0 > MILO_BUDGET_MS) {{ done = false; break; }}
@@ -436,15 +454,8 @@ function miloSync() {{
         from = to;
       }}
     }});
-    if (!done) {{ Logger.log('Chưa lưu hết lịch sử, lần chạy sau (10 phút) làm tiếp'); return; }}
-    // phần đang làm: từ mốc lưu tới cuối file
-    const live = {{}};
-    Object.keys(MILO_SRC).forEach(k => {{ live[k] = miloRead_(k, sheets[k], target[k], last[k]); }});
-    const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([target, live, headers]), Utilities.Charset.UTF_8));
-    if (hash === st.hash) {{ Logger.log('Không đổi (' + Math.round((Date.now() - t0) / 1000) + 's)'); return; }}
-    const r = miloPost_(Object.assign({{ op: 'live', hash: hash, headers: headers }}, live));
-    const c = r.count || {{}};
-    Logger.log('Đã gửi sang portal: nguồn 1 ' + c.s1 + ' · nguồn 2 ' + c.s2 + ' · file VH ' + c.vh + ' dòng (' + Math.round((Date.now() - t0) / 1000) + 's)');
+    if (!done) Logger.log('Chưa lưu hết lịch sử, lần chạy sau làm tiếp');
+    else if (hash === st.hash) Logger.log('Không đổi (' + Math.round((Date.now() - t0) / 1000) + 's)');
   }} finally {{
     lock.releaseLock();
   }}

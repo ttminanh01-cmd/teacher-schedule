@@ -1182,7 +1182,7 @@ async function aMilo(body) {
         <li>Đăng nhập Google bằng tài khoản <b>công ty xem được cả 3 file</b> → mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Dự án mới</a>.</li>
         <li>Xoá code mẫu, dán đoạn code bên dưới → bấm 💾 <b>Lưu</b>.</li>
         <li>Ô chọn hàm chọn <b>miloSetup</b> → <b>▶ Chạy</b> → <b>Xem xét quyền</b> → chọn tài khoản → <b>Cho phép</b>.</li>
-        <li>Nhật ký hiện “Đã gửi sang portal …” là xong → tải lại trang này. Lần đầu đọc toàn bộ lịch sử (có thể cần 2–3 lượt, mỗi lượt cách 10 phút). Sau đó mỗi 10 phút chỉ đọc khoảng 200 dòng cuối mỗi file, đổi mới gửi.</li>
+        <li>Nhật ký hiện “Đã gửi sang portal …” là xong → tải lại trang này. Lần đầu đọc toàn bộ lịch sử (có thể cần vài lượt, mỗi lượt cách 5 phút). Sau đó file VH sửa là gửi gần như ngay, 2 file bàn giao kiểm tra 5 phút/lần (chỉ đọc ~200 dòng cuối mỗi file).</li>
       </ol>
       <div style="position:relative;display:block;width:100%"><textarea class="input mono" rows="6" readonly style="font-size:11.5px;display:block;width:100%;box-sizing:border-box">${esc(d.gas_script)}</textarea>
         <button type="button" class="btn btn-sm" id="milo-copy" style="position:absolute;right:8px;top:8px">${icon('copy')} Sao chép</button></div>
