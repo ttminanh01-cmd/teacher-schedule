@@ -844,7 +844,7 @@ async function pagePH(v) {
    ========================================================= */
 async function pageDocs(v) {
   const desc = 'Tài liệu, video hướng dẫn do quản lý chia sẻ. Chọn tab để xem ngay tại đây.';
-  const head = actions => pageHead('Tài liệu', desc, actions);
+  const head = actions => pageHead('Document', desc, actions);
   v.innerHTML = head('') + loading();
   const tabs = await api('/docs');
   if (!tabs.length) { v.innerHTML = head('') + `<div class="card">${emptyState('Quản lý chưa thêm tài liệu nào')}</div>`; return; }
@@ -1089,7 +1089,7 @@ App.start({
       { id: 'handbook', label: 'Cẩm nang', icon: 'book', render: pageHandbook },
       { id: 'crm', label: 'Thao tác ở CRM', icon: 'video', render: pageCRM },
       { id: 'ph-videos', label: 'Video hướng dẫn PH', icon: 'play', render: pagePH },
-      { id: 'docs', label: 'Tài liệu', icon: 'file', render: pageDocs },
+      { id: 'docs', label: 'Document', icon: 'file', render: pageDocs },
     ] },
     { group: 'Cá nhân', items: [
       { id: 'salary', label: 'Tra cứu lương', icon: 'wallet', render: pageSalary },
