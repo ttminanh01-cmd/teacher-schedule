@@ -335,12 +335,14 @@ def apps_script(token: str, portal: str, ids: dict) -> str:
 // Chỉ lấy dòng có khoá "English Adventure with Milo" (Format: cột G/H · data_handover: cột S) — gửi đủ mọi cột của dòng đó
 // để tra được bàn giao lúc nào, ai bàn giao…; file VH lấy mọi dòng có tên/email/SĐT.
 // Dòng cũ gửi 1 lần rồi portal lưu lại; mỗi lần chạy chỉ đọc ~200 dòng cuối mỗi file (dòng mới / đang sửa), đổi mới gửi.
-// Chạy khi file VH có thay đổi (gần như ngay) + 5 phút/lần (2 file bàn giao chỉ có quyền xem nên không gắn được "khi thay đổi").
+// Chạy khi file VH có thay đổi (gần như ngay) + 2 phút/lần trong giờ làm (7h–23h), 15 phút/lần ban đêm
+// (2 file bàn giao chỉ có quyền xem nên không gắn được "khi thay đổi").
 // Lần đầu đọc toàn bộ lịch sử theo từng đợt (mỗi lần chạy tối đa ~4 phút, chưa xong thì lần sau làm tiếp); dòng mới nhất luôn gửi trước.
 const MILO_PORTAL = '{portal}/api/milo/push';
 const MILO_TOKEN = '{token}';
 const MILO_PRODUCT = 'english adventure with milo';
 const MILO_KEEP = 200, MILO_CHUNK = 5000, MILO_BUDGET_MS = 4 * 60 * 1000;
+const MILO_EVERY_DAY_MIN = 2, MILO_EVERY_NIGHT_MIN = 15, MILO_DAY_FROM = 7, MILO_DAY_TO = 23;  // giờ làm 7h–23h
 const MILO_SRC = {{
   s1: {{ id: '{ids["s1"]}', sheet: 'Format', start: 4, head: 3 }},               // ICC_Bàn giao học viên (tiêu đề dòng 3)
   s2: {{ id: '{ids["s2"]}', sheet: 'ICC_15052024', start: 2, head: 1 }},         // data_handover (tiêu đề dòng 1)
@@ -356,15 +358,15 @@ function miloSetup() {{
   miloSync();
 }}
 
-// Chỉ đặt lại lịch chạy (khi file VH đổi + 5 phút/lần), không gửi lại lịch sử
+// Chỉ đặt lại lịch chạy (khi file VH đổi + 2 phút/lần giờ làm, 15 phút ban đêm), không gửi lại lịch sử
 function miloTriggers() {{
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'miloSync').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('miloSync').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('miloSync').timeBased().everyMinutes(1).create();  // thức mỗi phút, tự bỏ qua nếu chưa tới lượt
   try {{
     ScriptApp.newTrigger('miloSync').forSpreadsheet(MILO_SRC.vh.id).onChange().create();
-    Logger.log('Đã bật cập nhật ngay khi file VH thay đổi + kiểm tra 5 phút/lần');
+    Logger.log('Đã bật: cập nhật ngay khi file VH thay đổi + kiểm tra ' + MILO_EVERY_DAY_MIN + ' phút/lần (giờ làm), ' + MILO_EVERY_NIGHT_MIN + ' phút/lần (ban đêm)');
   }} catch (err) {{
-    Logger.log('Không gắn được trigger khi file VH thay đổi (' + err.message + ') → vẫn kiểm tra 5 phút/lần');
+    Logger.log('Không gắn được trigger khi file VH thay đổi (' + err.message + ') → vẫn kiểm tra ' + MILO_EVERY_DAY_MIN + ' phút/lần');
   }}
 }}
 
@@ -419,12 +421,20 @@ function miloPost_(body) {{
   return JSON.parse(res.getContentText());
 }}
 
-function miloSync() {{
+function miloSync(e) {{
+  const p = PropertiesService.getScriptProperties();
+  // trigger thời gian (1 phút/lần) → chỉ chạy thật khi đủ 2 phút (giờ làm) / 15 phút (ban đêm) từ lần trước.
+  // Sửa file VH (e.changeType) hoặc bấm ▶ Chạy tay thì chạy luôn.
+  if (e && e.triggerUid && !e.changeType) {{
+    const h = Number(Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'H')), day = h >= MILO_DAY_FROM && h < MILO_DAY_TO;
+    const every = (day ? MILO_EVERY_DAY_MIN : MILO_EVERY_NIGHT_MIN) * 60 * 1000;
+    if (Date.now() - Number(p.getProperty('milo_last') || 0) < every - 20 * 1000) return;
+  }}
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return;  // đang chạy dở thì bỏ qua, lần sau bắt kịp
   const t0 = Date.now();
+  p.setProperty('milo_last', String(t0));
   try {{
-    const p = PropertiesService.getScriptProperties();
     const st = miloPost_({{ op: 'state' }});
     const sheets = {{}}, last = {{}}, target = {{}};
     let done = true;

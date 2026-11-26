@@ -918,7 +918,7 @@ async function pageDocs(v) {
   };
   const paintMilo = () => {
     $('#doc-body').innerHTML = `<div class="search hb-search">${icon('search')}<input class="input full" id="milo-q" placeholder="Tìm học viên Milo theo tên, email hoặc SĐT (gõ không dấu cũng được)" autocomplete="off" value="${esc(q)}"></div>
-      <div class="small muted" id="milo-count" style="margin:6px 2px 8px">${d.ready ? `Dữ liệu cập nhật lúc ${d.data_at.slice(11, 16)} ${fmtDate(d.data_at.slice(0, 10))} · gõ ít nhất 2 ký tự` : 'Đang chờ dữ liệu từ Google Sheet (tối đa ~5 phút)…'}${d.partial && d.ready ? ' · <span class="badge amber">Đang tải lịch sử lần đầu — chưa có ~200 dòng mới nhất mỗi file, chờ thêm vài phút</span>' : ''}</div><div id="milo-res"></div>`;
+      <div class="small muted" id="milo-count" style="margin:6px 2px 8px">${d.ready ? `Dữ liệu cập nhật lúc ${d.data_at.slice(11, 16)} ${fmtDate(d.data_at.slice(0, 10))} · gõ ít nhất 2 ký tự` : 'Đang chờ dữ liệu từ Google Sheet (tối đa ~2 phút)…'}${d.partial && d.ready ? ' · <span class="badge amber">Đang tải lịch sử lần đầu — chưa có ~200 dòng mới nhất mỗi file, chờ thêm vài phút</span>' : ''}</div><div id="milo-res"></div>`;
     let timer, seq = 0;
     const go = async () => {
       const my = ++seq, text = q;
