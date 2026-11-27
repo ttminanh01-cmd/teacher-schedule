@@ -924,6 +924,60 @@ def admin_week_auto(body: dict = Body(...), u=Depends(admin_user), con=Depends(g
     return rep
 
 
+# ----- chia ca theo tháng (khi CTV đăng ký lịch rảnh theo tháng)
+@app.get("/api/admin/month")
+def admin_month(ym: str, u=Depends(admin_user), con=Depends(get_con)):
+    weeks = autoschedule.month_weeks(ym)
+    if not weeks:
+        err("Tháng không hợp lệ")
+    return {"ym": ym, "start": weeks[0].isoformat(), "end": (weeks[-1] + timedelta(days=6)).isoformat(),
+            "reg_open": reg_open(con, ym), "deadline": autoschedule.month_deadline(ym).strftime("%Y-%m-%d %H:%M"),
+            "gen_time": (autoschedule.month_deadline(ym) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M"),
+            "registered": con.execute("SELECT COUNT(*) FROM availability WHERE ym=?", (ym,)).fetchone()[0],
+            "active_ctv": con.execute("SELECT COUNT(*) FROM users WHERE role='ctv' AND active=1").fetchone()[0],
+            "sheet_ready": bool(db.get_setting(con, "sync_url")),
+            "weeks": [week_info(con, w.isoformat()) for w in weeks]}
+
+
+@app.post("/api/admin/month/auto")
+def admin_month_auto(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    ym = body["ym"]
+    weeks = autoschedule.month_weeks(ym)
+    if not weeks:
+        err("Tháng không hợp lệ")
+    if not autoschedule.has_regs(con, weeks[0]):
+        err("Chưa có CTV nào đăng ký lịch rảnh cho tháng này nên chưa tự xếp được")
+    rep = autoschedule.generate_month(con, ym, u["name"])
+    if not any("added" in w for w in rep["weeks"]):
+        err("Các tuần của tháng này đều đã duyệt. Bỏ duyệt tuần cần xếp lại trước.")
+    return rep
+
+
+@app.post("/api/admin/month/approve")
+def admin_month_approve(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    ym = body["ym"]
+    weeks = [w for w in autoschedule.month_weeks(ym)
+             if con.execute("SELECT 1 FROM schedules WHERE date BETWEEN ? AND ?", (w.isoformat(), (w + timedelta(days=6)).isoformat())).fetchone()]
+    if not weeks:
+        err("Tháng này chưa có ca nào")
+    for w in weeks:
+        autoschedule.set_status(con, w.isoformat(), approved_at=now_str(), approved_by=u["name"])
+    y, m = ym.split("-")
+    rng = f"{weeks[0].strftime('%d/%m')} – {(weeks[-1] + timedelta(days=6)).strftime('%d/%m')}"
+    con.execute("INSERT INTO notifications(title, body, created_at) VALUES (?,?,?)",
+                (f"Lịch trực tháng {int(m)}/{y} đã chốt", f"Lịch {rng}. Xem ca của bạn ở mục Lịch làm việc.", now_str()))
+    log(con, u, f"Duyệt lịch tháng {int(m)}/{y} ({len(weeks)} tuần, {rng})")
+    out = {"ok": True, "weeks": len(weeks), "pushed": 0}
+    if body.get("push") and db.get_setting(con, "sync_url"):
+        for w in weeks:
+            try:
+                out["pushed"] += bool(sheet_sync_push({"start": w.isoformat()}, u, con)["ok"])
+            except HTTPException as e:  # đã duyệt; chỉ báo lỗi ghi sheet
+                out["push_error"] = f"Tuần {w.strftime('%d/%m')}: {e.detail}"
+                break
+    return out
+
+
 @app.post("/api/admin/week/approve")
 def admin_week_approve(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
     ws = autoschedule.monday(date.fromisoformat(body["start"]))

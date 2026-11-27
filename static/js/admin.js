@@ -129,17 +129,26 @@ async function weekSyncDialog(start, after) {
   });
 }
 
-let boardStart = mondayOf(new Date());
+let boardStart = mondayOf(new Date()), boardMonth = null;
+/* tháng (theo quy tắc đăng ký theo tháng: tuần thuộc tháng của ngày thứ 5) */
+const monthOfWeek = d => ymOf(addDays(mondayOf(d), 3));
+const shiftYM = (ym, n) => ymOf(new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1));
+/* mặc định: từ ngày 20 xem tháng sau (đang chuẩn bị chia ca), trước đó xem tháng hiện tại */
+const defaultMonth = () => { const n = new Date(); return n.getDate() >= 20 ? shiftYM(ymOf(n), 1) : monthOfWeek(n); };
 async function aSchedule(v) {
   const shifts = App.meta.shifts;
   const avCache = {};
-  let list = [], users = [];
+  let list = [], users = [], mon = null;
+  const monthMode = App.meta.reg_mode === 'month';   // CTV đăng ký theo tháng → có thêm tab Chia ca theo tháng
+  let view = monthMode && store.get('sched_view') !== 'week' ? 'month' : 'week';
+  if (!boardMonth) boardMonth = defaultMonth();
   v.innerHTML = pageHead('Xếp lịch', 'Bấm “+ Thêm” để xếp CTV vào ca, bấm vào tên CTV để sửa giờ vào / ra, ca hoặc vị trí.',
     `<button class="btn" id="copy">${icon('copy')} Sao chép tuần trước</button><button class="btn" id="auto">${icon('refresh')} Tự xếp ca</button><button class="btn btn-primary" id="sync">${icon('check')} Duyệt lịch tuần</button>`) + `
     <div class="filters">
-      <button class="btn btn-icon" id="prev" aria-label="Tuần trước">${icon('chevL')}</button>
+      ${monthMode ? '<div class="seg" id="sview"><button data-v="month">Chia ca theo tháng</button><button data-v="week">Theo tuần</button></div>' : ''}
+      <button class="btn btn-icon" id="prev" aria-label="Lùi">${icon('chevL')}</button>
       <button class="btn" id="this">Tuần này</button>
-      <button class="btn btn-icon" id="next" aria-label="Tuần sau">${icon('chevR')}</button>
+      <button class="btn btn-icon" id="next" aria-label="Tới">${icon('chevR')}</button>
       <strong id="range" style="margin-left:8px"></strong><span style="flex:1"></span>
     </div>
     <div id="wk-st"></div>
@@ -148,16 +157,53 @@ async function aSchedule(v) {
 
   const availability = async ym => avCache[ym] || (avCache[ym] = await api('/admin/availability', { query: { ym } }));
 
+  const paintMode = () => {
+    $$('#sview button').forEach(b => b.classList.toggle('active', b.dataset.v === view));
+    const m = view === 'month';
+    $('#copy').hidden = m;
+    $('#auto').innerHTML = `${icon('refresh')} ${m ? 'Tự xếp ca cả tháng' : 'Tự xếp ca'}`;
+    $('#sync').innerHTML = `${icon('check')} ${m ? 'Duyệt lịch tháng' : 'Duyệt lịch tuần'}`;
+    $('#this').textContent = m ? 'Tháng đang chia' : 'Tuần này';
+  };
   const load = async () => {
+    paintMode();
+    if (view === 'month') return loadMonth();
     const end = addDays(boardStart, 6);
     $('#range').textContent = `${fmtDate(ymd(boardStart))} – ${fmtDate(ymd(end))}`;
     let wk;
     [list, users, wk] = await Promise.all([api('/admin/schedules', { query: { start: ymd(boardStart), end: ymd(end) } }), users.length ? users : api('/admin/users'),
       api('/admin/week', { query: { start: ymd(boardStart) } })]);
     paintWeek(wk);
+    $('#board').innerHTML = boardHTML(Array.from({ length: 7 }, (_, i) => ymd(addDays(boardStart, i))));
+  };
+  /* chia ca theo tháng: các tuần của tháng xếp chồng, mỗi tuần 1 bảng như chế độ tuần */
+  const WST = w => w.approved_at ? '<span class="badge green">Đã duyệt</span>' : w.generated_at ? '<span class="badge amber">Bản nháp tự xếp — CTV chưa thấy</span>'
+    : w.auto_rows ? '<span class="badge amber">Có ca tự xếp</span>' : '<span class="badge">Chưa tự xếp</span>';
+  const loadMonth = async () => {
+    [mon, users] = await Promise.all([api('/admin/month', { query: { ym: boardMonth } }), users.length ? users : api('/admin/users')]);
+    $('#range').innerHTML = `${fmtYM(boardMonth)} <span class="muted small" style="font-weight:400">(${fmtDM(mon.start)} – ${fmtDM(mon.end)})</span>`;
+    list = await api('/admin/schedules', { query: { start: mon.start, end: mon.end } });
+    const G = { sang: 'Sáng', chieu: 'Chiều', toi: 'Tối' };
+    const short = mon.weeks.filter(w => !w.approved_at).flatMap(w => (w.report || {}).short || []);
+    const nApproved = mon.weeks.filter(w => w.approved_at).length;
+    const dl = mon.deadline.slice(11, 16) + ' ' + fmtDM(mon.deadline.slice(0, 10)), gt = mon.gen_time.slice(11, 16) + ' ' + fmtDM(mon.gen_time.slice(0, 10));
+    $('#wk-st').innerHTML = `<div class="wk-st card card-pad">
+      <div>${nApproved === mon.weeks.length ? '<span class="badge green">Đã duyệt cả tháng</span>' : nApproved ? `<span class="badge amber">Đã duyệt ${nApproved}/${mon.weeks.length} tuần</span>` : mon.weeks.some(w => w.generated_at) ? '<span class="badge amber">Bản nháp tự xếp — chờ duyệt</span>' : mon.reg_open ? '<span class="badge blue">Đang nhận đăng ký</span>' : '<span class="badge">Chưa tự xếp</span>'}
+        <span class="small muted">Tháng gồm các tuần có ngày thứ 5 thuộc ${fmtYM(boardMonth).toLowerCase()} (giống cách CTV đăng ký theo tháng). Hạn đăng ký ${dl} · hệ thống tự xếp cả tháng lúc ${gt}, hoặc bấm “Tự xếp ca cả tháng”.</span></div>
+      <div class="small muted" style="margin-top:6px">${mon.registered}/${mon.active_ctv} CTV đã đăng ký lịch rảnh ${fmtYM(boardMonth).toLowerCase()} · <a href="#availability" id="go-av">xem đăng ký</a></div>
+      ${short.length ? `<div class="low-list" style="margin-top:8px">${short.map(x => `<span class="chip-low">${dowOf(x.date)} ${fmtDM(x.date)} · ${G[x.group] || x.group}: ${x.have}/${x.need} <b>thiếu ${x.need - x.have}</b>${x.registered <= x.have ? ' (hết người đăng ký)' : ''}</span>`).join('')}</div>` : ''}
+    </div>`;
+    $('#go-av').onclick = () => { avWeek = boardMonth; };
+    $('#board').innerHTML = mon.weeks.map(w => {
+      const d0 = parseDate(w.week);
+      return `<div class="mweek"><div class="mweek-h"><b>Tuần ${fmtDM(w.week)} – ${fmtDM(ymd(addDays(d0, 6)))}</b> ${WST(w)}
+        <span style="flex:1"></span><button class="btn btn-sm" data-wk="${w.week}">Xem / duyệt tuần này</button></div>
+        ${boardHTML(Array.from({ length: 7 }, (_, i) => ymd(addDays(d0, i))))}</div>`;
+    }).join('');
+  };
+  const boardHTML = days => {
     const shown = list;
-    const days = Array.from({ length: 7 }, (_, i) => ymd(addDays(boardStart, i)));
-    $('#board').innerHTML = `<div class="board"><div class="bh"></div>${days.map(d => `<div class="bh ${d === todayStr() ? 'today' : ''}">${dowOf(d)}<b>${fmtDM(d)}</b></div>`).join('')}
+    return `<div class="board"><div class="bh"></div>${days.map(d => `<div class="bh ${d === todayStr() ? 'today' : ''}">${dowOf(d)}<b>${fmtDM(d)}</b></div>`).join('')}
       ${mainShifts().map(sh => `<div class="br">${esc(sh.name)}<span>${sh.start}–${sh.end}</span></div>${days.map(d => {
         const items = shown.filter(s => s.date === d && shiftGroup(s.shift_code) === sh.code)  // ca gãy tối nằm chung dòng Tối
           .sort((a, b) => a.start.localeCompare(b.start) || a.username.localeCompare(b.username));
@@ -170,6 +216,8 @@ async function aSchedule(v) {
   };
 
   $('#board').onclick = async e => {
+    const wkb = e.target.closest('[data-wk]');
+    if (wkb) { boardStart = parseDate(wkb.dataset.wk); view = 'week'; store.set('sched_view', 'week'); return load(); }
     const rm = e.target.closest('[data-rm]'), add = e.target.closest('[data-add]'), pill = !rm && e.target.closest('[data-edit-s]');
     if (pill) editDialog(list.find(x => x.id === +pill.dataset.editS));
     if (rm) {
@@ -271,9 +319,26 @@ async function aSchedule(v) {
     });
   }
 
-  $('#sync').onclick = () => weekSyncDialog(ymd(boardStart), load);
+  $('#sync').onclick = async e => {
+    if (view !== 'month') return weekSyncDialog(ymd(boardStart), load);
+    const btn = e.currentTarget, push = mon.sheet_ready;
+    if (!(await confirmDialog(`Duyệt lịch ${fmtYM(boardMonth).toLowerCase()}?`, `Duyệt cả ${mon.weeks.length} tuần (${fmtDM(mon.start)} – ${fmtDM(mon.end)}). CTV sẽ thấy lịch và nhận thông báo lịch tháng đã chốt.${push ? ' Lịch từng tuần cũng được ghi lên Google Sheet.' : ''}`, 'Duyệt'))) return;
+    run(btn, async () => {
+      const r = await api('/admin/month/approve', { method: 'POST', body: { ym: boardMonth, push } });
+      r.push_error ? toast(`Đã duyệt ${r.weeks} tuần, nhưng chưa ghi được sheet: ${r.push_error}`, 'error') : toast(`Đã duyệt lịch tháng (${r.weeks} tuần)${r.pushed ? ' & ghi lên Google Sheet' : ''}`);
+      load();
+    });
+  };
   $('#auto').onclick = async e => {
     const btn = e.currentTarget;
+    if (view === 'month') {
+      if (!(await confirmDialog(`Tự xếp ca ${fmtYM(boardMonth).toLowerCase()}?`, `Hệ thống xếp cả tháng (${fmtDM(mon.start)} – ${fmtDM(mon.end)}) theo đăng ký lịch rảnh tháng và chỉ tiêu từng ca, chia đều giờ giữa các CTV. Ca bạn đã xếp tay được giữ nguyên; tuần đã duyệt không bị đụng tới.`, 'Tự xếp'))) return;
+      return run(btn, async () => {
+        const r = await api('/admin/month/auto', { method: 'POST', body: { ym: boardMonth } });
+        const skip = r.weeks.filter(w => w.skipped).length;
+        toast(`Đã tự xếp ${r.added} ca${r.short.length ? ` · ${r.short.length} ô còn thiếu người` : ''}${skip ? ` · bỏ qua ${skip} tuần đã duyệt` : ''}`); load();
+      });
+    }
     if (!(await confirmDialog(`Tự xếp ca tuần ${fmtDM(ymd(boardStart))}?`, 'Hệ thống xếp theo đăng ký lịch rảnh và chỉ tiêu từng ca. Ca bạn đã xếp tay được giữ nguyên; các ca tự xếp trước đó (chưa chấm công) sẽ được xếp lại.', 'Tự xếp'))) return;
     run(btn, async () => {
       const r = await api('/admin/week/auto', { method: 'POST', body: { start: ymd(boardStart) } });
@@ -299,9 +364,11 @@ async function aSchedule(v) {
     </div>`;
     $('#go-av').onclick = () => { avWeek = byMonth ? wk.reg_key : ymd(boardStart); };
   }
-  $('#prev').onclick = () => { boardStart = addDays(boardStart, -7); load(); };
-  $('#next').onclick = () => { boardStart = addDays(boardStart, 7); load(); };
-  $('#this').onclick = () => { boardStart = mondayOf(new Date()); load(); };
+  $('#prev').onclick = () => { if (view === 'month') boardMonth = shiftYM(boardMonth, -1); else boardStart = addDays(boardStart, -7); load(); };
+  $('#next').onclick = () => { if (view === 'month') boardMonth = shiftYM(boardMonth, 1); else boardStart = addDays(boardStart, 7); load(); };
+  $('#this').onclick = () => { if (view === 'month') boardMonth = defaultMonth(); else boardStart = mondayOf(new Date()); load(); };
+  if ($('#sview')) $('#sview').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; view = b.dataset.v; store.set('sched_view', view);
+    if (view === 'month') boardMonth = monthOfWeek(boardStart); else if (mon) boardStart = parseDate(mon.weeks[0].week); load(); };
   $('#copy').onclick = async e => {
     if (!(await confirmDialog('Sao chép tuần trước?', `Toàn bộ ca của tuần ${fmtDate(ymd(addDays(boardStart, -7)))} sẽ được chép sang tuần đang xem. Ca bị trùng giờ sẽ được bỏ qua.`, 'Sao chép'))) return;
     run(e.currentTarget, async () => {

@@ -116,6 +116,41 @@ def month_reg_open(ym: str, now: datetime | None = None) -> bool:
     return month_deadline(before) <= now < month_deadline(ym)
 
 
+def month_weeks(ym: str) -> list[date]:
+    """Các tuần (ngày thứ 2) thuộc tháng ym theo cùng quy tắc đăng ký theo tháng: tuần thuộc tháng của ngày thứ 5.
+    VD tháng 12/2026 → 30/11, 07/12, 14/12, 21/12, 28/12 (tuần 28/12–03/01 có thứ 5 là 31/12)."""
+    ws = monday(date(int(ym[:4]), int(ym[5:7]), 1))
+    if month_of_week(ws) != ym:
+        ws += timedelta(days=7)
+    out = []
+    while month_of_week(ws) == ym:
+        out.append(ws)
+        ws += timedelta(days=7)
+    return out
+
+
+def next_ym(d: date) -> str:
+    return f"{d.year + (d.month == 12)}-{d.month % 12 + 1:02d}"
+
+
+def generate_month(con, ym: str, actor: str = "Hệ thống", only_new: bool = False) -> dict:
+    """Tự xếp cả tháng: xếp lần lượt từng tuần của tháng (tuần sau tính cả giờ đã xếp ở tuần trước để chia đều).
+    Bỏ qua tuần đã duyệt; only_new (chạy tự động) bỏ qua cả tuần đã có bản nháp."""
+    st = statuses(con)
+    weeks, added, short, no_monitor = [], 0, [], []
+    for ws in month_weeks(ym):
+        s = st.get(ws.isoformat(), {})
+        if s.get("approved_at") or (only_new and s.get("generated_at")):
+            weeks.append({"week": ws.isoformat(), "skipped": "approved" if s.get("approved_at") else "draft"})
+            continue
+        rep = generate(con, ws, actor)
+        added += rep["added"]
+        short += rep["short"]
+        no_monitor += rep["no_monitor"]
+        weeks.append({"week": ws.isoformat(), "added": rep["added"], "short": len(rep["short"])})
+    return {"ym": ym, "added": added, "short": short, "no_monitor": no_monitor, "weeks": weeks}
+
+
 def has_regs(con, ws: date) -> bool:
     return con.execute("SELECT 1 FROM availability WHERE ym=?", (reg_key(con, ws),)).fetchone() is not None
 
@@ -260,6 +295,45 @@ _checked: dict = {}  # tuần → thời điểm kiểm tra DB gần nhất ("do
 
 
 def tick(now: datetime | None = None, force: bool = False):
+    now = now or datetime.now()
+    m = tick_month(now, force)
+    w = tick_week(now, force)
+    return w or m
+
+
+def tick_month(now: datetime, force: bool = False):
+    """Đăng ký theo tháng: từ 20:00 ngày hạn chót (ngày 29 tháng trước) trong 2 ngày, nếu tháng tới chưa tự xếp thì xếp cả tháng.
+    Ngoài khung giờ không đụng DB; trong khung kiểm tra 10 phút/lần."""
+    ym = next_ym(now.date())
+    start = month_deadline(ym) + timedelta(hours=1)
+    if not (start <= now < start + timedelta(days=2)):
+        return None
+    k = ("m", ym)
+    last = _checked.get(k)
+    if last == "done" or (not force and last and (now - last).total_seconds() < 600):
+        return None
+    _checked[k] = now
+    con = db.connect()
+    try:
+        if reg_mode(con) != "month":
+            _checked[k] = "done"
+            return None
+        weeks = month_weeks(ym)
+        st = statuses(con)
+        if all(st.get(w.isoformat(), {}).get("generated_at") or st.get(w.isoformat(), {}).get("approved_at") for w in weeks):
+            _checked[k] = "done"
+            return None
+        if not weeks or not has_regs(con, weeks[0]):
+            return None
+        rep = generate_month(con, ym, only_new=True)
+        con.commit()
+        _checked[k] = "done"
+        return {**rep, "week": ym}
+    finally:
+        con.close()
+
+
+def tick_week(now: datetime | None = None, force: bool = False):
     """Gọi định kỳ: từ 20:00 CN tới hết thứ 2, nếu tuần tới chưa được tự xếp thì xếp.
     Ngoài khung giờ đó không đụng tới database (để Neon được ngủ); trong khung chỉ kiểm tra 10 phút/lần."""
     now = now or datetime.now()
