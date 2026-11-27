@@ -209,6 +209,22 @@ const isGay = s => /gay/.test(String(s.name + ' ' + s.code).normalize('NFD').rep
 /* tên ngắn khi đăng ký: nhóm có nhiều ca → "Ca full" / "Ca gãy" */
 const variantLabel = s => shiftGroup(s.code) !== s.code ? (isGay(s) ? 'Ca gãy' : s.name)
   : (App.meta.shifts.some(x => x.code !== s.code && shiftGroup(x.code) === s.code) ? 'Ca full' : s.name);
+/* đăng ký lịch rảnh: nhóm có nhiều ca gãy (VD gãy 18:30–21:30 và 19:00–22:00) chỉ cho CTV chọn 1 ô "Ca gãy";
+   gãy khung giờ nào do admin chọn khi xếp. Đăng ký lưu vào ca gãy đầu tiên của nhóm. */
+const gayOf = g => App.meta.shifts.filter(s => shiftGroup(s.code) === g && s.code !== g && isGay(s)).sort((a, b) => a.start.localeCompare(b.start))[0];
+const regVariants = main => { const g = gayOf(main.code); return shiftVariants(main).filter(s => !isGay(s) || s.code === main.code || s === g); };
+const regShifts = () => App.meta.shifts.filter(s => !isGay(s) || s.code === shiftGroup(s.code) || gayOf(shiftGroup(s.code)) === s);
+/* gộp đăng ký cũ ở ca gãy khác về ô "Ca gãy" chung */
+const foldGay = slots => {
+  const out = {};
+  Object.entries(slots || {}).forEach(([key, v]) => {
+    const k = key.slice(0, key.indexOf('-')), code = key.slice(key.indexOf('-') + 1);
+    const s = App.meta.shifts.find(x => x.code === code), g = s && s.code !== shiftGroup(code) && isGay(s) && gayOf(shiftGroup(code));
+    const nk = g ? `${k}-${g.code}` : key;
+    if (!out[nk]) out[nk] = g && g.code !== code ? { start: g.start, end: g.end, ...(v.note ? { note: v.note } : {}) } : v;
+  });
+  return out;
+};
 /* tên đầy đủ cho admin: "Ca Tối · full", "Ca Tối · gãy" */
 const regName = s => { const g = shiftGroup(s.code), main = App.meta.shifts.find(x => x.code === g);
   if (!main || !App.meta.shifts.some(x => x.code !== g && shiftGroup(x.code) === g)) return s.name;

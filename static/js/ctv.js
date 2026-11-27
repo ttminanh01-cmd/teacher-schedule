@@ -203,7 +203,7 @@ async function pageAvailability(v) {
   const locked = () => !state.open || (byMonth && state.status === 'submitted');
   const dayOf = k => ymd(addDays(parseDate(ws), k - 1));
   /* ghi chú ca tối (VD xin vào muộn / ra sớm): lưu trong từng slot đã chọn của ngày đó */
-  const noteKeys = (k, m) => [m, ...shiftVariants(m)].filter((s, i, a) => a.findIndex(x => x.code === s.code) === i)
+  const noteKeys = (k, m) => [m, ...regVariants(m)].filter((s, i, a) => a.findIndex(x => x.code === s.code) === i)
     .map(s => `${k}-${s.code}`).filter(x => state.slots[x]);
   const noteOf = (k, m) => (noteKeys(k, m).map(x => state.slots[x].note).find(Boolean) || '');
   const noteBtn = (k, m, L) => {
@@ -231,7 +231,7 @@ async function pageAvailability(v) {
     const L = locked();
     $('#grid').innerHTML = `<div class="av-grid"><div></div>${WEEK_KEYS.map(k => `<div class="h">${WEEK_LABEL[k]}${byMonth ? '' : `<br><span class="muted small">${fmtDM(dayOf(k))}</span>`}</div>`).join('')}
       ${mainShifts().map(m => {
-        const vars = shiftVariants(m);
+        const vars = regVariants(m);   // Tối: chỉ Ca full + 1 ô Ca gãy (gãy mấy giờ do admin xếp)
         if (vars.length < 2) {   // ca thường: 1 ô / ngày
           return `<div class="rowh">${esc(m.name)}<span>${m.start}–${m.end}</span></div>${WEEK_KEYS.map(k => {
             const key = `${k}-${m.code}`; const on = !!state.slots[key];
@@ -267,6 +267,7 @@ async function pageAvailability(v) {
   async function load() {
     $('#grid').innerHTML = loading();
     state = await api('/ctv/availability', { query: { ym: ws } });
+    state.slots = foldGay(state.slots);
     state.counts = state.counts || {};
     paint();
   }
@@ -325,7 +326,7 @@ async function pageAvailability(v) {
     let prev = await api('/ctv/availability', { query: { ym: prevWs } });
     if (!byMonth && !Object.keys(prev.slots).length) prev = await api('/ctv/availability', { query: { ym: prevWs.slice(0, 7) } }); // lịch theo tháng cũ
     if (!Object.keys(prev.slots).length) return toast(`${byMonth ? 'Tháng' : 'Tuần'} trước bạn chưa đăng ký lịch`, 'info');
-    state.slots = prev.slots; if (state.status === 'empty') state.status = 'draft';
+    state.slots = foldGay(prev.slots); if (state.status === 'empty') state.status = 'draft';
     paint(); toast('Đã sao chép. Nhớ bấm “Gửi đăng ký”.', 'info');
   };
   load();

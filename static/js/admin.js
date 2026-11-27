@@ -155,7 +155,8 @@ async function aSchedule(v) {
     <div class="card"><div class="table-wrap" id="board">${loading()}</div></div>
     <p class="small muted" style="margin-top:8px">Đây là lịch dự kiến. Thay đổi thực tế (PIC, vị trí, giờ vào muộn…) sửa ở mục <a href="#timesheet">Chấm công</a> rồi duyệt — lương tính theo bản đã duyệt.</p>`;
 
-  const availability = async ym => avCache[ym] || (avCache[ym] = await api('/admin/availability', { query: { ym } }));
+  const availability = async ym => avCache[ym] || (avCache[ym] = await api('/admin/availability', { query: { ym } })
+    .then(a => { a.users.forEach(u => { u.slots = foldGay(u.slots); }); return a; }));
 
   const paintMode = () => {
     $$('#sview button').forEach(b => b.classList.toggle('active', b.dataset.v === view));
@@ -281,9 +282,9 @@ async function aSchedule(v) {
       return { ...u, slot, fit };
     }).sort((a, b) => b.fit - a.fit || a.username.localeCompare(b.username));
     const fitBadge = c => multi
-      ? (c.regs.length ? c.regs.map(x => { const z = c.a.slots[`${dowKey(d)}-${x.code}`]; return `<span class="badge green" title="Đã đăng ký ${z.start}–${z.end}">ĐK ${esc(variantLabel(x))}</span>`; }).join(' ') : '<span class="badge">Chưa đăng ký</span>')
+      ? (c.regs.length ? c.regs.map(x => { const z = c.a.slots[`${dowKey(d)}-${x.code}`]; return `<span class="badge green" title="Đã đăng ký ${isGay(x) ? 'ca gãy — chọn khung giờ bên cạnh' : z.start + '–' + z.end}">ĐK ${esc(variantLabel(x))}</span>`; }).join(' ') : '<span class="badge">Chưa đăng ký</span>')
       : c.fit === 2 ? `<span class="badge green">Rảnh ${c.slot.start}–${c.slot.end}</span>` : c.fit === 1 ? `<span class="badge amber">Rảnh một phần ${c.slot.start}–${c.slot.end}</span>` : '<span class="badge">Chưa đăng ký</span>';
-    const pickShift = c => multi ? `<select class="input as-ca" data-ca="${c.id}" style="width:auto;height:30px;padding:0 6px;font-size:13px" title="Ca xếp cho ${esc(c.username)}">${grp.map(x => `<option value="${x.code}" ${x.code === c.code ? 'selected' : ''}>${esc(variantLabel(x))}</option>`).join('')}</select>` : '';
+    const pickShift = c => multi ? `<select class="input as-ca" data-ca="${c.id}" style="width:auto;height:30px;padding:0 6px;font-size:13px" title="Ca xếp cho ${esc(c.username)}">${grp.map(x => `<option value="${x.code}" ${x.code === c.code ? 'selected' : ''}>${esc(variantLabel(x))} ${x.start}–${x.end}</option>`).join('')}</select>` : '';
     modal({
       title: `Xếp ca · ${esc(main.name)} ${dowOf(d)} ${fmtDate(d)}`, wide: true,
       body: `<div class="form-row">
@@ -395,7 +396,7 @@ async function aAvailability(v) {
   const optLabel = mode === 'month'
     ? w => w === opts[1] ? 'Tháng này' : fmtYM(w)
     : w => w === ymd(thisMon) ? 'Tuần này' : w < ymd(thisMon) ? 'Tuần trước' : 'Tuần ' + wl(w);
-  const shifts = App.meta.shifts;
+  const shifts = regShifts();   // các ca gãy gộp thành 1 dòng "Ca gãy"
   // ca chính có ca phụ (Tối = Ca full + Ca gãy): CTV đăng ký ca nào trong nhóm cũng tính là rảnh ca Tối
   const isMainMulti = s => s.code === shiftGroup(s.code) && shiftVariants(s).length > 1;
   const regd = (u, k, s) => isMainMulti(s) ? shiftVariants(s).some(x => u.slots[`${k}-${x.code}`]) : !!u.slots[`${k}-${s.code}`];
@@ -413,6 +414,7 @@ async function aAvailability(v) {
     <div id="body">${loading()}</div>`;
   const load = async () => {
     const d = await api('/admin/availability', { query: { ym } });
+    d.users.forEach(u => { u.slots = foldGay(u.slots); });   // CTV đăng ký 1 ô "Ca gãy" chung
     $$('#wk button').forEach(b => b.classList.toggle('active', b.dataset.w === ym));
     $('#toggle').innerHTML = `<span class="badge ${d.open ? 'green' : ''}" style="margin-right:8px">${!d.open ? 'Đã chốt đăng ký' : mode === 'month' ? 'Đang mở · hạn 19:00 ngày ' + fmtDM(d.deadline.slice(0, 10)) : 'Đang mở · hạn 19:00 CN ' + fmtDM(ymd(addDays(parseDate(ym), -1)))}</span>
       <button class="btn" id="tg">${d.open ? (mode === 'month' ? 'Đóng đăng ký' : 'Đóng sớm') : (mode === 'month' ? 'Mở đăng ký' : 'Mở lại đăng ký')}</button>`;
