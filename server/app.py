@@ -162,9 +162,10 @@ def meta(u=Depends(current_user), con=Depends(get_con)):
 
 @app.get("/api/notifications")
 def notifications(u=Depends(current_user), con=Depends(get_con)):
+    # ẩn các thông báo "Lịch trực tuần … đã chốt" tự tạo trước đây (lịch tuần hay đổi nên không báo CTV nữa)
     return rows(con.execute("""SELECT n.*, (r.user_id IS NULL) AS unread FROM notifications n
         LEFT JOIN notification_reads r ON r.notification_id=n.id AND r.user_id=?
-        ORDER BY n.id DESC LIMIT 30""", (u["id"],)))
+        WHERE n.title NOT LIKE 'Lịch trực tuần %' ORDER BY n.id DESC LIMIT 30""", (u["id"],)))
 
 
 @app.post("/api/notifications/read")
@@ -1013,8 +1014,7 @@ def admin_week_approve(body: dict = Body(...), u=Depends(admin_user), con=Depend
         err("Tuần này chưa có ca nào")
     autoschedule.set_status(con, key, approved_at=now_str(), approved_by=u["name"])
     rng = f"{ws.strftime('%d/%m')} – {(ws + timedelta(days=6)).strftime('%d/%m')}"
-    con.execute("INSERT INTO notifications(title, body, created_at) VALUES (?,?,?)",
-                (f"Lịch trực tuần {rng} đã chốt", "Xem ca của bạn ở mục Lịch làm việc.", now_str()))
+    # lịch tuần hay thay đổi nên không gửi thông báo tới CTV
     log(con, u, f"Duyệt lịch tuần {rng}")
     out = {"ok": True, "pushed": False}
     if body.get("push") and db.get_setting(con, "sync_url"):

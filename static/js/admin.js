@@ -116,7 +116,7 @@ async function weekSyncDialog(start, after) {
       $('#ws-ok', el).onclick = async e => {
         const btn = e.currentTarget;
         const push = !!(cfg && cfg.url && pv);
-        if (!(await confirmDialog(`Duyệt lịch tuần ${fmtDM(start)} – ${fmtDM(end)}?`, `CTV sẽ thấy lịch và nhận thông báo lịch tuần đã chốt.${push ? ` Hàng ${pv.slots[0].row}–${pv.slots[pv.slots.length - 1].row} tab “${pv.tab}” trên Google Sheet sẽ được ghi theo lịch này.` : ''}`, 'Duyệt'))) return;
+        if (!(await confirmDialog(`Duyệt lịch tuần ${fmtDM(start)} – ${fmtDM(end)}?`, `CTV sẽ thấy lịch tuần này trên Cổng CTV (không gửi thông báo).${push ? ` Hàng ${pv.slots[0].row}–${pv.slots[pv.slots.length - 1].row} tab “${pv.tab}” trên Google Sheet sẽ được ghi theo lịch này.` : ''}`, 'Duyệt'))) return;
         run(btn, async () => {
           const r = await api('/admin/week/approve', { method: 'POST', body: { start, push } });
           if (r.push_error) toast(`Đã duyệt, nhưng chưa ghi được sheet: ${r.push_error}`, 'error');
@@ -1470,7 +1470,7 @@ async function aDocs(v) {
    9. Thông báo · 10. Nhật ký
    ========================================================= */
 async function aNotifications(v) {
-  v.innerHTML = pageHead('Thông báo', 'Gửi thông báo tới toàn bộ CTV. Thông báo hiện trong menu tài khoản.') + `
+  v.innerHTML = pageHead('Thông báo', 'Gửi thông báo tới toàn bộ CTV. CTV thấy ở mục Thông báo và đầu trang Tổng quan.') + `
     <div class="grid-2"><form class="card card-pad" id="nf">
       <div class="field"><label>Tiêu đề</label><input class="input" name="title" required placeholder="VD: Mở đăng ký lịch rảnh tháng 12"></div>
       <div class="field"><label>Nội dung</label><textarea class="input" name="body" rows="5"></textarea></div>
