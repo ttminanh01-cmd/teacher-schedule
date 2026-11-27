@@ -22,6 +22,9 @@ _lock = threading.Lock()
 _st = {"index": None, "token": None, "seen": None, "at": None}
 FORMAT = 1
 HTML_MAX = 3_000_000  # ký tự / mail (đã gồm ảnh dán trong mail)
+# chỉ nhận / giữ mail thông báo khoá Milo: tiêu đề kiểu "[Speakwell - MILO] - THÔNG BÁO KHÓA HỌC MỚI - Học viên …"
+SUBJECT_RE = re.compile(r"speakwell\W*milo", re.I)
+SUBJECT_SQL = "lower(subject) LIKE '%speakwell%milo%'"
 
 
 class MailError(Exception):
@@ -87,6 +90,9 @@ def _index() -> dict:
     if _st["index"] is None:
         con = db.connect()
         try:
+            # mail khác lọt vào trước khi có bộ lọc tiêu đề → xoá 1 lần lúc nạp
+            con.execute(f"DELETE FROM milo_mails WHERE NOT ({SUBJECT_SQL})")
+            con.commit()
             rs = con.execute("SELECT id, at, addrs, sender, subject FROM milo_mails").fetchall()
         finally:
             con.close()
@@ -143,7 +149,7 @@ def receive(body: dict) -> dict:
         except (KeyError, TypeError, ValueError):
             raise MailError("Dữ liệu mail không hợp lệ")
         ads = addrs(m.get("to"), m.get("cc"), m.get("bcc"))
-        if not mid or not ads:
+        if not mid or not ads or not SUBJECT_RE.search(str(m.get("subject") or "")):
             continue
         html = str(m.get("html") or "")[:HTML_MAX]
         atts = [a for a in (m.get("atts") or []) if isinstance(a, dict)]
@@ -214,7 +220,7 @@ APPS_SCRIPT = r"""// Cổng CTV ← mail đã gửi cho học viên Milo. Chạy
 // Ảnh dán trong mail ≤ 300KB được gửi kèm để CTV chụp lại đủ như mail thật.
 const MM_PORTAL = '__PORTAL__/api/milo/mail';
 const MM_TOKEN = '__TOKEN__';
-const MM_FILTER = '';   // lọc thêm nếu cần, VD: 'subject:Milo' (để trống = mọi mail đã gửi)
+const MM_FILTER = 'subject:"Speakwell - MILO"';   // chỉ lấy mail có tiêu đề chứa [Speakwell - MILO] (portal cũng chỉ nhận mail này)
 const MM_SINCE = '';    // chỉ lấy lịch sử từ ngày này, VD: '2024/01/01' (để trống = toàn bộ)
 const MM_PAGE = 30, MM_BATCH_CHARS = 4 * 1024 * 1024, MM_BUDGET_MS = 4 * 60 * 1000, MM_IMG_MAX = 300 * 1024;
 const MM_EVERY_DAY_MIN = 2, MM_EVERY_NIGHT_MIN = 15, MM_DAY_FROM = 7, MM_DAY_TO = 23;
@@ -290,7 +296,7 @@ function miloMailCheck() {
   Logger.log('Lịch sử: ' + (p.getProperty('mm_done') ? 'đã gửi xong' : 'đang gửi — đã qua ' + (p.getProperty('mm_start') || 0) + ' cuộc thư')
              + ' · mail mới tính từ ' + new Date(Number(p.getProperty('mm_new') || 0) * 1000));
   const out = [];
-  GmailApp.search('in:sent ' + email, 0, 20).forEach(t => t.getMessages().forEach(m => {
+  GmailApp.search(['in:sent', MM_FILTER, email].filter(String).join(' '), 0, 20).forEach(t => t.getMessages().forEach(m => {
     const rcpt = [m.getTo(), m.getCc(), m.getBcc()].join(',').toLowerCase();
     if (rcpt.indexOf(email) < 0) return;
     Logger.log(Utilities.formatDate(m.getDate(), 'Asia/Ho_Chi_Minh', 'dd/MM/yyyy HH:mm') + ' · From: ' + m.getFrom()
