@@ -980,15 +980,12 @@ async function aUsers(v) {
     const n = { active: rows.filter(u => u.active).length, left: rows.filter(u => !u.active).length };
     $('#tab').innerHTML = [['active', 'Nhân sự'], ['left', 'Nhân sự đã nghỉ việc']].map(([k, l]) => `<button class="${tab === k ? 'active' : ''}" data-t="${k}">${l} <span class="n">${n[k]}</span></button>`).join('');
     dataTable($('#body'), rows.filter(u => (tab === 'left' ? !u.active : !!u.active) && (!role || u.role === role) && (!q || foldVi(`${u.username} ${u.name} ${u.phone} ${u.code} ${u.email} ${u.cccd || ''}`).includes(q))), [
-      { label: 'Tài khoản', render: u => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar">${initials(u.name)}</div><div><b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span></div></div>` },
-      { label: 'Vai trò', render: u => u.role === 'admin' ? '<span class="badge blue">Quản trị</span>' : '<span class="badge">CTV</span>' },
-      { label: 'Team', render: u => esc(u.team || '—') },
-      { label: 'Mã CTV', render: u => esc(u.code || '—') },
-      { label: 'Mức lương', cls: 'right nowrap', render: u => u.hourly_rate ? `<b>${money(u.hourly_rate)}</b><span class="small muted"> /giờ</span>` : `<span class="small muted" title="Chưa đặt mức lương riêng — tính theo đơn giá vị trí">Theo vị trí</span>` },
+      { label: 'Tài khoản', render: u => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar">${initials(u.name)}</div><div><b>${esc(u.username)}</b>${u.role === 'admin' ? ' <span class="badge blue">Quản trị</span>' : ''}${u.active ? '' : ' <span class="badge red">Đã nghỉ</span>'}<br><span class="small muted">${esc(u.name)}</span></div></div>` },
+      { label: 'Mã CTV · Team', cls: 'nowrap', render: u => `${esc(u.code || '—')}<br><span class="small muted">${esc(u.team || '')}</span>` },
       { label: 'CCCD', cls: 'mono nowrap', render: u => u.cccd ? esc(u.cccd) : '<span class="muted">—</span>' },
       { label: 'Email', render: u => `<span class="small">${esc(u.email || '—')}</span>` },
-      { label: 'Trạng thái', render: u => u.active ? '<span class="badge green">Hoạt động</span>' : '<span class="badge red">Đã nghỉ · khoá</span>' },
-      { label: '', cls: 'right', render: u => `<div class="actions"><button class="btn btn-sm" data-reset="${u.id}">Đặt lại MK</button><button class="btn btn-sm" data-edit="${u.id}">Sửa</button></div>` },
+      { label: 'Mức lương', cls: 'right nowrap', render: u => u.hourly_rate ? `<b>${money(u.hourly_rate)}</b><span class="small muted"> /giờ</span>` : `<span class="small muted" title="Chưa đặt mức lương riêng — tính theo đơn giá vị trí">Theo vị trí</span>` },
+      { label: '', cls: 'right nowrap', render: u => `<div class="actions"><button class="btn btn-sm" data-edit="${u.id}">Sửa</button><button class="btn btn-sm" data-reset="${u.id}" title="Đặt lại mật khẩu">Đặt lại MK</button></div>` },
     ], { pageSize: 30, empty: tab === 'left' ? 'Chưa có nhân sự nào nghỉ việc' : 'Không có nhân sự nào' });
   };
   const load = async () => { rows = await api('/admin/users'); paint(); };

@@ -101,6 +101,7 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 .main { flex: 1; min-width: 0; }
 .topbar { display: none; }
 .content { max-width: 1200px; margin: 0 auto; padding: 28px 32px 64px; }
+.admin .content { max-width: 1640px; }  /* trang quản trị nhiều bảng: dùng hết màn hình rộng, đỡ phải kéo ngang */
 
 /* ---------- Page head ---------- */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
