@@ -573,6 +573,10 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
 
 /* đăng ký ca Tối: 2 lựa chọn Ca full / Ca gãy trong 1 ô */
 .slot-split { display: flex; flex-direction: column; gap: 4px; }
+.av-edit td { vertical-align: top; min-width: 84px; }
+.av-edit .slot { min-height: 0; width: 100%; padding: 8px 4px; font: inherit; cursor: pointer; }
+.av-edit .slot.on { cursor: pointer; }
+.av-edit .small { margin-top: 3px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slot-split .slot { min-height: 0; padding: 6px 4px; gap: 0; }
 .slot-split .slot b { font-size: 12.5px; }
 .slot-split .slot small { font-size: 11px; opacity: .8; }

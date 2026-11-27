@@ -438,6 +438,28 @@ async function aAvailability(v) {
       <div class="card"><div class="card-head"><h2>Danh sách CTV</h2>
         <button class="btn btn-sm" id="exp">${icon('download')} Xuất Excel</button></div><div id="tbl"></div></div>`;
     const ST = { submitted: ['Đã gửi', 'green'], draft: ['Nháp', 'amber'], empty: ['Chưa đăng ký', ''] };
+    // lead sửa / đăng ký hộ (CTV báo đổi lịch) — lưu là "Đã gửi", sửa được cả khi đã chốt
+    const saveFor = (u, slots) => api('/admin/availability', { method: 'PUT', body: { user_id: u.id, ym, slots } });
+    const editDialog = u => {
+      const slots = JSON.parse(JSON.stringify(u.slots));
+      const cells = () => `<div class="table-wrap"><table class="table av-edit"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6, 7].map(k => `<th>${k === 7 ? 'CN' : 'T' + (k + 1)}</th>`).join('')}</tr></thead>
+        <tbody>${shifts.map(s => `<tr><td><b>${esc(regName(s))}</b><br><span class="small muted">${s.start}–${s.end}</span></td>${[1, 2, 3, 4, 5, 6, 7].map(k => { const key = `${k}-${s.code}`, x = slots[key];
+          return `<td><button type="button" class="slot ${x ? 'on' : ''}" data-k="${key}" aria-pressed="${!!x}">${x ? '✓ Rảnh' : '+'}</button>${x && x.note ? `<div class="small" title="${esc(x.note)}">📝 ${esc(x.note)}</div>` : ''}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`;
+      modal({ title: `Sửa lịch rảnh · ${esc(u.username)} — ${esc(u.name)}`, wide: true,
+        body: `<p class="small muted" style="margin-bottom:10px">Bấm ô để bật / tắt ca rảnh theo lịch CTV báo. ${ym.length === 7 ? 'Lịch tháng ' + fmtYM(ym) + ' (áp dụng hằng tuần)' : 'Tuần ' + wl(ym)}. Lưu xong tính là <b>Đã gửi</b> và dùng khi chia ca (kể cả đã chốt đăng ký).${u.source === 'month' ? ' Đang hiện lịch theo tháng — lưu sẽ thành lịch riêng của tuần này.' : ''}</p><div id="ed-grid">${cells()}</div>`,
+        footer: `<span class="small muted" id="ed-n" style="margin-right:auto"></span><button class="btn" data-close>Huỷ</button><button class="btn btn-primary" id="ed-ok">Lưu lịch rảnh</button>`,
+        onOpen(el, close) {
+          const cnt = () => { $('#ed-n', el).textContent = `${Object.keys(slots).length} ca rảnh / tuần`; };
+          cnt();
+          $('#ed-grid', el).onclick = ev => {
+            const b = ev.target.closest('[data-k]'); if (!b) return;
+            const key = b.dataset.k, s = shifts.find(x => x.code === key.slice(key.indexOf('-') + 1));
+            if (slots[key]) delete slots[key]; else slots[key] = { start: s.start, end: s.end };
+            $('#ed-grid', el).innerHTML = cells(); cnt();
+          };
+          $('#ed-ok', el).onclick = ev => run(ev.currentTarget, async () => { await saveFor(u, slots); toast(`Đã lưu lịch rảnh ${u.username}`); close(); load(); });
+        } });
+    };
     $('#body').onclick = e => {
       const c = e.target.closest('[data-slot]'); if (!c) return;
       const key = c.dataset.slot, [k, code] = [+key.split('-')[0], key.slice(key.indexOf('-') + 1)];
@@ -445,7 +467,24 @@ async function aAvailability(v) {
       const ni = needInfo(who.length, s, true);
       modal({ title: `${k === 7 ? 'Chủ nhật' : 'Thứ ' + (k + 1)} · ${esc(isMainMulti(s) ? s.name : regName(s))} (${s.start}–${s.end})`,
         body: `<p style="margin-bottom:10px">${ni.target ? `Đã đăng ký <b>${who.length}</b> / cần <b>${ni.target}</b> CTV${ni.missing ? ` — <span class="accent">thiếu ${ni.missing}</span>` : ' — đủ'}` : `<b>${who.length}</b> CTV đăng ký`}</p>
-          ${who.length ? `<table class="table"><tbody>${who.map(u => `<tr><td><b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span></td><td>${regText(u, k, s)}</td><td><span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span></td></tr>`).join('')}</tbody></table>` : emptyState('Chưa có CTV nào đăng ký khung này')}` });
+          ${who.length ? `<table class="table"><tbody>${who.map(u => `<tr><td><b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span></td><td>${regText(u, k, s)}</td><td><span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span></td><td class="right"><button class="btn btn-sm" data-rm="${u.id}" title="CTV báo không rảnh khung này nữa">Bỏ</button></td></tr>`).join('')}</tbody></table>` : emptyState('Chưa có CTV nào đăng ký khung này')}
+          <div class="filters" style="margin-top:12px"><span class="small muted">CTV báo rảnh thêm:</span>
+            <select class="input" id="add-u" style="flex:1;min-width:160px"><option value="">— Chọn CTV —</option>${d.users.filter(u => !who.includes(u)).map(u => `<option value="${u.id}">${esc(u.username)} · ${esc(u.name)}</option>`).join('')}</select>
+            ${isMainMulti(s) ? `<select class="input" id="add-v" style="width:auto">${regVariants(s).map(x => `<option value="${x.code}">${esc(variantLabel(x))}</option>`).join('')}</select>` : ''}
+            <button class="btn btn-primary" id="add-ok">Thêm</button></div>`,
+        onOpen(el, close) {
+          el.addEventListener('click', ev => {
+            const rm = ev.target.closest('[data-rm]'); if (!rm) return;
+            const u = d.users.find(x => x.id === +rm.dataset.rm), slots = { ...u.slots };
+            (isMainMulti(s) ? shiftVariants(s) : [s]).forEach(x => delete slots[`${k}-${x.code}`]);
+            run(rm, async () => { await saveFor(u, slots); toast(`Đã bỏ ${u.username} khỏi khung này`); close(); load(); });
+          });
+          $('#add-ok', el).onclick = ev => {
+            const u = d.users.find(x => x.id === +$('#add-u', el).value); if (!u) return toast('Chọn CTV', 'error');
+            const x = shifts.concat(App.meta.shifts).find(z => z.code === ($('#add-v', el) ? $('#add-v', el).value : s.code));
+            run(ev.currentTarget, async () => { await saveFor(u, { ...u.slots, [`${k}-${x.code}`]: { start: x.start, end: x.end } }); toast(`Đã thêm ${u.username}`); close(); load(); });
+          };
+        } });
        };
     dataTable($('#tbl'), d.users, [
       { label: 'CTV', render: u => `<b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span>` },
@@ -453,10 +492,11 @@ async function aAvailability(v) {
       { label: 'Trạng thái', render: u => `<span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span>${u.source === 'month' ? ' <span class="badge" title="Chưa đăng ký theo tuần — đang dùng lịch rảnh đăng ký theo tháng">theo tháng</span>' : ''}` },
       { label: 'Số ca rảnh', render: u => `${Object.keys(u.slots).length || '—'}${Object.values(u.slots).some(x => x.note) ? ' <span class="badge amber" title="Có ghi chú vào muộn / ra sớm">📝 có ghi chú</span>' : ''}` },
       { label: 'Cập nhật', render: u => u.updated_at ? `<span class="small muted">${fmtDate(u.updated_at.slice(0, 10))} ${u.updated_at.slice(11, 16)}</span>` : '—' },
-      { label: '', cls: 'right', render: u => `<div class="actions">${Object.keys(u.slots).length ? `<button class="btn btn-sm" data-view="${u.id}">Xem</button>` : ''}${u.status === 'submitted' && ym.length === 7 ? `<button class="btn btn-sm" data-unlock="${u.id}">Mở khoá</button>` : ''}</div>` },
+      { label: '', cls: 'right', render: u => `<div class="actions">${Object.keys(u.slots).length ? `<button class="btn btn-sm" data-view="${u.id}">Xem</button>` : ''}<button class="btn btn-sm" data-edit="${u.id}" title="CTV báo đổi lịch rảnh: lead sửa / đăng ký hộ trước khi chia ca">${Object.keys(u.slots).length ? 'Sửa' : 'Đăng ký hộ'}</button>${u.status === 'submitted' && ym.length === 7 ? `<button class="btn btn-sm" data-unlock="${u.id}">Mở khoá</button>` : ''}</div>` },
     ], { pageSize: 50 });
     $('#tbl').addEventListener('click', async e => {
-      const vb = e.target.closest('[data-view]'), ub = e.target.closest('[data-unlock]');
+      const vb = e.target.closest('[data-view]'), ub = e.target.closest('[data-unlock]'), eb = e.target.closest('[data-edit]');
+      if (eb) editDialog(d.users.find(x => x.id === +eb.dataset.edit));
       if (vb) {
         const u = d.users.find(x => x.id === +vb.dataset.view);
         modal({ title: `Lịch rảnh · ${esc(u.username)}`, wide: true, body: `<div class="table-wrap"><table class="table"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6, 7].map(k => `<th>${k === 7 ? 'CN' : 'T' + (k + 1)}</th>`).join('')}</tr></thead>

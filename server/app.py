@@ -634,6 +634,33 @@ def unlock_availability(body: dict = Body(...), u=Depends(admin_user), con=Depen
     return {"ok": True}
 
 
+@app.put("/api/admin/availability")
+def admin_save_availability(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    """Lead sửa / đăng ký hộ lịch rảnh cho CTV (CTV báo đổi lịch) — được sửa cả khi đã chốt đăng ký."""
+    uid, ym, slots = body.get("user_id"), body.get("ym") or "", body.get("slots") or {}
+    ctv = row(con.execute("SELECT id, username FROM users WHERE id=? AND role='ctv'", (uid,)))
+    if not ctv or not re.fullmatch(r"\d{4}-\d{2}(-\d{2})?", ym):
+        err("Thiếu thông tin")
+    known = {r[0]: (r[1], r[2]) for r in con.execute('SELECT code, start, "end" FROM shift_types')}
+    out = {}
+    for key, v in slots.items():
+        k, _, code = key.partition("-")
+        if k not in "1234567" or len(k) != 1 or code not in known:
+            err("Ca không hợp lệ")
+        st, en = (v or {}).get("start") or known[code][0], (v or {}).get("end") or known[code][1]
+        if t2m(en) - t2m(st) < 120:
+            err("Mỗi ca rảnh tối thiểu 2 giờ")
+        n = " ".join(str((v or {}).get("note") or "").split())[:120]
+        out[key] = {"start": st, "end": en, **({"note": n} if n else {})}
+    if out:
+        con.execute("INSERT OR REPLACE INTO availability(user_id, ym, slots, status, updated_at) VALUES (?,?,?,?,?)",
+                    (uid, ym, dumps(out), "submitted", now_str()))
+    else:
+        con.execute("DELETE FROM availability WHERE user_id=? AND ym=?", (uid, ym))
+    log(con, u, f"Sửa lịch rảnh {'tuần ' + ym if autoschedule.is_week_key(ym) else 'tháng ' + ym} cho {ctv['username']} ({len(out)} ca)")
+    return {"ok": True}
+
+
 # ----- xếp lịch
 @app.get("/api/admin/schedules")
 def admin_schedules(start: str, end: str, u=Depends(admin_user), con=Depends(get_con)):
