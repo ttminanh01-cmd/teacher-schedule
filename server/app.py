@@ -1612,7 +1612,7 @@ def mail_status(con, portal: str) -> dict:
     ms = milo_mail.status()
     return {"gas_script": milo_mail.apps_script(milo_mail.ensure_token(con), portal), "count": ms["count"],
             "seen_at": fmt_ts(ms["seen_at"]) if ms["seen_at"] else None,
-            "data_at": fmt_ts(ms["data_at"]) if ms["data_at"] else None}
+            "data_at": fmt_ts(ms["data_at"]) if ms["data_at"] else None, "oldest": ms["oldest"]}
 
 
 @app.put("/api/admin/milo")

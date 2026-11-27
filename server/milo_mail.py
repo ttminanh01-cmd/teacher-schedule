@@ -206,10 +206,12 @@ def get(mid: str) -> dict | None:
 
 def status() -> dict:
     try:
-        n = len(_index()["items"])
+        items = _index()["items"]
+        n = len(items)
+        oldest = min((m["at"] for m in items.values()), default=None)
     except Exception:  # noqa: BLE001
-        n = None
-    return {"count": n, "seen_at": _st["seen"], "data_at": _st["at"]}
+        n = oldest = None
+    return {"count": n, "seen_at": _st["seen"], "data_at": _st["at"], "oldest": _fmt(oldest) if oldest else None}
 
 
 APPS_SCRIPT = r"""// Cổng CTV ← mail đã gửi cho học viên Milo. Chạy bằng CHÍNH tài khoản mail chung (hộp mail gửi TK cho học viên).
