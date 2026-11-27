@@ -968,19 +968,20 @@ async function aQC(v) {
 async function aUsers(v) {
   let rows = [], tab = 'active';   // active = đang làm việc · left = đã nghỉ việc (tài khoản đã khoá)
   v.innerHTML = pageHead('Nhân sự', 'Quản lý tài khoản CTV và quản trị viên.', `<button class="btn btn-primary" id="add">${icon('plus')} Thêm tài khoản</button>`) + `
-    <div class="filters"><div class="seg" id="tab"></div><div class="search">${icon('search')}<input class="input" id="q" placeholder="Tìm theo tên, username"></div>
+    <div class="filters"><div class="seg" id="tab"></div><div class="search">${icon('search')}<input class="input" id="q" placeholder="Tìm theo tên, username, CCCD"></div>
       <select class="input" id="role"><option value="">Tất cả vai trò</option><option value="ctv">CTV</option><option value="admin">Quản trị</option></select></div>
     <div class="card" id="body">${loading()}</div>`;
   const paint = () => {
     const q = foldVi($('#q').value.trim()), role = $('#role').value;
     const n = { active: rows.filter(u => u.active).length, left: rows.filter(u => !u.active).length };
     $('#tab').innerHTML = [['active', 'Nhân sự'], ['left', 'Nhân sự đã nghỉ việc']].map(([k, l]) => `<button class="${tab === k ? 'active' : ''}" data-t="${k}">${l} <span class="n">${n[k]}</span></button>`).join('');
-    dataTable($('#body'), rows.filter(u => (tab === 'left' ? !u.active : !!u.active) && (!role || u.role === role) && (!q || foldVi(`${u.username} ${u.name} ${u.phone} ${u.code} ${u.email}`).includes(q))), [
+    dataTable($('#body'), rows.filter(u => (tab === 'left' ? !u.active : !!u.active) && (!role || u.role === role) && (!q || foldVi(`${u.username} ${u.name} ${u.phone} ${u.code} ${u.email} ${u.cccd || ''}`).includes(q))), [
       { label: 'Tài khoản', render: u => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar">${initials(u.name)}</div><div><b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span></div></div>` },
       { label: 'Vai trò', render: u => u.role === 'admin' ? '<span class="badge blue">Quản trị</span>' : '<span class="badge">CTV</span>' },
       { label: 'Team', render: u => esc(u.team || '—') },
       { label: 'Mã CTV', render: u => esc(u.code || '—') },
       { label: 'Mức lương', cls: 'right nowrap', render: u => u.hourly_rate ? `<b>${money(u.hourly_rate)}</b><span class="small muted"> /giờ</span>` : `<span class="small muted" title="Chưa đặt mức lương riêng — tính theo đơn giá vị trí">Theo vị trí</span>` },
+      { label: 'CCCD', cls: 'mono nowrap', render: u => u.cccd ? esc(u.cccd) : '<span class="muted">—</span>' },
       { label: 'Email', render: u => `<span class="small">${esc(u.email || '—')}</span>` },
       { label: 'Trạng thái', render: u => u.active ? '<span class="badge green">Hoạt động</span>' : '<span class="badge red">Đã nghỉ · khoá</span>' },
       { label: '', cls: 'right', render: u => `<div class="actions"><button class="btn btn-sm" data-reset="${u.id}">Đặt lại MK</button><button class="btn btn-sm" data-edit="${u.id}">Sửa</button></div>` },
@@ -998,7 +999,9 @@ async function aUsers(v) {
         <div class="field"><label>Email</label><input class="input" name="email" type="email" value="${esc(u?.email || '')}"></div></div>
       <div class="field"><label>Mức lương (đ / giờ)</label><input class="input" name="hourly_rate" type="number" min="0" step="1000" value="${u?.hourly_rate || ''}" placeholder="Để trống = theo đơn giá vị trí (Danh mục)">
         <span class="hint">Bảng công = Mức lương × số giờ làm đã duyệt.</span></div>
-      <div class="form-row"><div class="field"><label>Điện thoại</label><input class="input" name="phone" value="${esc(u?.phone || '')}"></div>
+      <div class="form-row"><div class="field"><label>Số CCCD</label><input class="input" name="cccd" value="${esc(u?.cccd || '')}" inputmode="numeric" maxlength="14" placeholder="12 chữ số"></div>
+        <div class="field"><label>Điện thoại</label><input class="input" name="phone" value="${esc(u?.phone || '')}"></div></div>
+      <div class="form-row">
         ${u ? `<div class="field"><label>Trạng thái</label><select class="input" name="active"><option value="1">Hoạt động</option><option value="0" ${u.active ? '' : 'selected'}>Đã nghỉ việc (khoá)</option></select></div>`
           : `<div class="field"><label>Mật khẩu ban đầu</label><input class="input" name="password" placeholder="Mặc định: 123456"></div>`}</div>
       <button class="btn btn-primary btn-block">Lưu</button></form>`,
@@ -1009,7 +1012,7 @@ async function aUsers(v) {
           await api('/admin/users', { method: 'POST', body: {
             id: u?.id, username: u ? u.username : f.username.value, name: f.name.value, role: f.role.value,
             team_id: f.team_id.value ? +f.team_id.value : null, phone: f.phone.value, code: f.code.value, email: f.email.value,
-            active: u ? f.active.value === '1' : true, password: f.password?.value, hourly_rate: +f.hourly_rate.value || 0,
+            active: u ? f.active.value === '1' : true, password: f.password?.value, hourly_rate: +f.hourly_rate.value || 0, cccd: f.cccd.value,
           } });
           close(); toast('Đã lưu tài khoản'); load();
         });

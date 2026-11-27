@@ -123,6 +123,8 @@ def migrate(con):
                 con.execute("UPDATE users SET must_change_pw=1 WHERE id=?", (r[0],))
     if "hourly_rate" not in {r[1] for r in con.execute("PRAGMA table_info(users)")}:  # mức lương / giờ riêng; 0 = theo đơn giá vị trí
         con.execute("ALTER TABLE users ADD COLUMN hourly_rate INTEGER NOT NULL DEFAULT 0")
+    if "cccd" not in {r[1] for r in con.execute("PRAGMA table_info(users)")}:  # số CCCD
+        con.execute("ALTER TABLE users ADD COLUMN cccd TEXT DEFAULT ''")
     if "source" not in {r[1] for r in con.execute("PRAGMA table_info(schedules)")}:
         con.execute("ALTER TABLE schedules ADD COLUMN source TEXT DEFAULT ''")  # 'auto' = hệ thống tự xếp
     scols = {r[1] for r in con.execute("PRAGMA table_info(shift_types)")}

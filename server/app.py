@@ -493,7 +493,7 @@ def admin_dashboard(day: str | None = None, u=Depends(admin_user), con=Depends(g
 # ----- nhân sự
 @app.get("/api/admin/users")
 def list_users(u=Depends(admin_user), con=Depends(get_con)):
-    return rows(con.execute("""SELECT u.id, u.username, u.name, u.role, u.team_id, u.phone, u.email, u.code, u.active, u.created_at, u.hourly_rate, t.name AS team
+    return rows(con.execute("""SELECT u.id, u.username, u.name, u.role, u.team_id, u.phone, u.email, u.code, u.active, u.created_at, u.hourly_rate, u.cccd, t.name AS team
         FROM users u LEFT JOIN teams t ON t.id=u.team_id ORDER BY u.role, u.username"""))
 
 
@@ -506,12 +506,15 @@ def save_user(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con
         rate = max(0, int(float(body.get("hourly_rate") or 0)))
     except (TypeError, ValueError):
         err("Mức lương không hợp lệ")
+    cccd = re.sub(r"\s+", "", str(body.get("cccd") or ""))[:20]
+    if cccd and not re.fullmatch(r"\d{9}|\d{12}", cccd):
+        err("Số CCCD phải gồm 12 chữ số (CMND cũ 9 số)")
     if not fields[0]:
         err("Vui lòng nhập họ tên")
     if body.get("id"):
         if int(body["id"]) == u["id"] and (fields[1] != "admin" or not fields[6]):
             err("Không thể tự khoá hoặc hạ quyền chính mình")
-        con.execute("UPDATE users SET name=?, role=?, team_id=?, phone=?, email=?, code=?, active=?, hourly_rate=? WHERE id=?", (*fields, rate, body["id"]))
+        con.execute("UPDATE users SET name=?, role=?, team_id=?, phone=?, email=?, code=?, active=?, hourly_rate=?, cccd=? WHERE id=?", (*fields, rate, cccd, body["id"]))
         if not fields[6]:
             con.execute("DELETE FROM sessions WHERE user_id=?", (body["id"],))
         log(con, u, f"Cập nhật tài khoản {body.get('username')}")
@@ -522,8 +525,8 @@ def save_user(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con
             err("Vui lòng nhập tên đăng nhập")
         if con.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
             err("Tên đăng nhập đã tồn tại")
-        con.execute("INSERT INTO users(username, password_hash, name, role, team_id, phone, email, code, active, created_at, hourly_rate) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                    (username, db.hash_pw(pw), *fields, now_str(), rate))
+        con.execute("INSERT INTO users(username, password_hash, name, role, team_id, phone, email, code, active, created_at, hourly_rate, cccd) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (username, db.hash_pw(pw), *fields, now_str(), rate, cccd))
         log(con, u, f"Tạo tài khoản {username}")
     return {"ok": True}
 
