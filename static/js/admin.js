@@ -696,8 +696,8 @@ async function aSalary(v) {
       <span><b>2</b> Kiểm tra bảng lương theo tháng / ngày / nhân sự, điều chỉnh nếu cần</span><span>→</span>
       <span><b>3</b> Bấm <b>Duyệt &amp; công bố</b> để CTV xem được lương</span>
     </div>
-    <div class="filters"><select class="input" id="ym">${monthOptions(ym, -12, 0)}</select>
-      <div class="seg" id="view"><button data-v="month" class="active">Tổng hợp tháng</button><button data-v="day">Theo ngày</button><button data-v="person">Theo nhân sự</button></div>
+    <div class="filters"><select class="input" id="ym">${monthOptions(ym, -12, 2)}</select>
+      <div class="seg" id="view"><button data-v="month" class="active">Tổng hợp tháng</button><button data-v="day">Theo ngày</button><button data-v="person">Theo nhân sự</button><button data-v="est">EST lương</button></div>
       <select class="input" id="person" hidden></select>
       <span style="flex:1"></span><span id="pub"></span>
       <button class="btn" id="exp">${icon('download')} Xuất Excel</button></div>
@@ -755,6 +755,40 @@ async function aSalary(v) {
     wireNotice();
   };
 
+  /* ---- EST lương: dự kiến theo mọi ca đã chia trong tháng ---- */
+  let est = null;
+  const viewEst = async () => {
+    est = await api('/admin/salary/estimate', { query: { ym } });
+    const R = est.rows, sum = k => R.reduce((a, r) => a + r[k], 0), hrs = k => Math.round(sum(k) * 10) / 10;
+    const sub = (m, h) => `<div class="small muted" style="margin-top:2px">${h} giờ · ${money(m)}</div>`;
+    $('#body').innerHTML = `<p class="small muted" style="margin:0 0 12px">Tính trên <b>tất cả ca đã chia</b> trong ${fmtYM(ym).toLowerCase()} (kể cả ca chưa duyệt chấm công và ca chưa tới ngày) × đơn giá giờ, rồi trừ phạt QC / khấu trừ và cộng thưởng đã ghi. Chỉ là số dự kiến — lương thật vẫn theo tab <b>Tổng hợp tháng</b> sau khi duyệt chấm công.</p>
+      <div class="stats">
+        <div class="stat"><div class="label">EST tổng chi</div><div class="value accent">${money(sum('total'))}</div><div class="small muted">${R.length} người · ${hrs('hours')} giờ</div></div>
+        <div class="stat"><div class="label">Đã duyệt chấm công</div><div class="value">${money(sum('done'))}</div>${sub(sum('done'), hrs('done_h'))}</div>
+        <div class="stat"><div class="label">Đã qua, chờ duyệt</div><div class="value">${money(sum('wait'))}</div>${sub(sum('wait'), hrs('wait_h'))}</div>
+        <div class="stat"><div class="label">Chưa tới ngày</div><div class="value">${money(sum('next'))}</div>${sub(sum('next'), hrs('next_h'))}</div></div>
+      <div class="card" id="tbl"></div>`;
+    const part = (m, h) => m || h ? `<span class="nowrap">${money(m)}</span><br><span class="small muted">${h} giờ</span>` : '<span class="muted">—</span>';
+    dataTable($('#tbl'), R, [
+      { label: 'Nhân sự', render: r => `<a href="javascript:void 0" data-person="${r.id}"><b>${esc(r.username)}</b></a><br><span class="small muted">${esc(r.name)}</span>` },
+      { label: 'Ca / Giờ', cls: 'mono', render: r => `<span class="nowrap">${r.shifts} / ${r.hours}</span>` },
+      { label: 'Đã duyệt', cls: 'right mono', render: r => part(r.done, r.done_h) },
+      { label: 'Chờ duyệt', cls: 'right mono', render: r => part(r.wait, r.wait_h) },
+      { label: 'Chưa tới ngày', cls: 'right mono', render: r => part(r.next, r.next_h) },
+      { label: 'Lương giờ dự kiến', cls: 'right mono', render: r => `<span class="nowrap">${money(r.amount)}</span>` },
+      { label: 'Thưởng / phạt', cls: 'right mono', render: r => [r.bonus ? `<span class="plus">+${money(r.bonus)}</span>` : '',
+          r.qc_fine ? `<span class="minus">−${money(r.qc_fine)}</span> <span class="small muted">QC</span>` : '',
+          r.deduction ? `<span class="minus">−${money(r.deduction)}</span> <span class="small muted">KT</span>` : ''].filter(Boolean).join('<br>') || '—' },
+      { label: 'EST thực nhận', cls: 'right mono', render: r => `<b class="nowrap">${money(r.total)}</b>` },
+      { label: '', cls: 'right', render: r => `<div class="actions"><button class="btn btn-sm" data-adj="${r.id}">Xem / sửa công</button></div>` },
+    ], { pageSize: 50, empty: 'Tháng này chưa chia ca nào' });
+    $('#tbl').onclick = e => {
+      const p = e.target.closest('[data-person]'), b = e.target.closest('[data-adj]');
+      if (p) { personId = +p.dataset.person; setView('person'); }
+      if (b) monthSheetDialog(ym, +b.dataset.adj, load);
+    };
+  };
+
   /* ---- theo nhân sự ---- */
   let person = null;
   const viewPerson = async () => {
@@ -803,7 +837,7 @@ async function aSalary(v) {
     $$('#view button').forEach(b => b.classList.toggle('active', b.dataset.v === view));
     $('#person').hidden = view !== 'person';
     $('#body').innerHTML = loading();
-    (view === 'month' ? viewMonth : view === 'day' ? viewDay : viewPerson)();
+    (view === 'month' ? viewMonth : view === 'day' ? viewDay : view === 'est' ? viewEst : viewPerson)();
   };
   const load = async () => {
     [data, users] = await Promise.all([api('/admin/salary', { query: { ym } }), users.length ? users : api('/admin/users')]);
@@ -822,6 +856,8 @@ async function aSalary(v) {
   $('#view').onclick = e => { const b = e.target.closest('[data-v]'); if (b) setView(b.dataset.v); };
   $('#person').onchange = e => { personId = +e.target.value; viewPerson(); };
   $('#exp').onclick = () => {
+    if (view === 'est' && est) return downloadCSV(`est-luong-${ym}.csv`, ['Username', 'Họ tên', 'Số ca', 'Tổng giờ', 'Giờ đã duyệt', 'Tiền đã duyệt', 'Giờ chờ duyệt', 'Tiền chờ duyệt', 'Giờ chưa tới ngày', 'Tiền chưa tới ngày', 'Lương giờ dự kiến', 'Thưởng', 'Phạt QC', 'Khấu trừ', 'EST thực nhận'],
+      est.rows.map(r => [r.username, r.name, r.shifts, r.hours, r.done_h, r.done, r.wait_h, r.wait, r.next_h, r.next, r.amount, r.bonus, r.qc_fine, r.deduction, r.total]));
     if (view === 'day') return downloadCSV(`luong-theo-ngay-${ym}.csv`, ['Ngày', 'Thứ', 'Số ca', 'Số người', 'Giờ đã duyệt', 'Lương giờ', 'Ca chờ duyệt'],
       daily.map(d => [fmtDate(d.date), dowOf(d.date), d.shifts, d.people, d.hours, d.amount, d.pending]));
     if (view === 'person' && person) return downloadCSV(`luong-${person.user.username}-${ym}.csv`, ['Ngày', 'Ca', 'Giờ', 'Vị trí', 'Số giờ', 'Thành tiền', 'Trạng thái', 'Ghi chú'],

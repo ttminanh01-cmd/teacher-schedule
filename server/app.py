@@ -1095,6 +1095,48 @@ def admin_salary_daily(ym: str, u=Depends(admin_user), con=Depends(get_con)):
     return list(out.values())
 
 
+@app.get("/api/admin/salary/estimate")
+def admin_salary_estimate(ym: str, u=Depends(admin_user), con=Depends(get_con)):
+    """Dự kiến lương tháng theo mọi ca đã chia (đã duyệt + chờ duyệt + chưa tới ngày) × đơn giá,
+    cộng thưởng / trừ phạt QC, khấu trừ đã ghi. 3 truy vấn cho cả tháng (Neon ở xa, tránh lặp theo người)."""
+    f, l = month_range(ym)
+    today = date.today().isoformat()
+    people = {}
+
+    def person(x):
+        return people.setdefault(x["user_id"], {
+            "id": x["user_id"], "username": x["username"], "name": x["name"], "shifts": 0, "hours": 0.0, "amount": 0,
+            "done_h": 0.0, "done": 0, "wait_h": 0.0, "wait": 0, "next_h": 0.0, "next": 0, "next_n": 0,
+            "bonus": 0, "deduction": 0, "qc_fine": 0, "qc_count": 0})
+
+    for s in rows(con.execute(SCHED_SQL + " WHERE s.date BETWEEN ? AND ?", (f, l))):
+        p = person(s)
+        h = max(0, t2m(s["end"]) - t2m(s["start"])) / 60
+        amt = round(h * (s["hourly_rate"] or 0))
+        k = "done" if s["approved_at"] else "wait" if s["date"] <= today else "next"
+        p["shifts"] += 1
+        p["hours"] += h
+        p["amount"] += amt
+        p[k + "_h"] += h
+        p[k] += amt
+        if k == "next":
+            p["next_n"] += 1
+    for a in rows(con.execute("SELECT s.user_id, s.bonus, s.deduction, u.username, u.name FROM salaries s"
+                              " JOIN users u ON u.id=s.user_id WHERE s.ym=?", (ym,))):
+        if a["bonus"] or a["deduction"]:
+            p = person(a)
+            p["bonus"], p["deduction"] = a["bonus"] or 0, a["deduction"] or 0
+    for q in rows(con.execute("SELECT q.user_id, SUM(q.amount) AS fine, COUNT(*) AS n, u.username, u.name FROM qc_errors q"
+                              " JOIN users u ON u.id=q.user_id WHERE q.ym=? GROUP BY q.user_id, u.username, u.name", (ym,))):
+        p = person(q)
+        p["qc_fine"], p["qc_count"] = int(q["fine"] or 0), q["n"]
+    for p in people.values():
+        for k in ("hours", "done_h", "wait_h", "next_h"):
+            p[k] = round(p[k], 2)
+        p["total"] = p["amount"] + p["bonus"] - p["qc_fine"] - p["deduction"]
+    return {"ym": ym, "today": today, "rows": sorted(people.values(), key=lambda p: -p["total"])}
+
+
 @app.get("/api/admin/salary/user")
 def admin_salary_user(ym: str, user_id: int, u=Depends(admin_user), con=Depends(get_con)):
     """Chi tiết lương 1 nhân sự: các ca đã duyệt (được tính) + ca chờ duyệt (chưa tính)."""
