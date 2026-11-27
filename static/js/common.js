@@ -403,6 +403,7 @@ const App = {
     };
     $('#open-nav').onclick = () => this.toggleNav(true);
     this.refreshNotifCount();
+    setInterval(() => { if (document.visibilityState === 'visible') this.refreshNotifCount(); }, 120000);
     this.route();
     this.startPresence();
     if (user.must_change_pw) changePasswordDialog(true);
@@ -441,6 +442,8 @@ const App = {
     const list = await api('/notifications').catch(() => []);
     const n = list.filter(x => x.unread).length;
     const el = $('#notif-count'); if (el) { el.hidden = !n; el.textContent = n; }
+    if (this.config.role === 'ctv') this.setCount('notifications', n);   // số thông báo mới cạnh mục "Thông báo"
+    return list;
   },
 
   route() {
@@ -492,7 +495,13 @@ function changePasswordDialog(forced = false) {
   });
 }
 
+const notifItem = n => `<div class="notif ${n.unread ? 'new' : ''}">
+  <div style="display:flex;gap:8px;align-items:center"><strong>${esc(n.title)}</strong>${n.unread ? '<span class="badge accent">Mới</span>' : ''}</div>
+  ${n.body ? `<div class="notif-b">${esc(n.body)}</div>` : ''}
+  <div class="small muted" style="margin-top:4px">${fmtDate(n.created_at.slice(0, 10))} ${n.created_at.slice(11, 16)}</div></div>`;
+
 async function notificationsDialog() {
+  if (App.config.role === 'ctv') { location.hash = '#notifications'; return; }
   const list = await api('/notifications');
   modal({
     title: 'Thông báo',

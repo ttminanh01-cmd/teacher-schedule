@@ -86,9 +86,12 @@ async function swapDialog(s, reload) {
    ========================================================= */
 async function pageDashboard(v) {
   v.innerHTML = pageHead(`Xin chào, ${esc(App.user.name.split(' ').pop())}`, 'Tổng quan ca trực và giờ làm của bạn trong tháng này.') + loading();
-  const [d, today] = await Promise.all([api('/ctv/dashboard'), api('/ctv/schedule', { query: { start: todayStr(), end: todayStr() } })]);
+  const [d, today, notifs] = await Promise.all([api('/ctv/dashboard'), api('/ctv/schedule', { query: { start: todayStr(), end: todayStr() } }), api('/notifications').catch(() => [])]);
+  const unread = notifs.filter(n => n.unread);
   const reload = () => App.route();
   v.innerHTML = pageHead(`Xin chào, ${esc(App.user.name.split(' ').pop())}`, 'Tổng quan ca trực và giờ làm của bạn trong tháng này.') + `
+    ${unread.length ? `<div class="card card-pad notif-box"><div class="card-head" style="padding:0 0 6px;border:0"><h2>${icon('bell')} ${unread.length} thông báo mới</h2><a class="btn btn-sm" href="#notifications">Xem tất cả</a></div>
+      ${unread.slice(0, 3).map(notifItem).join('')}</div>` : ''}
     <div class="stats">
       <div class="stat"><div class="label">Giờ đã chấm công</div><div class="value">${d.hours}</div></div>
       <div class="stat"><div class="label">Ca đã chấm công / được xếp</div><div class="value">${d.done}<span class="muted" style="font-size:16px"> / ${d.shifts}</span></div>${d.waiting ? `<div class="small muted">${d.waiting} ca chờ admin duyệt</div>` : ''}</div>
@@ -1186,11 +1189,21 @@ async function pageLogs(v) {
   ]);
 }
 
+/* ---------- thông báo từ quản lý ---------- */
+async function pageNotifications(v) {
+  v.innerHTML = pageHead('Thông báo', 'Thông báo từ quản lý: lịch đã chốt, thay đổi ca, nhắc việc…') + loading();
+  const list = await api('/notifications');
+  v.innerHTML = pageHead('Thông báo', 'Thông báo từ quản lý: lịch đã chốt, thay đổi ca, nhắc việc…') +
+    `<div class="card card-pad">${list.length ? list.map(notifItem).join('') : emptyState('Chưa có thông báo')}</div>`;
+  if (list.some(n => n.unread)) { await api('/notifications/read', { method: 'POST' }).catch(() => {}); App.refreshNotifCount(); }
+}
+
 /* ---------- khởi động ---------- */
 App.start({
   role: 'ctv', brand: 'Cổng CTV', subtitle: 'Cộng tác viên', loginHint: 'Tên đăng nhập dạng ctv.tenban (VD ctv.haott). Mật khẩu ban đầu do quản lý cấp.',
   nav: [
-    { group: 'Tổng quan', items: [{ id: 'dashboard', label: 'Tổng quan', icon: 'home', render: pageDashboard }] },
+    { group: 'Tổng quan', items: [{ id: 'dashboard', label: 'Tổng quan', icon: 'home', render: pageDashboard },
+      { id: 'notifications', label: 'Thông báo', icon: 'bell', render: pageNotifications }] },
     { group: 'Lịch làm', items: [
       { id: 'schedule', label: 'Lịch làm việc', icon: 'calendar', render: pageSchedule },
       { id: 'availability', label: 'Đăng ký lịch rảnh', icon: 'checkSquare', render: pageAvailability },
