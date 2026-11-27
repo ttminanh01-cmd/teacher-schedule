@@ -1201,7 +1201,7 @@ async function aMilo(body) {
       </ol>
       <div style="position:relative;display:block;width:100%"><textarea class="input mono" rows="6" readonly style="font-size:11.5px;display:block;width:100%;box-sizing:border-box">${esc(m.gas_script)}</textarea>
         <button type="button" class="btn btn-sm" id="milo-mail-copy" style="position:absolute;right:8px;top:8px">${icon('copy')} Sao chép</button></div>
-      <span class="hint">Muốn chỉ lấy mail Milo: sửa dòng <span class="mono">MM_FILTER = ''</span> thành VD <span class="mono">'subject:Milo'</span>; chỉ lấy lịch sử từ một ngày: sửa <span class="mono">MM_SINCE</span>. Sửa xong chạy lại miloMailSetup (xoá mail đã lưu và gửi lại).</span></details>
+      <span class="hint">Muốn chỉ lấy mail Milo: sửa dòng <span class="mono">MM_FILTER = ''</span> thành VD <span class="mono">'subject:Milo'</span>; chỉ lấy lịch sử từ một ngày: sửa <span class="mono">MM_SINCE</span>. Sửa xong chạy lại miloMailSetup (xoá mail đã lưu và gửi lại). CTV báo có mail mà portal không thấy: điền email vào <span class="mono">MM_CHECK_EMAIL</span> → chạy hàm <b>miloMailCheck</b> (xem nguyên nhân trong nhật ký + gửi luôn mail đó).</span></details>
   </div></div>`;
   const mcb = $('#milo-mail-copy', body); if (mcb) mcb.onclick = () => navigator.clipboard.writeText(m.gas_script).then(() => toast('Đã sao chép code'));
   $('#milo-form', body).onsubmit = e => {

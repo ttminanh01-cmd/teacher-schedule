@@ -279,6 +279,29 @@ function mmPack_(m) {
            bcc: m.getBcc(), subject: m.getSubject(), html: html, atts: atts };
 }
 
+// Kiểm tra 1 email (khi CTV báo có mail mà portal không thấy): điền email vào MM_CHECK_EMAIL → 💾 Lưu → chọn hàm
+// miloMailCheck → ▶ Chạy. Nhật ký ghi từng mail tìm được + tiến độ gửi lịch sử; mail tìm được gửi luôn sang portal.
+const MM_CHECK_EMAIL = '';
+function miloMailCheck() {
+  const email = String(MM_CHECK_EMAIL).trim().toLowerCase();
+  if (!email) throw new Error('Điền email học viên vào dòng MM_CHECK_EMAIL = \'\' rồi chạy lại');
+  const p = PropertiesService.getScriptProperties(), me = mmMe_();
+  Logger.log('Tài khoản đang chạy + bí danh: ' + me.join(', '));
+  Logger.log('Lịch sử: ' + (p.getProperty('mm_done') ? 'đã gửi xong' : 'đang gửi — đã qua ' + (p.getProperty('mm_start') || 0) + ' cuộc thư')
+             + ' · mail mới tính từ ' + new Date(Number(p.getProperty('mm_new') || 0) * 1000));
+  const out = [];
+  GmailApp.search('in:sent ' + email, 0, 20).forEach(t => t.getMessages().forEach(m => {
+    const rcpt = [m.getTo(), m.getCc(), m.getBcc()].join(',').toLowerCase();
+    if (rcpt.indexOf(email) < 0) return;
+    Logger.log(Utilities.formatDate(m.getDate(), 'Asia/Ho_Chi_Minh', 'dd/MM/yyyy HH:mm') + ' · From: ' + m.getFrom()
+               + ' · ' + m.getSubject() + (mmFromMe_(m, me) ? '' : '  ⚠ From không phải tài khoản/bí danh ở trên → lần đồng bộ thường đang bỏ qua'));
+    out.push(mmPack_(m));
+  }));
+  if (!out.length) { Logger.log('Không thấy mail nào trong Đã gửi gửi tới ' + email); return; }
+  const r = mmPost_({ op: 'push', mails: out });
+  Logger.log('Đã gửi ' + out.length + ' mail sang portal (portal đang có ' + r.count + ' mail) → tìm lại trên portal');
+}
+
 function miloMailSync(e) {
   const p = PropertiesService.getScriptProperties();
   if (e && e.triggerUid) {  // trigger 1 phút/lần → chỉ chạy thật khi đủ 2 phút (giờ làm) / 15 phút (ban đêm)
