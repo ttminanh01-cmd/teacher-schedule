@@ -225,16 +225,25 @@ const MM_TOKEN = '__TOKEN__';
 const MM_FILTER = 'subject:"Speakwell - MILO"';   // chỉ lấy mail có tiêu đề chứa [Speakwell - MILO] (portal cũng chỉ nhận mail này)
 const MM_SINCE = '';    // chỉ lấy lịch sử từ ngày này, VD: '2024/01/01' (để trống = toàn bộ)
 const MM_PAGE = 30, MM_BATCH_CHARS = 4 * 1024 * 1024, MM_BUDGET_MS = 4 * 60 * 1000, MM_IMG_MAX = 300 * 1024;
+const MM_DAY_SEC = 86400;
 const MM_EVERY_DAY_MIN = 2, MM_EVERY_NIGHT_MIN = 15, MM_DAY_FROM = 7, MM_DAY_TO = 23;
 
 // Chạy 1 lần (chạy lại = xoá mail đã lưu trên portal và gửi lại toàn bộ)
 function miloMailSetup() {
   miloMailTriggers();
   const p = PropertiesService.getScriptProperties(), now = Math.floor(Date.now() / 1000);
-  p.setProperties({ mm_new: String(now), mm_old: String(now), mm_start: '0', mm_done: '', mm_ids: '{}', mm_last: '0' });
+  p.setProperties({ mm_new: String(now), mm_old: String(now), mm_done: '', mm_ids: '{}', mm_last: '0' });
   mmPost_({ op: 'reset' });
   miloMailSync();
 }
+
+// Quét lại lịch sử từ hôm nay lùi về trước, KHÔNG xoá mail đã lưu trên portal (mail trùng tự gộp)
+function miloMailHistory() {
+  PropertiesService.getScriptProperties().setProperties({ mm_old: String(Math.floor(Date.now() / 1000)), mm_done: '' });
+  miloMailSync();
+}
+
+function mmDay_(t) { return Utilities.formatDate(new Date(t * 1000), 'Asia/Ho_Chi_Minh', 'dd/MM/yyyy'); }
 
 // Chỉ đặt lại lịch chạy, không gửi lại lịch sử
 function miloMailTriggers() {
@@ -295,7 +304,7 @@ function miloMailCheck() {
   if (!email) throw new Error('Điền email học viên vào dòng MM_CHECK_EMAIL = \'\' rồi chạy lại');
   const p = PropertiesService.getScriptProperties(), me = mmMe_();
   Logger.log('Tài khoản đang chạy + bí danh: ' + me.join(', '));
-  Logger.log('Lịch sử: ' + (p.getProperty('mm_done') ? 'đã gửi xong' : 'đang gửi — đã qua ' + (p.getProperty('mm_start') || 0) + ' cuộc thư')
+  Logger.log('Lịch sử: ' + (p.getProperty('mm_done') ? 'đã gửi xong' : 'đang gửi — đã quét lùi tới ngày ' + mmDay_(Number(p.getProperty('mm_old') || 0)))
              + ' · mail mới tính từ ' + new Date(Number(p.getProperty('mm_new') || 0) * 1000));
   const out = [];
   GmailApp.search(['in:sent', MM_FILTER, email].filter(String).join(' '), 0, 20).forEach(t => t.getMessages().forEach(m => {
@@ -345,23 +354,36 @@ function miloMailSync(e) {
     Object.keys(ids).forEach(k => { if (ids[k] < newest - 3600) delete ids[k]; });
     p.setProperties({ mm_new: String(newest), mm_ids: JSON.stringify(ids) });
     if (sent) Logger.log('Đã gửi ' + sent + ' mail mới sang portal');
-    // 2) lịch sử cũ (trước lúc chạy miloMailSetup): từng trang, nhớ vị trí để lần sau làm tiếp
+    // 2) lịch sử cũ: quét TỪNG NGÀY lùi dần (mỗi ngày ít mail → tìm đủ; lật trang trên cả hộp thư lớn bị Gmail trả sót)
     if (!p.getProperty('mm_done')) {
-      const before = Number(p.getProperty('mm_old'));
-      let start = Number(p.getProperty('mm_start') || 0), old = 0;
+      const stop = MM_SINCE ? Math.floor(new Date(MM_SINCE.replace(/\//g, '-') + 'T00:00:00+07:00').getTime() / 1000) : 0;
+      let end = Number(p.getProperty('mm_old')), old = 0;
       while (Date.now() - t0 < MM_BUDGET_MS) {
-        const th = GmailApp.search(q('before:' + before + (MM_SINCE ? ' after:' + MM_SINCE : '')), start, MM_PAGE);
-        if (!th.length) { p.setProperty('mm_done', '1'); Logger.log('Đã gửi xong lịch sử mail'); break; }
-        th.forEach(t => t.getMessages().forEach(m => {
-          if (m.getDate().getTime() / 1000 >= before || !mmFromMe_(m, me)) return;
-          add(m);
-          old++;
-        }));
+        if (end <= stop) { p.setProperty('mm_done', '1'); break; }
+        const begin = Math.max(end - MM_DAY_SEC, stop), seen = {};
+        let n = 0, full = true;
+        for (let start = 0; ; start += MM_PAGE) {
+          if (Date.now() - t0 > MM_BUDGET_MS) { full = false; break; }
+          const th = GmailApp.search(q('after:' + (begin - 60) + ' before:' + (end + 60)), start, MM_PAGE);
+          th.forEach(t => t.getMessages().forEach(m => {
+            const at = Math.floor(m.getDate().getTime() / 1000);
+            if (at < begin || at >= end || seen[m.getId()] || !mmFromMe_(m, me)) return;
+            seen[m.getId()] = 1;
+            add(m);
+            n++;
+          }));
+          if (th.length < MM_PAGE) break;
+        }
+        if (!full) break;  // hết giờ giữa chừng → lần sau quét lại ngày này
         flush();
-        start += th.length;
-        p.setProperty('mm_start', String(start));
+        old += n;
+        // ngày trống: còn mail nào cũ hơn không? hết → xong lịch sử
+        if (!n && !GmailApp.search(q('before:' + begin), 0, 1).length) { p.setProperties({ mm_old: String(begin), mm_done: '1' }); break; }
+        p.setProperty('mm_old', String(begin));
+        end = begin;
       }
-      if (old) Logger.log('Đã gửi ' + old + ' mail cũ (tới cuộc thư thứ ' + p.getProperty('mm_start') + ')' + (p.getProperty('mm_done') ? '' : ' — lần chạy sau làm tiếp'));
+      Logger.log(p.getProperty('mm_done') ? 'Đã gửi xong lịch sử mail' + (old ? ' (lượt này ' + old + ' mail)' : '')
+                 : 'Đã gửi ' + old + ' mail cũ — đã quét lùi tới ngày ' + mmDay_(end) + ', lần chạy sau làm tiếp');
     }
     if (!sent) mmPost_({ op: 'ping' });
   } finally {
