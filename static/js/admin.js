@@ -1171,7 +1171,7 @@ async function aMilo(body) {
   body.innerHTML = loading();
   const d = await api('/admin/milo');
   const L = { s1: ['File ICC_Bàn giao học viên (tab Format)', 'https://docs.google.com/spreadsheets/d/…'], s2: ['File data_handover (tab ICC_15052024)', 'https://docs.google.com/spreadsheets/d/…'], vh: ['File làm việc Milo của VH (tab File làm việc Milo)', 'https://docs.google.com/spreadsheets/d/…'] };
-  const c = d.count;
+  const c = d.count, m = d.mail || {};
   body.innerHTML = `<div class="card"><div class="card-pad">
     <p class="small muted" style="margin-bottom:12px">CTV vào <b>Document → TK Milo</b>, tìm học viên theo tên / email / SĐT để xem: đã bàn giao ở 2 file nguồn chưa, đã có trong file VH chưa, username / password được tạo và tình trạng cấp tài khoản. Khớp học viên giữa các file theo email hoặc SĐT.</p>
     ${d.data_at ? `<p class="small" style="margin-bottom:12px"><span class="badge green">Đang nhận dữ liệu</span> Cập nhật lúc <b>${hm(d.data_at)} ${fmtDate(d.data_at.slice(0, 10))}</b>${c ? ` · nguồn 1: ${c.s1} dòng Milo · nguồn 2: ${c.s2} · file VH: ${c.vh}` : ''}${d.seen_at ? ` · Apps Script kiểm tra gần nhất ${hm(d.seen_at)}` : ''}</p>` : '<p class="small" style="margin-bottom:12px"><span class="badge amber">Chưa nhận dữ liệu</span> Dán link 3 file → Lưu → cài Apps Script bên dưới.</p>'}
@@ -1187,7 +1187,23 @@ async function aMilo(body) {
       <div style="position:relative;display:block;width:100%"><textarea class="input mono" rows="6" readonly style="font-size:11.5px;display:block;width:100%;box-sizing:border-box">${esc(d.gas_script)}</textarea>
         <button type="button" class="btn btn-sm" id="milo-copy" style="position:absolute;right:8px;top:8px">${icon('copy')} Sao chép</button></div>
       <span class="hint">Đổi link file, hoặc sửa dòng cũ trong sheet, thì bấm Lưu → sao chép lại code → dán đè → chạy lại miloSetup (gửi lại toàn bộ lịch sử). Mã bảo mật trong code là riêng của portal — không chia sẻ ra ngoài.</span></details>` : ''}
+  </div></div>
+  <div class="card" style="margin-top:14px"><div class="card-pad">
+    <h3 style="margin:0 0 6px">Mail đã gửi cho học viên (hộp mail chung)</h3>
+    <p class="small muted" style="margin-bottom:12px">CTV tìm học viên ở tab TK Milo sẽ thấy các mail hộp mail chung đã gửi tới email học viên, bấm xem và <b>Sao chép ảnh</b> chụp mail để gửi cho học viên.</p>
+    ${m.count ? `<p class="small" style="margin-bottom:12px"><span class="badge green">Đang nhận mail</span> Đã lưu <b>${m.count}</b> mail${m.data_at ? ` · mail mới nhất về lúc ${hm(m.data_at)} ${fmtDate(m.data_at.slice(0, 10))}` : ''}${m.seen_at ? ` · Apps Script kiểm tra gần nhất ${hm(m.seen_at)}` : ''}</p>` : `<p class="small" style="margin-bottom:12px"><span class="badge amber">Chưa nhận mail</span>${m.seen_at ? ` Apps Script kiểm tra gần nhất ${hm(m.seen_at)}` : ' Cài Apps Script bên dưới bằng tài khoản mail chung.'}</p>`}
+    <details ${m.count ? '' : 'open'}><summary style="cursor:pointer"><b>Cài Apps Script bằng tài khoản mail chung</b> <span class="muted small">(cài 1 lần — project riêng, không dán chung với script 3 file ở trên)</span></summary>
+      <ol class="small" style="margin:8px 0 8px 18px;line-height:1.7">
+        <li>Đăng nhập Google bằng <b>tài khoản mail chung</b> (hộp mail gửi tài khoản Milo cho học viên) → mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Dự án mới</a>.</li>
+        <li>Xoá code mẫu, dán đoạn code bên dưới → bấm 💾 <b>Lưu</b>.</li>
+        <li>Ô chọn hàm chọn <b>miloMailSetup</b> → <b>▶ Chạy</b> → <b>Xem xét quyền</b> → chọn tài khoản mail chung → <b>Cho phép</b> (quyền đọc Gmail để lấy thư mục Đã gửi).</li>
+        <li>Nhật ký hiện “Đã gửi … mail” là xong. Lịch sử cũ gửi dần qua các lần chạy (mỗi lượt tối đa ~4 phút); mail mới kiểm tra 2 phút/lần giờ làm (7h–23h), 15 phút/lần ban đêm.</li>
+      </ol>
+      <div style="position:relative;display:block;width:100%"><textarea class="input mono" rows="6" readonly style="font-size:11.5px;display:block;width:100%;box-sizing:border-box">${esc(m.gas_script)}</textarea>
+        <button type="button" class="btn btn-sm" id="milo-mail-copy" style="position:absolute;right:8px;top:8px">${icon('copy')} Sao chép</button></div>
+      <span class="hint">Muốn chỉ lấy mail Milo: sửa dòng <span class="mono">MM_FILTER = ''</span> thành VD <span class="mono">'subject:Milo'</span>; chỉ lấy lịch sử từ một ngày: sửa <span class="mono">MM_SINCE</span>. Sửa xong chạy lại miloMailSetup (xoá mail đã lưu và gửi lại).</span></details>
   </div></div>`;
+  const mcb = $('#milo-mail-copy', body); if (mcb) mcb.onclick = () => navigator.clipboard.writeText(m.gas_script).then(() => toast('Đã sao chép code'));
   $('#milo-form', body).onsubmit = e => {
     e.preventDefault();
     const f = new FormData(e.target);

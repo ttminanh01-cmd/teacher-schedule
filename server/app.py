@@ -15,7 +15,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import autoschedule, crm_videos, db, docs, handbook, ican, milo, notify, sheet_sync, yt_videos
+from . import autoschedule, crm_videos, db, docs, handbook, ican, milo, milo_mail, notify, sheet_sync, yt_videos
 from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -1565,7 +1565,33 @@ def milo_push(body: dict = Body(...), con=Depends(get_con)):
 def milo_search(q: str = "", u=Depends(current_user)):
     if len(q.strip()) < 2:
         return {"ready": milo.status()["data_at"] is not None, "students": []}
-    return milo.search(q)
+    r = milo.search(q)
+    for s in r["students"]:  # mail đã gửi (hộp mail chung) tới các email của học viên
+        s["mails"] = milo_mail.for_emails(s["emails"])
+    if "@" in q and not r["students"]:  # không có trong 3 file nhưng có mail đã gửi tới địa chỉ này
+        e = q.strip().lower()
+        ms = milo_mail.for_emails([e])
+        if ms:
+            r.update(ready=True, students=[{"name": "", "emails": [e], "phones": [], "status": "none", "s1": [], "s2": [], "vh": [],
+                                            "status_label": "Không có trong 3 file — chỉ thấy mail đã gửi", "mails": ms}])
+    return r
+
+
+@app.post("/api/milo/mail")
+def milo_mail_push(body: dict = Body(...)):
+    """Apps Script (tài khoản mail chung) gửi mail đã gửi sang. Không mở DB khi chỉ ping / không có mail mới."""
+    try:
+        return milo_mail.receive(body)
+    except milo_mail.MailError as e:
+        err(str(e), 403 if "mã bảo mật" in str(e) else 400)
+
+
+@app.get("/api/milo/mail/{mid}")
+def milo_mail_get(mid: str, u=Depends(current_user)):
+    m = milo_mail.get(mid)
+    if not m:
+        err("Không tìm thấy mail", 404)
+    return m
 
 
 @app.get("/api/admin/milo")
@@ -1578,7 +1604,15 @@ def admin_milo(request: Request, u=Depends(admin_user), con=Depends(get_con)):
             "ready": all(src.values()),
             "gas_script": milo.apps_script(tok, portal, src) if all(src.values()) else "",
             "data_at": fmt_ts(st["data_at"]) if st["data_at"] else None,
-            "seen_at": fmt_ts(st["seen_at"]) if st["seen_at"] else None, "count": st["count"]}
+            "seen_at": fmt_ts(st["seen_at"]) if st["seen_at"] else None, "count": st["count"],
+            "mail": mail_status(con, portal)}
+
+
+def mail_status(con, portal: str) -> dict:
+    ms = milo_mail.status()
+    return {"gas_script": milo_mail.apps_script(milo_mail.ensure_token(con), portal), "count": ms["count"],
+            "seen_at": fmt_ts(ms["seen_at"]) if ms["seen_at"] else None,
+            "data_at": fmt_ts(ms["data_at"]) if ms["data_at"] else None}
 
 
 @app.put("/api/admin/milo")

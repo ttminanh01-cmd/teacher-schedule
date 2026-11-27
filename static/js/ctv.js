@@ -911,10 +911,81 @@ async function pageDocs(v) {
         <dt>Password</dt><dd>${cp(r.password)}</dd>
         <dt>Cấp tài khoản</dt><dd>${r.granted ? '<span class="badge green">Đã tích</span>' : '<span class="badge amber">Chưa tích</span>'}</dd>
         <dt>Mail</dt><dd>${r.mail ? esc(r.mail) : '<span class="muted">—</span>'}</dd></dl>`).join('<hr style="border:0;border-top:1px solid var(--border);margin:8px 0">') : no('Chưa có trong file VH');
+    // mail hộp mail chung đã gửi tới học viên: bấm để xem, trong đó có nút sao chép ảnh chụp mail
+    const mails = (s.mails || []).length ? s.mails.map(m => `<div class="mm-item"><button type="button" class="mm-row" data-mail="${esc(m.id)}">${icon('mail')}
+        <span class="small muted nowrap">${m.at.slice(11, 16)} ${fmtDate(m.at.slice(0, 10))}</span> <b>${esc(m.subject || '(không tiêu đề)')}</b></button><div class="mm-view" hidden></div></div>`).join('')
+      : no('Không thấy mail đã gửi tới email này');
     return `<div class="card" style="margin-bottom:12px">
       <div class="card-head"><h2>${esc(s.name || '(không tên)')}</h2><span class="badge ${MILO_ST[s.status]}">${esc(s.status_label)}</span></div>
       <div class="card-pad"><div class="small muted" style="margin-bottom:10px">${[...s.emails, ...s.phones].map(esc).join(' · ') || '—'}</div>
-        <dl class="kv"><dt>Bàn giao (ICC – Format)</dt><dd>${s1}</dd><dt>Bàn giao (data_handover)</dt><dd>${s2}</dd><dt>File VH (tạo TK)</dt><dd>${vh}</dd></dl></div></div>`;
+        <dl class="kv"><dt>Bàn giao (ICC – Format)</dt><dd>${s1}</dd><dt>Bàn giao (data_handover)</dt><dd>${s2}</dd><dt>File VH (tạo TK)</dt><dd>${vh}</dd>
+          <dt>Mail đã gửi</dt><dd>${mails}</dd></dl></div></div>`;
+  };
+  /* xem mail đã gửi trong iframe (sandbox: không chạy script của mail) + chụp thành ảnh PNG để CTV dán vào Zalo / Messenger */
+  const mailDoc = m => {
+    const row = (k, v) => v ? `<div><span class="k">${k}:</span> ${esc(v)}</div>` : '';
+    const imgs = m.atts.filter(a => a.data).map(a => `<img src="data:${esc(a.type)};base64,${a.data}" alt="${esc(a.name)}">`).join('');
+    const files = m.atts.filter(a => !a.data).map(a => `<span class="f">📎 ${esc(a.name)}</span>`).join('');
+    return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>
+      html,body{margin:0;background:#fff;color:#202124;font:14px/1.5 Arial,Helvetica,sans-serif}
+      #mm-shot{background:#fff;display:flow-root}
+      .mm-h{padding:16px 20px 12px;border-bottom:1px solid #e3e3e3}.mm-s{font-size:19px;margin:0 0 8px;font-weight:600}
+      .mm-m{font-size:12.5px;color:#5f6368;line-height:1.6;word-break:break-word}.mm-m .k{color:#202124}
+      .mm-b{padding:16px 20px;overflow-wrap:anywhere}.mm-b img{max-width:100%;height:auto}
+      .mm-a{padding:0 20px 16px}.mm-a img{max-width:100%;display:block;margin:8px 0;border:1px solid #e3e3e3}
+      .mm-a .f{display:inline-block;margin:4px 8px 0 0;padding:4px 8px;border:1px solid #e3e3e3;border-radius:6px;font-size:12.5px}
+    </style></head><body><div id="mm-shot"><div class="mm-h"><div class="mm-s">${esc(m.subject || '(không tiêu đề)')}</div><div class="mm-m">
+      ${row('Từ', m.from)}${row('Tới', m.to)}${row('Cc', m.cc)}${row('Lúc', `${m.at.slice(11, 16)} ${fmtDate(m.at.slice(0, 10))}`)}</div></div>
+      <div class="mm-b">${m.html}</div>${imgs || files ? `<div class="mm-a">${imgs}${files}</div>` : ''}</div></body></html>`;
+  };
+  const fitFrame = f => { try { f.style.height = f.contentDocument.documentElement.scrollHeight + 'px'; } catch (e) { /* bỏ qua */ } };
+  const loadShot = () => window.html2canvas ? Promise.resolve() : new Promise((ok, no) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    sc.onload = ok; sc.onerror = () => no(new Error('Không tải được công cụ chụp ảnh, thử lại'));
+    document.head.appendChild(sc);
+  });
+  const shotMail = async f => {
+    await loadShot();
+    const doc = f.contentDocument, el = doc.getElementById('mm-shot');
+    const c = await window.html2canvas(el, { useCORS: true, backgroundColor: '#ffffff', scale: 2, logging: false,
+      windowWidth: doc.documentElement.scrollWidth, windowHeight: doc.documentElement.scrollHeight });
+    return new Promise((ok, no) => c.toBlob(b => b ? ok(b) : no(new Error('Không tạo được ảnh')), 'image/png'));
+  };
+  const saveBlob = (b, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };
+  const mailAction = async (btn, kind) => {
+    const box = btn.closest('.mm-view'), f = $('iframe', box), m = box._mail;
+    const name = `mail-${(m.to.match(/[\w.+'-]+@[\w.-]+/) || ['hoc-vien'])[0]}-${m.at.slice(0, 10)}.png`;
+    btn.disabled = true;
+    try {
+      if (kind === 'copy') {
+        if (!navigator.clipboard || !window.ClipboardItem) throw new Error('Trình duyệt không cho sao chép ảnh — dùng nút Tải ảnh');
+        // truyền Promise vào ClipboardItem để Safari vẫn coi là thao tác của người dùng
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': shotMail(f) })]);
+        toast('Đã sao chép ảnh mail — dán (Ctrl+V) vào Zalo / Messenger');
+      } else {
+        saveBlob(await shotMail(f), name);
+        toast('Đã tải ảnh mail');
+      }
+    } catch (er) {
+      toast(/NotAllowed|denied/i.test(`${er.name} ${er.message}`) ? 'Trình duyệt chặn sao chép ảnh — dùng nút Tải ảnh' : er.message || 'Không chụp được ảnh', 'error');
+    } finally { btn.disabled = false; }
+  };
+  const openMail = async btn => {
+    const box = btn.nextElementSibling;
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    if (box._mail) return;
+    box.innerHTML = loading();
+    try {
+      const m = box._mail = await api(`/milo/mail/${encodeURIComponent(btn.dataset.mail)}`);
+      box.innerHTML = `<div class="mm-tools"><button type="button" class="btn btn-sm btn-primary" data-mailshot="copy">${icon('copy')} Sao chép ảnh</button>
+        <button type="button" class="btn btn-sm" data-mailshot="save">${icon('download')} Tải ảnh</button></div>
+        <iframe class="mm-frame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" title="Nội dung mail"></iframe>`;
+      const f = $('iframe', box);
+      f.onload = () => { fitFrame(f); setTimeout(() => fitFrame(f), 600); };
+      f.srcdoc = mailDoc(m);
+    } catch (er) { box._mail = null; box.innerHTML = `<div class="small muted">${esc(er.message)}</div>`; }
   };
   const paintMilo = () => {
     $('#doc-body').innerHTML = `<div class="search hb-search">${icon('search')}<input class="input full" id="milo-q" placeholder="Tìm học viên Milo theo tên, email hoặc SĐT (gõ không dấu cũng được)" autocomplete="off" value="${esc(q)}"></div>
@@ -969,6 +1040,8 @@ async function pageDocs(v) {
   $('#doc-body').addEventListener('click', e => {
     const c = e.target.closest('[data-copylink]'); if (c) copy(c.dataset.copylink, 'Đã sao chép link');
     const cv = e.target.closest('[data-copyval]'); if (cv) copy(cv.dataset.copyval, 'Đã sao chép');
+    const ml = e.target.closest('[data-mail]'); if (ml) openMail(ml);
+    const ms = e.target.closest('[data-mailshot]'); if (ms) mailAction(ms, ms.dataset.mailshot);
     const cc = e.target.closest('[data-copy]'); if (cc) { e.preventDefault(); copy(cc.previousElementSibling.innerText, 'Đã sao chép'); }
     if (e.target.closest('[data-tmore]')) { tlimit += 200; paintRows(); }
   });

@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS notification_reads (user_id INTEGER NOT NULL, notific
   PRIMARY KEY (user_id, notification_id));
 CREATE TABLE IF NOT EXISTS logs (
   id INTEGER PRIMARY KEY, user_id INTEGER, actor TEXT NOT NULL, action TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS milo_mails (
+  id TEXT PRIMARY KEY, at INTEGER NOT NULL, addrs TEXT NOT NULL, sender TEXT DEFAULT '', subject TEXT DEFAULT '', body TEXT NOT NULL);
 """
 
 # Đi muộn quá số phút này được đánh dấu "muộn" (chỉ để theo dõi, không tự trừ lương —

@@ -17,7 +17,7 @@ import psycopg
 
 UPSERT_KEYS = {"availability": ["user_id", "ym"], "reg_months": ["ym"], "salaries": ["user_id", "ym"],
                "salary_months": ["ym"], "settings": ["key"], "attendance": ["schedule_id"],
-               "notification_reads": ["user_id", "notification_id"], "sessions": ["token"]}
+               "notification_reads": ["user_id", "notification_id"], "sessions": ["token"], "milo_mails": ["id"]}
 ID_TABLES = {"teams", "positions", "users", "schedules", "swaps", "qc_errors", "notifications", "logs"}
 
 _cache: dict = {}

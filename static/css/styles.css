@@ -621,3 +621,13 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
 .doc-sub .btn svg { width: 14px; height: 14px; }
 .doc-single { overflow: hidden; }
 .crm-frame.doc-frame { aspect-ratio: auto; height: calc(100vh - 260px); min-height: 420px; background: var(--surface); }
+/* TK Milo: mail đã gửi + chụp ảnh mail */
+.mm-item + .mm-item { margin-top: 4px; }
+.mm-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; color: inherit; font: inherit; cursor: pointer; }
+.mm-row:hover { background: var(--surface-2, rgba(127,127,127,.08)); }
+.mm-row svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.mm-row b { overflow-wrap: anywhere; font-weight: 500; }
+.mm-view { margin: 8px 0 10px; }
+.mm-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.mm-tools .btn svg { width: 14px; height: 14px; }
+.mm-frame { display: block; width: 100%; min-height: 200px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
