@@ -381,13 +381,33 @@ const App = {
     $('#m-out').onclick = async () => {
       menu.hidden = true;
       if (!(await confirmDialog('Đăng xuất?', 'Bạn sẽ cần đăng nhập lại để tiếp tục.', 'Đăng xuất'))) return;
+      if (this._presence) this._presence(true);
       await api('/logout', { method: 'POST' }).catch(() => {});
       store.set(TOKEN_KEY, null); location.hash = ''; this.showLogin();
     };
     $('#open-nav').onclick = () => this.toggleNav(true);
     this.refreshNotifCount();
     this.route();
+    this.startPresence();
     if (user.must_change_pw) changePasswordDialog(true);
+  },
+
+  /* báo "đang mở web" cho trang Nhật ký hệ thống của admin: 1 phút/lần + khi đổi mục / ẩn hiện tab / đóng tab */
+  startPresence() {
+    if (this._presence) return;
+    let tab = '';
+    try { tab = sessionStorage.getItem('ctv_tab') || ''; if (!tab) { tab = Math.random().toString(36).slice(2, 12); sessionStorage.setItem('ctv_tab', tab); } }
+    catch (e) { tab = Math.random().toString(36).slice(2, 12); }
+    this._presence = bye => {
+      const t = store.get(TOKEN_KEY);
+      if (!t || !this.user) return;
+      fetch('/api/presence', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+        body: JSON.stringify({ tab, portal: this.config.role, page: document.title.split(' · ')[0], visible: document.visibilityState === 'visible', bye: !!bye }) }).catch(() => {});
+    };
+    this._presence();
+    setInterval(() => this._presence(), 60000);
+    document.addEventListener('visibilitychange', () => this._presence());
+    addEventListener('pagehide', () => this._presence(true));
   },
 
   toggleNav(open) {
@@ -418,6 +438,7 @@ const App = {
     v.innerHTML = '';
     window.scrollTo(0, 0);
     document.title = `${item.label} · ${this.config.brand}`;
+    if (this._presence) this._presence();
     Promise.resolve(item.render(v)).catch(e => { v.innerHTML = pageHead(item.label) + `<div class="card">${emptyState(e.message)}</div>`; });
   },
 

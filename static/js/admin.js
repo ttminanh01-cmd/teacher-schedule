@@ -1343,9 +1343,31 @@ async function aNotifications(v) {
   load();
 }
 
+/* ai đang mở web (trang gửi tín hiệu 1 phút/lần) — tự làm mới 30 giây/lần khi đang ở trang Nhật ký */
+const agoText = s => s < 60 ? 'vừa xong' : s < 3600 ? `${Math.floor(s / 60)} phút trước` : `${Math.floor(s / 3600)} giờ ${Math.floor(s % 3600 / 60)} phút trước`;
+const durText = s => s < 60 ? 'dưới 1 phút' : s < 3600 ? `${Math.floor(s / 60)} phút` : `${Math.floor(s / 3600)} giờ ${Math.floor(s % 3600 / 60)} phút`;
+async function paintOnline(box) {
+  const d = await api('/admin/online').catch(() => null);
+  if (!d || !box.isConnected) return;
+  const who = u => `<b>${esc(u.name)}</b> <span class="muted small">${esc(u.username)}${u.role === 'admin' ? ' · admin' : ''}</span>`;
+  box.innerHTML = `<div class="card-head"><h2>Đang mở web <span class="badge ${d.online.length ? 'green' : ''}">${d.online.length}</span></h2>
+      <span class="small muted">Tự cập nhật 30 giây/lần · rời quá ~2 phút coi như đã thoát</span></div>
+    <div class="card-pad">${d.online.length ? `<div class="online-list">${d.online.map(u => `<div class="online-row">
+        <span class="dot ${u.visible ? 'on' : 'idle'}" title="${u.visible ? 'Đang xem trang' : 'Đang mở nhưng ở tab khác / thu nhỏ'}"></span>
+        <div>${who(u)}<div class="small muted">${u.portal === 'admin' ? 'Trang Quản trị' : 'Trang CTV'} · ${esc(u.page || '—')}${u.visible ? '' : ' · <i>tab nền</i>'}${u.tabs > 1 ? ` · ${u.tabs} tab` : ''} · đã mở ${durText(u.since)}</div></div></div>`).join('')}</div>`
+      : '<p class="small muted">Hiện không có ai mở web.</p>'}
+    ${d.left.length ? `<details style="margin-top:10px"><summary class="small" style="cursor:pointer">Đã rời trong 24 giờ qua (${d.left.length})</summary>
+      <div class="online-list" style="margin-top:8px">${d.left.map(u => `<div class="online-row"><span class="dot off"></span><div>${who(u)}<div class="small muted">Rời ${agoText(u.ago)}</div></div></div>`).join('')}</div></details>` : ''}</div>`;
+}
+
 async function aLogs(v) {
   v.innerHTML = pageHead('Nhật ký hệ thống', 'Mọi thao tác của CTV và quản trị viên.') + `
+    <div class="card" id="online" style="margin-bottom:16px">${loading()}</div>
     <div class="filters"><div class="search">${icon('search')}<input class="input" id="q" placeholder="Tìm người thực hiện, hành động"></div></div><div class="card" id="body">${loading()}</div>`;
+  const ob = $('#online');
+  paintOnline(ob);
+  const timer = setInterval(() => paintOnline(ob), 30000);
+  App.cleanup.push(() => clearInterval(timer));
   const rows = await api('/admin/logs');
   const paint = () => {
     const q = $('#q').value.trim().toLowerCase();

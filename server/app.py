@@ -15,7 +15,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import autoschedule, crm_videos, db, docs, handbook, ican, milo, milo_mail, notify, sheet_sync, yt_videos
+from . import autoschedule, crm_videos, db, docs, handbook, ican, milo, milo_mail, notify, presence, sheet_sync, yt_videos
 from .db import dumps, now_str, row, rows
 
 STATIC = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -108,9 +108,26 @@ def login(body: dict = Body(...), con=Depends(get_con)):
 
 @app.post("/api/logout")
 def logout(authorization: str = Header(default=""), u=Depends(current_user), con=Depends(get_con)):
-    con.execute("DELETE FROM sessions WHERE token=?", (authorization.removeprefix("Bearer ").strip(),))
+    tok = authorization.removeprefix("Bearer ").strip()
+    con.execute("DELETE FROM sessions WHERE token=?", (tok,))
+    presence.forget(tok)
     log(con, u, "Đăng xuất")
     return {"ok": True}
+
+
+@app.post("/api/presence")
+def presence_beat(body: dict = Body(default={}), authorization: str = Header(default="")):
+    """Tín hiệu "đang mở web" mỗi phút — không mở DB (token tra từ bộ nhớ đệm)."""
+    u = presence.user_for(authorization.removeprefix("Bearer ").strip())
+    if not u:
+        err("Phiên đăng nhập đã hết hạn", 401)
+    presence.beat(u, body.get("tab"), body.get("page"), body.get("portal"), body.get("visible", True), bool(body.get("bye")))
+    return {"ok": True}
+
+
+@app.get("/api/admin/online")
+def admin_online(u=Depends(admin_user)):
+    return presence.snapshot()
 
 
 @app.get("/api/me")
