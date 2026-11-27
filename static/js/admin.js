@@ -762,6 +762,8 @@ async function aSalary(v) {
     const R = est.rows, sum = k => R.reduce((a, r) => a + r[k], 0), hrs = k => Math.round(sum(k) * 10) / 10;
     const sub = (m, h) => `<div class="small muted" style="margin-top:2px">${h} giờ · ${money(m)}</div>`;
     $('#body').innerHTML = `<p class="small muted" style="margin:0 0 12px">Tính trên <b>tất cả ca đã chia</b> trong ${fmtYM(ym).toLowerCase()} (kể cả ca chưa duyệt chấm công và ca chưa tới ngày) × đơn giá giờ, rồi trừ phạt QC / khấu trừ và cộng thưởng đã ghi. Chỉ là số dự kiến — lương thật vẫn theo tab <b>Tổng hợp tháng</b> sau khi duyệt chấm công.</p>
+      ${est.missing_days.length ? `<div class="notice">Đã chia ca ${est.days - est.missing_days.length} / ${est.days} ngày. Chưa có ca nào: ${est.missing_days.map(d => `<b>${dowOf(d)} ${fmtDM(d)}</b>`).join(', ')} — EST chưa tính các ngày này (chia ca xong sẽ tự cộng vào).</div>`
+        : `<p class="small" style="margin:0 0 12px">✓ Đã chia ca đủ ${est.days} / ${est.days} ngày của tháng.</p>`}
       <div class="stats">
         <div class="stat"><div class="label">EST tổng chi</div><div class="value accent">${money(sum('total'))}</div><div class="small muted">${R.length} người · ${hrs('hours')} giờ</div></div>
         <div class="stat"><div class="label">Đã duyệt chấm công</div><div class="value">${money(sum('done'))}</div>${sub(sum('done'), hrs('done_h'))}</div>

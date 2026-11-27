@@ -1104,7 +1104,7 @@ def admin_salary_estimate(ym: str, u=Depends(admin_user), con=Depends(get_con)):
     cộng thưởng / trừ phạt QC, khấu trừ đã ghi. 3 truy vấn cho cả tháng (Neon ở xa, tránh lặp theo người)."""
     f, l = month_range(ym)
     today = date.today().isoformat()
-    people = {}
+    people, per_day = {}, {}
 
     def person(x):
         return people.setdefault(x["user_id"], {
@@ -1117,6 +1117,7 @@ def admin_salary_estimate(ym: str, u=Depends(admin_user), con=Depends(get_con)):
         h = max(0, t2m(s["end"]) - t2m(s["start"])) / 60
         amt = round(h * (s["hourly_rate"] or 0))
         k = "done" if s["approved_at"] else "wait" if s["date"] <= today else "next"
+        per_day[s["date"]] = per_day.get(s["date"], 0) + 1
         p["shifts"] += 1
         p["hours"] += h
         p["amount"] += amt
@@ -1137,7 +1138,10 @@ def admin_salary_estimate(ym: str, u=Depends(admin_user), con=Depends(get_con)):
         for k in ("hours", "done_h", "wait_h", "next_h"):
             p[k] = round(p[k], 2)
         p["total"] = p["amount"] + p["bonus"] - p["qc_fine"] - p["deduction"]
-    return {"ym": ym, "today": today, "rows": sorted(people.values(), key=lambda p: -p["total"])}
+    d0, d1 = date.fromisoformat(f), date.fromisoformat(l)
+    all_days = [(d0 + timedelta(days=i)).isoformat() for i in range((d1 - d0).days + 1)]
+    return {"ym": ym, "today": today, "days": len(all_days), "missing_days": [d for d in all_days if d not in per_day],
+            "rows": sorted(people.values(), key=lambda p: -p["total"])}
 
 
 @app.get("/api/admin/salary/user")
