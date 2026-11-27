@@ -332,8 +332,10 @@ async function aAvailability(v) {
   // ca chính có ca phụ (Tối = Ca full + Ca gãy): CTV đăng ký ca nào trong nhóm cũng tính là rảnh ca Tối
   const isMainMulti = s => s.code === shiftGroup(s.code) && shiftVariants(s).length > 1;
   const regd = (u, k, s) => isMainMulti(s) ? shiftVariants(s).some(x => u.slots[`${k}-${x.code}`]) : !!u.slots[`${k}-${s.code}`];
+  const regNote = (u, k, s) => { const n = (isMainMulti(s) ? shiftVariants(s) : [s]).map(x => (u.slots[`${k}-${x.code}`] || {}).note).find(Boolean);
+    return n ? `<div class="small" style="margin-top:4px">📝 ${esc(n)}</div>` : ''; };
   const regText = (u, k, s) => (isMainMulti(s) ? shiftVariants(s) : [s]).filter(x => u.slots[`${k}-${x.code}`])
-    .map(x => { const z = u.slots[`${k}-${x.code}`]; return `<span class="badge accent">${isMainMulti(s) ? esc(variantLabel(x)) + ' ' : ''}${z.start}–${z.end}</span>`; }).join(' ');
+    .map(x => { const z = u.slots[`${k}-${x.code}`]; return `<span class="badge accent">${isMainMulti(s) ? esc(variantLabel(x)) + ' ' : ''}${z.start}–${z.end}</span>`; }).join(' ') + regNote(u, k, s);
   v.innerHTML = pageHead('Lịch rảnh CTV', mode === 'month'
       ? 'CTV đăng ký 1 lần cho cả tháng (những ca rảnh hằng tuần), tự chốt 19:00 ngày 29 của tháng trước. 20:00 Chủ nhật hệ thống tự xếp ca tuần tới theo lịch tháng để bạn duyệt ở mục Xếp lịch.'
       : 'CTV đăng ký theo tuần, tự chốt 19:00 Chủ nhật; 20:00 hệ thống tự xếp ca để bạn duyệt ở mục Xếp lịch.') + `
@@ -380,7 +382,7 @@ async function aAvailability(v) {
       { label: 'CTV', render: u => `<b>${esc(u.username)}</b><br><span class="small muted">${esc(u.name)}</span>` },
       { label: 'Team', render: u => esc(u.team || '—') },
       { label: 'Trạng thái', render: u => `<span class="badge ${ST[u.status][1]}">${ST[u.status][0]}</span>${u.source === 'month' ? ' <span class="badge" title="Chưa đăng ký theo tuần — đang dùng lịch rảnh đăng ký theo tháng">theo tháng</span>' : ''}` },
-      { label: 'Số ca rảnh', render: u => Object.keys(u.slots).length || '—' },
+      { label: 'Số ca rảnh', render: u => `${Object.keys(u.slots).length || '—'}${Object.values(u.slots).some(x => x.note) ? ' <span class="badge amber" title="Có ghi chú vào muộn / ra sớm">📝 có ghi chú</span>' : ''}` },
       { label: 'Cập nhật', render: u => u.updated_at ? `<span class="small muted">${fmtDate(u.updated_at.slice(0, 10))} ${u.updated_at.slice(11, 16)}</span>` : '—' },
       { label: '', cls: 'right', render: u => `<div class="actions">${Object.keys(u.slots).length ? `<button class="btn btn-sm" data-view="${u.id}">Xem</button>` : ''}${u.status === 'submitted' && ym.length === 7 ? `<button class="btn btn-sm" data-unlock="${u.id}">Mở khoá</button>` : ''}</div>` },
     ], { pageSize: 50 });
@@ -389,7 +391,7 @@ async function aAvailability(v) {
       if (vb) {
         const u = d.users.find(x => x.id === +vb.dataset.view);
         modal({ title: `Lịch rảnh · ${esc(u.username)}`, wide: true, body: `<div class="table-wrap"><table class="table"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6, 7].map(k => `<th>${k === 7 ? 'CN' : 'T' + (k + 1)}</th>`).join('')}</tr></thead>
-          <tbody>${shifts.map(s => `<tr><td><b>${esc(regName(s))}</b></td>${[1, 2, 3, 4, 5, 6, 7].map(k => { const x = u.slots[`${k}-${s.code}`]; return `<td>${x ? `<span class="badge accent">${x.start}–${x.end}</span>` : '<span class="muted">—</span>'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` });
+          <tbody>${shifts.map(s => `<tr><td><b>${esc(regName(s))}</b></td>${[1, 2, 3, 4, 5, 6, 7].map(k => { const x = u.slots[`${k}-${s.code}`]; return `<td>${x ? `<span class="badge accent">${x.start}–${x.end}</span>${x.note ? `<div class="small" style="margin-top:4px;max-width:150px">📝 ${esc(x.note)}</div>` : ''}` : '<span class="muted">—</span>'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` });
       }
       if (ub) {
         if (!(await confirmDialog('Mở khoá lịch rảnh?', 'CTV sẽ có thể sửa và chốt lại lịch rảnh tháng này.', 'Mở khoá'))) return;
@@ -397,7 +399,7 @@ async function aAvailability(v) {
       }
     });
     $('#exp').onclick = () => downloadCSV(`lich-ranh-${ym}.csv`, ['Username', 'Họ tên', 'Trạng thái', ...shifts.flatMap(s => [1, 2, 3, 4, 5, 6, 7].map(k => `${k === 7 ? 'CN' : 'T' + (k + 1)} ${regName(s)}`))],
-      d.users.map(u => [u.username, u.name, ST[u.status][0], ...shifts.flatMap(s => [1, 2, 3, 4, 5, 6, 7].map(k => { const x = u.slots[`${k}-${s.code}`]; return x ? `${x.start}-${x.end}` : ''; }))]));
+      d.users.map(u => [u.username, u.name, ST[u.status][0], ...shifts.flatMap(s => [1, 2, 3, 4, 5, 6, 7].map(k => { const x = u.slots[`${k}-${s.code}`]; return x ? `${x.start}-${x.end}${x.note ? ` (${x.note})` : ''}` : ''; }))]));
   };
   $('#wk').onclick = e => { const b = e.target.closest('[data-w]'); if (b) { ym = b.dataset.w; load(); } };
   $('#mode').onclick = async e => {

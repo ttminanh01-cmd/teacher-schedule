@@ -202,6 +202,16 @@ async function pageAvailability(v) {
   // theo tháng: đã gửi là chốt (muốn sửa nhờ quản lý mở khoá); theo tuần: sửa được tới hạn chót
   const locked = () => !state.open || (byMonth && state.status === 'submitted');
   const dayOf = k => ymd(addDays(parseDate(ws), k - 1));
+  /* ghi chú ca tối (VD xin vào muộn / ra sớm): lưu trong từng slot đã chọn của ngày đó */
+  const noteKeys = (k, m) => [m, ...shiftVariants(m)].filter((s, i, a) => a.findIndex(x => x.code === s.code) === i)
+    .map(s => `${k}-${s.code}`).filter(x => state.slots[x]);
+  const noteOf = (k, m) => (noteKeys(k, m).map(x => state.slots[x].note).find(Boolean) || '');
+  const noteBtn = (k, m, L) => {
+    if (shiftGroup(m.code) !== 'toi' || !noteKeys(k, m).length) return '';
+    const n = noteOf(k, m);
+    if (L) return n ? `<div class="av-note has" title="${esc(n)}">📝 ${esc(n)}</div>` : '';
+    return `<button type="button" class="av-note ${n ? 'has' : ''}" data-note="${k}|${m.code}" title="${n ? esc(n) : 'Ghi chú nếu muốn vào muộn / ra sớm'}">${n ? '📝 ' + esc(n) : '+ Ghi chú in/out sớm'}</button>`;
+  };
 
   function paint() {
     $$('#wk button').forEach(b => b.classList.toggle('active', b.dataset.w === ws));
@@ -228,7 +238,7 @@ async function pageAvailability(v) {
             const ni = needInfo((state.counts[key] || 0) + (on ? 1 : 0), m, true);
             const cnt = `<span class="need ${ni.cls}" title="Số CTV đã đăng ký${ni.target ? ' / cần ' + ni.target : ''}">${ni.text} CTV${ni.missing ? ` · thiếu ${ni.missing}` : ''}</span>`;
             const attrs = L ? '' : `data-toggle="${key}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${esc(m.name)} ${WEEK_LABEL[k]}"`;
-            return on ? `<div class="slot on ${L ? 'locked' : ''}" ${attrs}><b>✓ Rảnh</b>${cnt}</div>`
+            return on ? `<div class="slot-split"><div class="slot on ${L ? 'locked' : ''}" ${attrs}><b>✓ Rảnh</b>${cnt}</div>${noteBtn(k, m, L)}</div>`
               : `<div class="slot ${L ? 'locked' : ''}" ${attrs}>${L ? '—' : '+ Rảnh'}${cnt}</div>`;
           }).join('')}`;
         }
@@ -240,7 +250,7 @@ async function pageAvailability(v) {
             const key = `${k}-${s.code}`, on = !!state.slots[key];
             const attrs = L ? '' : `data-toggle="${key}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${esc(m.name)} ${esc(variantLabel(s))} ${WEEK_LABEL[k]}"`;
             return `<div class="slot ${on ? 'on' : ''} ${L ? 'locked' : ''}" ${attrs} title="${esc(variantLabel(s))}"><b>${on ? '✓ ' : L ? '' : '+ '}${esc(variantLabel(s).replace(/^Ca\s+/i, ''))}</b></div>`;
-          }).join('')}<span class="need ${ni.cls}" title="Số CTV đã đăng ký ca ${esc(m.name)}${ni.target ? ' / cần ' + ni.target : ''}">${ni.text} CTV${ni.missing ? ` · thiếu ${ni.missing}` : ''}</span></div>`;
+          }).join('')}<span class="need ${ni.cls}" title="Số CTV đã đăng ký ca ${esc(m.name)}${ni.target ? ' / cần ' + ni.target : ''}">${ni.text} CTV${ni.missing ? ` · thiếu ${ni.missing}` : ''}</span>${noteBtn(k, m, L)}</div>`;
         }).join('')}`;
       }).join('')}</div>`;
     // 1 ngày đăng ký cả Full lẫn Gãy vẫn tính là 1 ca, lấy giờ dài nhất
@@ -266,14 +276,42 @@ async function pageAvailability(v) {
   $('#wk').onclick = e => { const b = e.target.closest('[data-w]'); if (b) { ws = b.dataset.w; load(); } };
   $('#grid').addEventListener('click', e => {
     if (locked()) return;
+    const nb = e.target.closest('[data-note]');
+    if (nb) return noteDialog(...nb.dataset.note.split('|'));
     const t = e.target.closest('[data-toggle]'); if (!t) return;
     const key = t.dataset.toggle;
     if (state.slots[key]) delete state.slots[key];
-    else { const s = shifts.find(x => x.code === key.slice(key.indexOf('-') + 1)); state.slots[key] = { start: s.start, end: s.end }; }
+    else {
+      const s = shifts.find(x => x.code === key.slice(key.indexOf('-') + 1)), k = key.slice(0, key.indexOf('-'));
+      // chọn thêm Full / Gãy cùng ngày: giữ ghi chú đã viết
+      const sib = Object.entries(state.slots).find(([x, v]) => v.note && x.startsWith(k + '-') && shiftGroup(x.slice(x.indexOf('-') + 1)) === shiftGroup(s.code));
+      state.slots[key] = { start: s.start, end: s.end, ...(sib ? { note: sib[1].note } : {}) };
+    }
     if (state.status === 'empty') state.status = 'draft';
     paint();
     const again = $(`[data-toggle="${key}"]`); again && again.focus();
   });
+  function noteDialog(k, code) {
+    const m = shifts.find(x => x.code === code);
+    modal({ title: `Ghi chú ca ${esc(m.name)} · ${WEEK_LABEL[k]}${byMonth ? ' hằng tuần' : ' ' + fmtDM(dayOf(+k))}`,
+      body: `<div class="field"><label>Muốn vào muộn / ra sớm? Ghi rõ giờ để quản lý xếp ca</label>
+          <input class="input" id="nt" maxlength="120" value="${esc(noteOf(k, m))}" placeholder="VD: Xin ra sớm lúc 21:00"></div>
+        <div class="actions">${['Xin vào muộn 18:30', 'Xin ra sớm 21:00', 'Xin ra sớm 21:30'].map(t => `<button type="button" class="btn btn-sm" data-q="${t}">${t}</button>`).join('')}</div>`,
+      footer: `<button class="btn" id="nt-clear">Xoá ghi chú</button><button class="btn btn-primary" id="nt-ok">Lưu ghi chú</button>`,
+      onOpen(el, close) {
+        const inp = $('#nt', el); inp.focus();
+        el.addEventListener('click', ev => { const q = ev.target.closest('[data-q]'); if (q) { inp.value = q.dataset.q; inp.focus(); } });
+        const save = val => {
+          noteKeys(k, m).forEach(x => { if (val) state.slots[x].note = val; else delete state.slots[x].note; });
+          if (state.status === 'empty') state.status = 'draft';
+          close(); paint();
+          toast(state.status === 'submitted' ? 'Nhớ bấm “Cập nhật đăng ký” để gửi ghi chú' : 'Nhớ bấm “Gửi đăng ký”', 'info');
+        };
+        $('#nt-ok', el).onclick = () => save(inp.value.trim().replace(/\s+/g, ' ').slice(0, 120));
+        $('#nt-clear', el).onclick = () => save('');
+        inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); $('#nt-ok', el).click(); } });
+      } });
+  }
   $('#grid').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset.toggle) { e.preventDefault(); e.target.click(); } });
   $('#submit').onclick = e => {
     if (!Object.keys(state.slots).length) return toast('Bạn chưa chọn ca rảnh nào', 'error');

@@ -252,6 +252,9 @@ def save_availability(body: dict = Body(...), u=Depends(current_user), con=Depen
     for key, v in slots.items():
         if t2m(v["end"]) - t2m(v["start"]) < 120:
             err("Mỗi ca rảnh tối thiểu 2 giờ")
+    # chỉ giữ giờ + ghi chú (VD ca tối xin vào muộn / ra sớm), ghi chú tối đa 120 ký tự
+    slots = {k: {"start": v["start"], "end": v["end"], **({"note": n} if (n := " ".join(str(v.get("note") or "").split())[:120]) else {})}
+             for k, v in slots.items()}
     if submit and not slots:
         err("Bạn chưa chọn ca rảnh nào")
     con.execute("INSERT OR REPLACE INTO availability(user_id, ym, slots, status, updated_at) VALUES (?,?,?,?,?)",

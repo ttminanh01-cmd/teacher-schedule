@@ -188,7 +188,8 @@ def generate(con, ws: date, actor: str = "Hệ thống") -> dict:
                     kd, _, code = k.partition("-")
                     if kd == str(dow) and code in shifts and group_of(code) == g:
                         cands.append({"uid": uid, "code": code, "start": v.get("start") or shifts[code]["start"],
-                                      "end": v.get("end") or shifts[code]["end"], "partial": code != g})
+                                      "end": v.get("end") or shifts[code]["end"], "partial": code != g,
+                                      "note": str(v.get("note") or "")})
             cells.append({"date": d, "group": g, "lo": main["need_min"] or 0, "hi": max(main["need_min"] or 0, main["need_max"] or 0),
                           "have": have, "cands": cands, "new": []})
     for e in existing:
@@ -217,7 +218,8 @@ def generate(con, ws: date, actor: str = "Hệ thống") -> dict:
         else:
             pc = pos_count.get((x["uid"], c["group"]), {})
             pos = max(pc, key=pc.get) if pc else 1
-        n = {"user_id": x["uid"], "code": x["code"], "start": x["start"], "end": x["end"], "position_id": pos}
+        n = {"user_id": x["uid"], "code": x["code"], "start": x["start"], "end": x["end"], "position_id": pos,
+             "note": f"CTV ghi chú: {x['note']}" if x["note"] else ""}
         c["new"].append(n)
         book(x["uid"], c["date"], t2m(x["start"]), t2m(x["end"]))
         return n
@@ -238,8 +240,8 @@ def generate(con, ws: date, actor: str = "Hệ thống") -> dict:
     added = 0
     for c in cells:
         for n in c["new"]:
-            con.execute('INSERT INTO schedules(user_id, date, shift_code, start, "end", position_id, source) VALUES (?,?,?,?,?,?,?)',
-                        (n["user_id"], c["date"], n["code"], n["start"], n["end"], n["position_id"], SOURCE))
+            con.execute('INSERT INTO schedules(user_id, date, shift_code, start, "end", position_id, source, note) VALUES (?,?,?,?,?,?,?,?)',
+                        (n["user_id"], c["date"], n["code"], n["start"], n["end"], n["position_id"], SOURCE, n["note"]))
             added += 1
     short = [{"date": c["date"], "group": c["group"], "have": count(c), "need": c["lo"], "registered": len(c["cands"])}
              for c in cells if count(c) < c["lo"]]
