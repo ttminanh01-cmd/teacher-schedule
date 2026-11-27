@@ -858,15 +858,17 @@ async function aSalary(v) {
   $('#view').onclick = e => { const b = e.target.closest('[data-v]'); if (b) setView(b.dataset.v); };
   $('#person').onchange = e => { personId = +e.target.value; viewPerson(); };
   $('#exp').onclick = () => {
-    if (view === 'est' && est) return downloadCSV(`est-luong-${ym}.csv`, ['Username', 'Họ tên', 'Số ca', 'Tổng giờ', 'Giờ đã duyệt', 'Tiền đã duyệt', 'Giờ chờ duyệt', 'Tiền chờ duyệt', 'Giờ chưa tới ngày', 'Tiền chưa tới ngày', 'Lương giờ dự kiến', 'Thưởng', 'Phạt QC', 'Khấu trừ', 'EST thực nhận'],
-      est.rows.map(r => [r.username, r.name, r.shifts, r.hours, r.done_h, r.done, r.wait_h, r.wait, r.next_h, r.next, r.amount, r.bonus, r.qc_fine, r.deduction, r.total]));
+    /* Tổng hợp tháng / EST: đúng 5 cột Mã CTV | Họ tên | CCCD | Tổng giờ | Thù lao (thù lao = thực nhận) */
+    const info = id => users.find(x => x.id === id) || {};
+    const pay = (file, list) => downloadCSV(file, ['Mã CTV', 'Họ tên', 'CCCD', 'Tổng giờ', 'Thù lao'],
+      list.map(r => { const x = info(r.id); return [x.code || '', r.name, x.cccd ? `="${x.cccd}"` : '', r.hours, r.total]; }));
+    if (view === 'est' && est) return pay(`est-luong-${ym}.csv`, est.rows);
     if (view === 'day') return downloadCSV(`luong-theo-ngay-${ym}.csv`, ['Ngày', 'Thứ', 'Số ca', 'Số người', 'Giờ đã duyệt', 'Lương giờ', 'Ca chờ duyệt'],
       daily.map(d => [fmtDate(d.date), dowOf(d.date), d.shifts, d.people, d.hours, d.amount, d.pending]));
     if (view === 'person' && person) return downloadCSV(`luong-${person.user.username}-${ym}.csv`, ['Ngày', 'Ca', 'Giờ', 'Vị trí', 'Số giờ', 'Thành tiền', 'Trạng thái', 'Ghi chú'],
       [...person.rows.map(r => [fmtDate(r.date), r.shift_name, `${r.start}-${r.end}`, r.position, hoursOf(r), Math.round(hoursOf(r) * (r.hourly_rate || 0)), 'Đã duyệt', r.note]),
        ...person.pending_rows.map(r => [fmtDate(r.date), r.shift_name, `${r.start}-${r.end}`, r.position, hoursOf(r), 0, 'Chờ duyệt', r.note])]);
-    data && downloadCSV(`bang-luong-${ym}.csv`, ['Username', 'Họ tên', 'Số ca', 'Tổng giờ làm', 'Lương theo giờ làm', 'Số lỗi QC', 'Tổng tiền phạt', 'Lương CTV gọi', 'Khấu trừ khác', 'Tổng lương CTV', 'Ghi chú'],
-      data.rows.map(r => [r.username, r.name, r.shifts, r.hours, r.base, r.qc_count, r.qc_fine, r.bonus, r.deduction, r.total, r.note]));
+    data && pay(`bang-luong-${ym}.csv`, data.rows);
   };
   load();
 }
