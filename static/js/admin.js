@@ -1544,18 +1544,18 @@ async function aPIP(v) {
 
   /* ----- form kế hoạch (thêm / sửa) */
   const planForm = (p, after) => modal({
-    title: p ? `Sửa kế hoạch theo dõi · ${esc(p.username)}` : 'Đưa CTV vào danh sách theo dõi (PIP)', wide: true,
+    title: p ? `Sửa đợt QC · ${esc(p.username)}` : 'Thêm CTV vào QC CTV', wide: true,
     body: `<form id="pf">
       ${p ? '' : `<div class="field"><label>CTV</label><select class="input" name="user_id" required><option value="">— Chọn CTV —</option>
         ${users.filter(u => u.active && u.role === 'ctv').map(u => `<option value="${u.id}">${esc(u.username)} · ${esc(u.name)}</option>`).join('')}</select></div>`}
       <div class="form-row"><div class="field"><label>Từ ngày</label><input class="input" type="date" name="start_date" value="${p ? p.start_date : todayStr()}" required></div>
         <div class="field"><label>Đến ngày</label><input class="input" type="date" name="end_date" value="${p ? p.end_date : ymd(addDays(new Date(), 13))}" required>
           <div class="seg" id="pf-len" style="margin-top:6px"><button type="button" data-d="7">1 tuần</button><button type="button" data-d="14">2 tuần</button><button type="button" data-d="30">1 tháng</button></div></div></div>
-      <div class="field"><label>Lý do đưa vào theo dõi</label><textarea class="input" name="reason" rows="3" placeholder="VD: 3 lỗi QC trong tuần, chậm phản hồi khách…">${esc(p ? p.reason : '')}</textarea></div>
+      <div class="field"><label>Lý do / bối cảnh</label><textarea class="input" name="reason" rows="3" placeholder="VD: 3 lỗi QC trong tuần, chậm phản hồi khách…">${esc(p ? p.reason : '')}</textarea></div>
       <div class="field"><label>Mục tiêu cần đạt <span class="muted small">(mỗi dòng 1 mục tiêu)</span></label><textarea class="input" name="goals" rows="4" placeholder="Không có lỗi QC nặng trong 2 tuần&#10;Phản hồi khách trong 5 phút&#10;Đúng giờ vào ca">${esc(p ? p.goals : '')}</textarea></div>
       <div class="field"><label>Người phụ trách</label><input class="input" name="owner" value="${esc(p ? p.owner : App.user.name)}"></div>
-      <p class="small muted">CTV sẽ thấy mục <b>Theo dõi &amp; nhận xét</b> trên trang của mình: xem kế hoạch, các nhận xét theo ca và gửi phản hồi.</p>
-      <button class="btn btn-primary btn-block">${p ? 'Lưu' : 'Bắt đầu theo dõi'}</button></form>`,
+      <p class="small muted">CTV sẽ thấy mục <b>Nhận xét QC</b> trên trang của mình: xem mục tiêu, các nhận xét theo ca và gửi phản hồi.</p>
+      <button class="btn btn-primary btn-block">${p ? 'Lưu' : 'Bắt đầu QC'}</button></form>`,
     onOpen(el, close) {
       const f = $('#pf', el);
       if (!p) searchSelect(f.user_id, { placeholder: 'Gõ tên / username CTV…' });
@@ -1566,7 +1566,7 @@ async function aPIP(v) {
           if (!p && !f.user_id.value) throw new Error('Vui lòng chọn CTV trong danh sách gợi ý');
           const r = await api('/admin/pip', { method: 'POST', body: { id: p && p.id, user_id: p ? undefined : +f.user_id.value,
             start_date: f.start_date.value, end_date: f.end_date.value, reason: f.reason.value, goals: f.goals.value, owner: f.owner.value } });
-          close(); toast(p ? 'Đã lưu kế hoạch' : 'Đã đưa vào danh sách theo dõi'); after(r.id);
+          close(); toast(p ? 'Đã lưu' : 'Đã thêm vào QC CTV'); after(r.id);
         });
       };
     },
@@ -1574,8 +1574,8 @@ async function aPIP(v) {
 
   /* ----- danh sách */
   const showList = async () => {
-    v.innerHTML = pageHead('Theo dõi CTV', 'CTV trong kế hoạch cải thiện (PIP): admin nhận xét sau mỗi ca hoặc vài ca, CTV xem được và phản hồi lại nếu thấy chưa đúng.',
-      `<button class="btn btn-primary" id="add">${icon('plus')} Đưa CTV vào PIP</button>`) + `
+    v.innerHTML = pageHead('QC CTV', 'Nhận xét chất lượng CTV sau mỗi ca hoặc vài ca. CTV xem được và phản hồi lại nếu thấy chưa đúng.',
+      `<button class="btn btn-primary" id="add">${icon('plus')} Thêm CTV cần QC</button>`) + `
       <div class="filters"><div class="seg" id="tabs"></div><div class="search">${icon('search')}<input class="input" id="q" placeholder="Tìm CTV"></div></div>
       <div class="card" id="body">${loading()}</div>`;
     [plans, users] = await Promise.all([api('/admin/pip'), users.length ? users : api('/admin/users')]);
@@ -1583,7 +1583,7 @@ async function aPIP(v) {
     const paint = () => {
       const n = { active: plans.filter(p => p.status === 'active').length };
       n.closed = plans.length - n.active;
-      $('#tabs').innerHTML = [['active', 'Đang theo dõi'], ['closed', 'Đã kết thúc'], ['all', 'Tất cả']]
+      $('#tabs').innerHTML = [['active', 'Đang QC'], ['closed', 'Đã kết thúc'], ['all', 'Tất cả']]
         .map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'active' : ''}">${l} <span class="n">${k === 'all' ? plans.length : n[k]}</span></button>`).join('');
       const q = foldVi($('#q').value.trim());
       const list = plans.filter(p => (tab === 'all' || (tab === 'active') === (p.status === 'active')) && (!q || foldVi(`${p.username} ${p.name}`).includes(q)));
@@ -1596,7 +1596,7 @@ async function aPIP(v) {
         { label: 'Nhận xét', render: p => `${p.reviews}${p.last_review ? `<div class="small muted">gần nhất ${fmtDate(p.last_review.slice(0, 10))}</div>` : ''}` },
         { label: 'Phản hồi CTV', render: p => p.unread ? `<span class="badge red">${p.unread} mới</span>` : '<span class="muted">—</span>' },
         { label: '', cls: 'right', render: p => `<button class="btn btn-sm" data-open="${p.id}">Mở</button>` },
-      ], { pageSize: 30, empty: tab === 'active' ? 'Chưa có CTV nào đang theo dõi' : 'Không có dữ liệu' });
+      ], { pageSize: 30, empty: tab === 'active' ? 'Chưa có CTV nào đang QC' : 'Không có dữ liệu' });
     };
     $('#tabs').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { tab = b.dataset.t; paint(); } };
     $('#q').oninput = paint;
@@ -1617,7 +1617,7 @@ async function aPIP(v) {
         <div class="field"><label>Ca được nhận xét <span class="muted small">(chọn 1 hoặc nhiều ca; bỏ trống = nhận xét chung)</span></label>
           ${shifts.length ? `<div class="pip-shift-list">${shifts.map(s => `<label><input type="checkbox" name="sid" value="${s.id}" ${sel.has(s.id) ? 'checked' : ''}>
             <span>${esc(s.label)}</span>${s.reviewed && !own.has(s.id) ? '<span class="badge green">đã nhận xét</span>' : ''}</label>`).join('')}</div>`
-            : '<div class="small muted">CTV chưa có ca nào trong thời gian theo dõi.</div>'}</div>
+            : '<div class="small muted">CTV chưa có ca nào trong đợt QC này.</div>'}</div>
         <div class="field"><label>Đánh giá</label><div class="seg" id="rf-rate">${Object.keys(PIP_RATING).map(k => `<button type="button" data-r="${k}" class="${r && r.rating === k ? 'active' : ''}">${k}</button>`).join('')}</div></div>
         <div class="field"><label>Nhận xét</label><textarea class="input" name="content" rows="6" placeholder="Điểm làm tốt, điểm cần cải thiện, ví dụ cụ thể… (dán ảnh chụp màn hình bằng Ctrl+V)">${esc(r ? r.content : '')}</textarea>
           <div id="rf-img"></div></div>
@@ -1646,11 +1646,11 @@ async function aPIP(v) {
 
   /* ----- kết thúc PIP */
   const closeForm = (d, after) => modal({
-    title: `Kết thúc theo dõi · ${esc(d.plan.username)}`,
+    title: `Kết thúc đợt QC · ${esc(d.plan.username)}`,
     body: `<form id="cf"><div class="field"><label>Kết quả</label><div class="seg" id="cf-st">
         <button type="button" data-s="passed">Đạt</button><button type="button" data-s="extended">Gia hạn</button><button type="button" data-s="failed">Không đạt</button></div></div>
       <div class="field"><label>Kết luận</label><textarea class="input" name="conclusion" rows="4" placeholder="Nhận xét tổng kết — CTV sẽ xem được">${esc(d.plan.conclusion || '')}</textarea></div>
-      <p class="small muted">Chọn <b>Gia hạn</b> rồi tạo kế hoạch mới nếu muốn theo dõi tiếp.</p>
+      <p class="small muted">Chọn <b>Gia hạn</b> rồi tạo đợt mới nếu muốn QC tiếp.</p>
       <button class="btn btn-primary btn-block">Lưu kết quả</button></form>`,
     onOpen(el, close) {
       const f = $('#cf', el); let st = '';
@@ -1674,10 +1674,10 @@ async function aPIP(v) {
     refreshSwapCount();
     const pending = d.shifts.filter(s => !s.reviewed && s.date <= today);
     const reload = () => showDetail(id);
-    v.innerHTML = `<button class="btn btn-ghost btn-sm" id="back" style="margin-bottom:8px">${icon('chevL')} Danh sách theo dõi</button>` +
+    v.innerHTML = `<button class="btn btn-ghost btn-sm" id="back" style="margin-bottom:8px">${icon('chevL')} Danh sách QC CTV</button>` +
       pageHead(`${esc(p.name)} <span class="muted" style="font-weight:500;font-size:16px">${esc(p.username)}</span>`, '',
-        `${pipStatusBadge(p.status)}<button class="btn" id="edit-plan">Sửa kế hoạch</button>
-         ${p.status === 'active' ? '<button class="btn" id="close-plan">Kết thúc PIP</button>' : '<button class="btn" id="reopen">Mở lại</button>'}
+        `${pipStatusBadge(p.status)}<button class="btn" id="edit-plan">Sửa thông tin</button>
+         ${p.status === 'active' ? '<button class="btn" id="close-plan">Kết thúc đợt QC</button>' : '<button class="btn" id="reopen">Mở lại</button>'}
          <button class="btn btn-danger" id="del-plan">Xoá</button>`) + `
       <div class="pip-grid"><div>
         <div class="card card-pad" style="margin-bottom:16px">
@@ -1686,14 +1686,14 @@ async function aPIP(v) {
             <div class="actions"><button class="btn btn-sm" id="rev-general">Nhận xét chung</button><button class="btn btn-sm btn-primary" id="rev-sel" ${pending.length ? '' : 'disabled'}>${icon('plus')} Nhận xét ca đã chọn</button></div></div>
           ${pending.length ? `<div class="pip-shift-list" id="pend">${pending.map(s => `<label><input type="checkbox" value="${s.id}"><span>${esc(s.label)}</span></label>`).join('')}</div>
             <div class="small muted" style="margin-top:6px">Tick 1 ca hoặc gộp 3–4 ca rồi nhận xét một lần.</div>`
-            : `<div class="small muted">${d.shifts.length ? 'Đã nhận xét hết các ca đã làm.' : 'CTV chưa có ca nào trong thời gian theo dõi.'}</div>`}
+            : `<div class="small muted">${d.shifts.length ? 'Đã nhận xét hết các ca đã làm.' : 'CTV chưa có ca nào trong đợt QC này.'}</div>`}
         </div>
         <h2 style="font-size:15px;margin:4px 0 10px">Nhận xét &amp; phản hồi (${d.reviews.length})</h2>
         <div id="reviews">${d.reviews.length ? d.reviews.map(r => pipReviewCard({ ...r, unread: !!(r.last_ctv_at && (!r.admin_seen_at || r.last_ctv_at > r.admin_seen_at)) }, { admin: true, me: App.user.id })).join('')
           : `<div class="card">${emptyState('Chưa có nhận xét nào')}</div>`}</div>
       </div>
       <div class="pip-side">
-        <div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Kế hoạch</h2><dl class="pip-dl">
+        <div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Thông tin đợt QC</h2><dl class="pip-dl">
           <dt>Thời gian</dt><dd>${fmtDate(p.start_date)} → ${fmtDate(p.end_date)}${p.status === 'active' ? `<div class="pip-progress"><i style="width:${pct(p)}%"></i></div>` : ''}</dd>
           <dt>Phụ trách</dt><dd>${esc(p.owner || '—')}</dd>
           <dt>Lý do</dt><dd>${esc(p.reason || '—')}</dd>
@@ -1702,7 +1702,7 @@ async function aPIP(v) {
         <div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Lỗi QC trong kỳ <span class="badge ${d.qc.length ? 'red' : ''}">${d.qc.length}</span></h2>
           ${d.qc.length ? d.qc.map(q => `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><div class="small muted">${fmtDate(q.date)}${q.amount ? ` · <span class="minus">−${money(q.amount)}</span>` : ''}</div><div class="pip-text" style="margin:2px 0">${esc(q.error || '—')}</div></div>`).join('')
             : '<div class="small muted">Không có lỗi QC trong thời gian này.</div>'}</div>
-        ${d.history.length ? `<div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Các lần theo dõi khác</h2>
+        ${d.history.length ? `<div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Các đợt QC khác</h2>
           ${d.history.map(h => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0"><a href="#pip" data-hist="${h.id}">${fmtDate(h.start_date)} → ${fmtDate(h.end_date)}</a>${pipStatusBadge(h.status)}</div>`).join('')}</div>` : ''}
       </div></div>`;
     $('#back').onclick = showList;
@@ -1710,7 +1710,7 @@ async function aPIP(v) {
     $('#close-plan') && ($('#close-plan').onclick = () => closeForm(d, reload));
     $('#reopen') && ($('#reopen').onclick = () => run($('#reopen'), async () => { await api(`/admin/pip/${id}/close`, { method: 'POST', body: { status: 'active' } }); reload(); }));
     $('#del-plan').onclick = async () => {
-      if (!(await confirmDialog('Xoá kế hoạch theo dõi?', 'Toàn bộ nhận xét, phản hồi và ảnh của kế hoạch này sẽ bị xoá.', 'Xoá', true))) return;
+      if (!(await confirmDialog('Xoá đợt QC này?', 'Toàn bộ nhận xét, phản hồi và ảnh của đợt này sẽ bị xoá.', 'Xoá', true))) return;
       run(null, async () => { await api(`/admin/pip/${id}`, { method: 'DELETE' }); toast('Đã xoá'); showList(); });
     };
     $('#rev-sel').onclick = () => {
@@ -1742,7 +1742,7 @@ App.start({
       { id: 'availability', label: 'Lịch rảnh CTV', icon: 'checkSquare', render: aAvailability },
       { id: 'timesheet', label: 'Chấm công', icon: 'clock', render: aTimesheet },
       { id: 'swaps', label: 'Duyệt đổi ca', icon: 'swap', render: aSwaps },
-      { id: 'pip', label: 'Theo dõi CTV', icon: 'target', render: aPIP },
+      { id: 'pip', label: 'QC CTV', icon: 'target', render: aPIP },
     ] },
     { group: 'Tài chính', items: [
       { id: 'qc', label: 'Lỗi QC', icon: 'alert', render: aQC },

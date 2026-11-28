@@ -1379,7 +1379,7 @@ def save_qc(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con))
 
 # ----- theo dõi CTV (PIP): kế hoạch, nhận xét theo ca, CTV phản hồi, ảnh dán Ctrl+V
 PIP_RATINGS = ("Tốt", "Đạt", "Cần cải thiện", "Chưa đạt")
-PIP_STATUS = {"active": "Đang PIP", "passed": "Đạt", "extended": "Gia hạn", "failed": "Không đạt"}
+PIP_STATUS = {"active": "Đang QC", "passed": "Đạt", "extended": "Gia hạn", "failed": "Không đạt"}
 PIP_MAX_IMG = 900_000  # ký tự base64 / ảnh (trình duyệt đã thu nhỏ trước khi gửi)
 
 
@@ -1422,7 +1422,7 @@ def pip_reviews(con, plan_ids: list):
 def pip_plan_or_404(con, pid: int):
     p = row(con.execute("SELECT p.*, u.username, u.name FROM pip_plans p JOIN users u ON u.id=p.user_id WHERE p.id=?", (pid,)))
     if not p:
-        err("Không tìm thấy kế hoạch theo dõi", 404)
+        err("Không tìm thấy đợt QC", 404)
     return p
 
 
@@ -1460,22 +1460,22 @@ def admin_pip_unread(u=Depends(admin_user), con=Depends(get_con)):
 def admin_pip_save(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
     sd, ed = (body.get("start_date") or "").strip(), (body.get("end_date") or "").strip()
     if not sd or not ed or ed < sd:
-        err("Vui lòng chọn thời gian theo dõi hợp lệ")
+        err("Vui lòng chọn thời gian hợp lệ")
     vals = ((body.get("reason") or "").strip(), (body.get("goals") or "").strip(), sd, ed, (body.get("owner") or u["name"]).strip())
     if body.get("id"):
         p = pip_plan_or_404(con, int(body["id"]))
         con.execute("UPDATE pip_plans SET reason=?, goals=?, start_date=?, end_date=?, owner=? WHERE id=?", (*vals, p["id"]))
-        log(con, u, f"Sửa kế hoạch theo dõi của {p['username']}")
+        log(con, u, f"Sửa đợt QC CTV của {p['username']}")
         return {"ok": True, "id": p["id"]}
     uid = body.get("user_id")
     target = row(con.execute("SELECT id, username FROM users WHERE id=?", (uid,))) if uid else None
     if not target:
         err("Vui lòng chọn CTV")
     if con.execute("SELECT 1 FROM pip_plans WHERE user_id=? AND status='active'", (uid,)).fetchone():
-        err(f"{target['username']} đang có kế hoạch theo dõi chưa kết thúc")
+        err(f"{target['username']} đang có đợt QC chưa kết thúc")
     pid = con.execute("INSERT INTO pip_plans(user_id, status, reason, goals, start_date, end_date, owner, created_at) VALUES (?,?,?,?,?,?,?,?)",
                       (uid, "active", *vals, now_str())).lastrowid
-    log(con, u, f"Đưa {target['username']} vào danh sách theo dõi (PIP) {sd} → {ed}")
+    log(con, u, f"Đưa {target['username']} vào QC CTV {sd} → {ed}")
     return {"ok": True, "id": pid}
 
 
@@ -1489,7 +1489,7 @@ def admin_pip_close(pid: int, body: dict = Body(...), u=Depends(admin_user), con
         con.execute("UPDATE pip_plans SET status='active', closed_at=NULL WHERE id=?", (pid,))
     else:
         con.execute("UPDATE pip_plans SET status=?, conclusion=?, closed_at=? WHERE id=?", (st, (body.get("conclusion") or "").strip(), now_str(), pid))
-    log(con, u, f"Kế hoạch theo dõi của {p['username']}: {PIP_STATUS[st]}")
+    log(con, u, f"Đợt QC CTV của {p['username']}: {PIP_STATUS[st]}")
     return {"ok": True}
 
 
@@ -1505,7 +1505,7 @@ def admin_pip_delete(pid: int, u=Depends(admin_user), con=Depends(get_con)):
     p = pip_plan_or_404(con, pid)
     pip_delete_reviews(con, "plan_id=?", (pid,))
     con.execute("DELETE FROM pip_plans WHERE id=?", (pid,))
-    log(con, u, f"Xoá kế hoạch theo dõi của {p['username']}")
+    log(con, u, f"Xoá đợt QC CTV của {p['username']}")
     return {"ok": True}
 
 
@@ -1555,14 +1555,14 @@ def admin_pip_review(pid: int, body: dict = Body(...), u=Depends(admin_user), co
         rid = con.execute("INSERT INTO pip_reviews(plan_id, user_id, schedule_ids, shifts_text, rating, content, author, created_at, updated_at, last_admin_at, admin_seen_at) "
                           "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (pid, p["user_id"], sid_txt, label, rating, content, u["name"], now, now, now, now)).lastrowid
     pip_save_images(con, rid, None, body.get("images"))
-    log(con, u, f"{'Sửa' if body.get('id') else 'Viết'} nhận xét theo dõi cho {p['username']} ({len(shifts)} ca)")
+    log(con, u, f"{'Sửa' if body.get('id') else 'Viết'} nhận xét QC CTV cho {p['username']} ({len(shifts)} ca)")
     return {"ok": True, "id": rid}
 
 
 @app.delete("/api/admin/pip/reviews/{rid}")
 def admin_pip_review_delete(rid: int, u=Depends(admin_user), con=Depends(get_con)):
     pip_delete_reviews(con, "id=?", (rid,))
-    log(con, u, f"Xoá nhận xét theo dõi #{rid}")
+    log(con, u, f"Xoá nhận xét QC CTV #{rid}")
     return {"ok": True}
 
 
@@ -1586,11 +1586,11 @@ def pip_comment(rid: int, body: dict = Body(...), u=Depends(current_user), con=D
     pip_save_images(con, rid, cid, body.get("images"))
     if side == "ctv":
         con.execute("UPDATE pip_reviews SET last_ctv_at=?, ctv_seen_at=? WHERE id=?", (now, now, rid))
-        notify.send_async(f"💬 <b>{notify.esc(u['name'])}</b> ({notify.esc(u['username'])}) phản hồi nhận xét theo dõi CTV:\n"
+        notify.send_async(f"💬 <b>{notify.esc(u['name'])}</b> ({notify.esc(u['username'])}) phản hồi nhận xét QC CTV:\n"
                           f"{notify.esc(text[:500])}{' [kèm ảnh]' if body.get('images') else ''}")
     else:
         con.execute("UPDATE pip_reviews SET last_admin_at=?, admin_seen_at=? WHERE id=?", (now, now, rid))
-    log(con, u, f"Phản hồi nhận xét theo dõi #{rid}")
+    log(con, u, f"Phản hồi nhận xét QC CTV #{rid}")
     return {"ok": True}
 
 

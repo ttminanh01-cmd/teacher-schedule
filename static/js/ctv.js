@@ -1200,15 +1200,15 @@ async function pageNotifications(v) {
 
 /* ---------- Theo dõi & nhận xét (PIP) ---------- */
 async function pagePIP(v) {
-  const desc = 'Kế hoạch cải thiện và nhận xét của quản lý sau các ca làm. Nếu thấy nhận xét chưa đúng, bạn có thể phản hồi ngay dưới nhận xét đó.';
-  v.innerHTML = pageHead('Theo dõi &amp; nhận xét', desc) + loading();
+  const desc = 'Nhận xét của quản lý sau các ca làm. Nếu thấy nhận xét chưa đúng, bạn có thể phản hồi ngay dưới nhận xét đó.';
+  v.innerHTML = pageHead('Nhận xét QC', desc) + loading();
   const plans = await api('/ctv/pip');
   App.setCount('pip', 0);
-  if (!plans.length) { v.innerHTML = pageHead('Theo dõi &amp; nhận xét', desc) + `<div class="card">${emptyState('Bạn chưa có kế hoạch theo dõi nào.')}</div>`; return; }
-  v.innerHTML = pageHead('Theo dõi &amp; nhận xét', desc) + plans.map(p => `
+  if (!plans.length) { v.innerHTML = pageHead('Nhận xét QC', desc) + `<div class="card">${emptyState('Bạn chưa có nhận xét QC nào.')}</div>`; return; }
+  v.innerHTML = pageHead('Nhận xét QC', desc) + plans.map(p => `
     <div class="card card-pad" style="margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-        <h2 style="font-size:15px">Kế hoạch ${fmtDate(p.start_date)} → ${fmtDate(p.end_date)}</h2>${pipStatusBadge(p.status)}</div>
+        <h2 style="font-size:15px">Đợt QC ${fmtDate(p.start_date)} → ${fmtDate(p.end_date)}</h2>${pipStatusBadge(p.status)}</div>
       <dl class="pip-dl">
         <dt>Phụ trách</dt><dd>${esc(p.owner || '—')}</dd>
         ${p.reason ? `<dt>Lý do</dt><dd>${esc(p.reason)}</dd>` : ''}
@@ -1250,7 +1250,7 @@ App.start({
     { group: 'Cá nhân', items: [
       { id: 'salary', label: 'Tra cứu lương', icon: 'wallet', render: pageSalary },
       { id: 'qc', label: 'Lỗi QC', icon: 'alert', render: pageQC },
-      { id: 'pip', label: 'Theo dõi & nhận xét', icon: 'target', render: pagePIP },
+      { id: 'pip', label: 'Nhận xét QC', icon: 'target', render: pagePIP },
       { id: 'logs', label: 'Nhật ký hoạt động', icon: 'list', render: pageLogs },
     ] },
   ],

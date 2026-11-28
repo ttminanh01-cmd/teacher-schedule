@@ -3,7 +3,7 @@
    dán ảnh Ctrl+V, ảnh cần đăng nhập, thẻ nhận xét + phản hồi
    ========================================================= */
 const PIP_RATING = { 'Tốt': 'green', 'Đạt': 'blue', 'Cần cải thiện': 'amber', 'Chưa đạt': 'red' };
-const PIP_STATUS = { active: ['Đang PIP', 'accent'], passed: ['Đạt', 'green'], extended: ['Gia hạn', 'amber'], failed: ['Không đạt', 'red'] };
+const PIP_STATUS = { active: ['Đang QC', 'accent'], passed: ['Đạt', 'green'], extended: ['Gia hạn', 'amber'], failed: ['Không đạt', 'red'] };
 const pipStatusBadge = s => { const [l, c] = PIP_STATUS[s] || [s, '']; return `<span class="badge ${c}">${l}</span>`; };
 const fmtDT = s => s ? `${s.slice(11, 16)} ${fmtDate(s.slice(0, 10))}` : '';
 const pipGoals = g => { const l = String(g || '').split('\n').map(x => x.replace(/^[-•*\d.)\s]+/, '').trim()).filter(Boolean);
