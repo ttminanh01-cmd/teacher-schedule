@@ -1096,14 +1096,14 @@ async function aUsers(v) {
   let rows = [], tab = 'active';   // active = đang làm việc · left = đã nghỉ việc (tài khoản đã khoá)
   v.innerHTML = pageHead('Nhân sự', 'Quản lý tài khoản CTV và quản trị viên.', `<button class="btn btn-primary" id="add">${icon('plus')} Thêm tài khoản</button>`) + `
     <div class="filters"><div class="seg" id="tab"></div><div class="search">${icon('search')}<input class="input" id="q" placeholder="Tìm theo tên, username, CCCD"></div>
-      <select class="input" id="role"><option value="">Tất cả vai trò</option><option value="ctv">CTV</option><option value="admin">Quản trị</option></select></div>
+      <select class="input" id="role"><option value="">Tất cả vai trò</option><option value="ctv">CTV</option><option value="subadmin">Sub admin</option><option value="admin">Quản trị</option></select></div>
     <div class="card" id="body">${loading()}</div>`;
   const paint = () => {
     const q = foldVi($('#q').value.trim()), role = $('#role').value;
     const n = { active: rows.filter(u => u.active).length, left: rows.filter(u => !u.active).length };
     $('#tab').innerHTML = [['active', 'Nhân sự'], ['left', 'Nhân sự đã nghỉ việc']].map(([k, l]) => `<button class="${tab === k ? 'active' : ''}" data-t="${k}">${l} <span class="n">${n[k]}</span></button>`).join('');
     dataTable($('#body'), rows.filter(u => (tab === 'left' ? !u.active : !!u.active) && (!role || u.role === role) && (!q || foldVi(`${u.username} ${u.name} ${u.phone} ${u.code} ${u.email} ${u.cccd || ''}`).includes(q))), [
-      { label: 'Tài khoản', render: u => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar">${initials(u.name)}</div><div><b>${esc(u.username)}</b>${u.role === 'admin' ? ' <span class="badge blue">Quản trị</span>' : ''}${u.active ? '' : ' <span class="badge red">Đã nghỉ</span>'}<br><span class="small muted">${esc(u.name)}</span></div></div>` },
+      { label: 'Tài khoản', render: u => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar">${initials(u.name)}</div><div><b>${esc(u.username)}</b>${u.role === 'admin' ? ' <span class="badge blue">Quản trị</span>' : u.role === 'subadmin' ? ' <span class="badge amber">Sub admin</span>' : ''}${u.active ? '' : ' <span class="badge red">Đã nghỉ</span>'}<br><span class="small muted">${esc(u.name)}</span></div></div>` },
       { label: 'Mã CTV · Team', cls: 'nowrap', render: u => `${esc(u.code || '—')}<br><span class="small muted">${esc(u.team || '')}</span>` },
       { label: 'CCCD', cls: 'mono nowrap', render: u => u.cccd ? esc(u.cccd) : '<span class="muted">—</span>' },
       { label: 'Email', render: u => `<span class="small">${esc(u.email || '—')}</span>` },
@@ -1117,7 +1117,7 @@ async function aUsers(v) {
     body: `<form id="uf">
       <div class="form-row"><div class="field"><label>Tên đăng nhập</label><input class="input" name="username" value="${esc(u?.username || '')}" ${u ? 'disabled' : 'required'}></div>
         <div class="field"><label>Họ tên</label><input class="input" name="name" value="${esc(u?.name || '')}" required></div></div>
-      <div class="form-row"><div class="field"><label>Vai trò</label><select class="input" name="role"><option value="ctv">CTV</option><option value="admin" ${u?.role === 'admin' ? 'selected' : ''}>Quản trị</option></select></div>
+      <div class="form-row"><div class="field"><label>Vai trò</label><select class="input" name="role"><option value="ctv">CTV</option><option value="subadmin" ${u?.role === 'subadmin' ? 'selected' : ''}>Sub admin (xem, ghi QC)</option><option value="admin" ${u?.role === 'admin' ? 'selected' : ''}>Quản trị</option></select></div>
         <div class="field"><label>Team</label><select class="input" name="team_id"><option value="">—</option>${App.meta.teams.map(t => `<option value="${t.id}" ${u?.team_id === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div></div>
       <div class="form-row"><div class="field"><label>Mã CTV</label><input class="input" name="code" value="${esc(u?.code || '')}" placeholder="VD: CTV.4161"></div>
         <div class="field"><label>Email</label><input class="input" name="email" type="email" value="${esc(u?.email || '')}"></div></div>
@@ -1749,21 +1749,21 @@ App.start({
   role: 'admin', brand: 'Cổng CTV', subtitle: 'Quản trị', loginHint: 'Khu vực dành cho quản lý.',
   nav: [
     { group: 'Vận hành', items: [
-      { id: 'dashboard', label: 'Tổng quan', icon: 'home', render: aDashboard },
-      { id: 'schedule', label: 'Xếp lịch', icon: 'calendar', render: aSchedule },
-      { id: 'availability', label: 'Lịch rảnh CTV', icon: 'checkSquare', render: aAvailability },
+      { id: 'dashboard', roles: ['subadmin'], label: 'Tổng quan', icon: 'home', render: aDashboard },
+      { id: 'schedule', roles: ['subadmin'], label: 'Xếp lịch', icon: 'calendar', render: aSchedule },
+      { id: 'availability', roles: ['subadmin'], label: 'Lịch rảnh CTV', icon: 'checkSquare', render: aAvailability },
       { id: 'timesheet', label: 'Chấm công', icon: 'clock', render: aTimesheet },
       { id: 'swaps', label: 'Duyệt đổi ca', icon: 'swap', render: aSwaps },
-      { id: 'pip', label: 'QC CTV', icon: 'target', render: aPIP },
+      { id: 'pip', roles: ['subadmin'], write: ['subadmin'], label: 'QC CTV', icon: 'target', render: aPIP },
     ] },
     { group: 'Tài chính', items: [
-      { id: 'qc', label: 'Lỗi QC', icon: 'alert', render: aQC },
-      { id: 'salary', label: 'Bảng lương', icon: 'wallet', render: aSalary },
+      { id: 'qc', roles: ['subadmin'], write: ['subadmin'], label: 'Lỗi QC', icon: 'alert', render: aQC },
+      { id: 'salary', roles: ['subadmin'], label: 'Bảng lương', icon: 'wallet', render: aSalary },
     ] },
     { group: 'Hệ thống', items: [
-      { id: 'users', label: 'Nhân sự', icon: 'users', render: aUsers },
-      { id: 'catalog', label: 'Danh mục', icon: 'grid', render: aCatalog },
-      { id: 'docs', label: 'Document', icon: 'book', render: aDocs },
+      { id: 'users', roles: ['subadmin'], label: 'Nhân sự', icon: 'users', render: aUsers },
+      { id: 'catalog', roles: ['subadmin'], label: 'Danh mục', icon: 'grid', render: aCatalog },
+      { id: 'docs', roles: ['subadmin'], label: 'Document', icon: 'book', render: aDocs },
       { id: 'notifications', label: 'Thông báo', icon: 'bell', render: aNotifications },
       { id: 'logs', label: 'Nhật ký hệ thống', icon: 'list', render: aLogs },
     ] },

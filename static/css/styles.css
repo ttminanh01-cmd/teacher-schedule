@@ -702,3 +702,9 @@ button.c { border: 0; font: inherit; font-weight: 600; cursor: pointer; color: v
 .view-as { position: sticky; top: 0; z-index: 40; display: flex; gap: 10px; align-items: center; padding: 10px 16px; background: var(--amber-soft); color: var(--amber); border-bottom: 1px solid var(--border); font-size: 13.5px; }
 .view-as > div { flex: 1; min-width: 0; color: var(--text); }
 .view-as svg { width: 18px; height: 18px; flex: none; }
+
+/* ---------- sub admin: mục chỉ xem (server cũng chặn) ---------- */
+body.ro-page .btn-primary, body.ro-page .btn-danger,
+body.ro-page :is([data-edit], [data-del], [data-rm], [data-reset], [data-unlock], [data-add], [data-act="del"], [data-act="edit"], [data-act="left"], [data-act="right"]),
+body.ro-page :is(#add, #auto, #copy, #sync, #tg, #pb, #p-adj, #doc-add, #es-del, #es-ok, #as-ok, #add-ok, #ed-ok, #np-ok, #ws-un, #ws-push, #ws-save, #ws-ok) { display: none !important; }
+body.ro-page [data-edit-s] { pointer-events: none; }

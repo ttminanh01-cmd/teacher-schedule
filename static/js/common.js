@@ -69,6 +69,7 @@ const icon = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 
 /* ---------- API ---------- */
 let TOKEN_KEY = 'ctv_token';
+const STAFF_ROLES = ['admin', 'subadmin'];
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} },
@@ -369,7 +370,7 @@ const App = {
       e.preventDefault();
       run(e.submitter, async () => {
         const r = await api('/login', { method: 'POST', body: { username: $('#lg-u').value, password: $('#lg-p').value } });
-        if (c.role === 'admin' && r.user.role !== 'admin') throw new Error('Tài khoản này không có quyền quản trị');
+        if (c.role === 'admin' && !STAFF_ROLES.includes(r.user.role)) throw new Error('Tài khoản này không có quyền quản trị');
         store.set(TOKEN_KEY, r.token);
         this.enter(r.user);
       });
@@ -377,16 +378,19 @@ const App = {
   },
 
   async enter(user) {
-    if (this.config.role === 'admin' && user.role !== 'admin') { store.set(TOKEN_KEY, null); return this.showLogin(); }
+    if (this.config.role === 'admin' && !STAFF_ROLES.includes(user.role)) { store.set(TOKEN_KEY, null); return this.showLogin(); }
     this.user = user;
     this.meta = await api('/meta');
     const c = this.config;
+    // menu theo vai trò: ở trang Quản trị, sub admin chỉ thấy các mục có roles chứa 'subadmin'
+    const allowed = i => c.role !== 'admin' || user.role === 'admin' || (i.roles || []).includes(user.role);
+    this.nav = c.nav.map(g => ({ ...g, items: g.items.filter(allowed) })).filter(g => g.items.length);
     document.body.innerHTML = `<div class="shell">
       <aside class="sidebar" id="sidebar">
         <div class="brand"><div class="brand-mark">C</div><div>${c.brand}<small>${c.subtitle}</small></div></div>
-        <nav class="nav" id="nav">${c.nav.map(g => `<div class="nav-group">${g.group}</div>` +
+        <nav class="nav" id="nav">${this.nav.map(g => `<div class="nav-group">${g.group}</div>` +
           g.items.map(i => `<a href="#${i.id}" data-id="${i.id}">${icon(i.icon)}<span>${i.label}</span><span class="count" data-count="${i.id}" hidden></span></a>`).join('')).join('')}</nav>
-        ${user.role === 'admin' ? `<a class="switch-portal" id="switch-portal" href="/${c.role === 'admin' ? 'ctv' : 'admin'}">${icon(c.role === 'admin' ? 'users' : 'grid')}<span>${c.role === 'admin' ? 'Xem trang CTV' : 'Sang trang Quản trị'}</span>${icon('chevR')}</a>` : ''}
+        ${STAFF_ROLES.includes(user.role) ? `<a class="switch-portal" id="switch-portal" href="/${c.role === 'admin' ? 'ctv' : 'admin'}">${icon(c.role === 'admin' ? 'users' : 'grid')}<span>${c.role === 'admin' ? 'Xem trang CTV' : 'Sang trang Quản trị'}</span>${icon('chevR')}</a>` : ''}
         <div class="user-box">
           <button class="user-btn" id="user-btn" aria-haspopup="true"><div class="avatar">${initials(user.name)}</div>
             <div><strong>${esc(user.name)}</strong><span>${esc(user.username)}</span></div></button>
@@ -473,9 +477,11 @@ const App = {
   route() {
     if (!this.user || !$('#view')) return;
     this.cleanup.forEach(fn => fn()); this.cleanup = [];
-    const items = this.config.nav.flatMap(g => g.items);
+    const items = this.nav.flatMap(g => g.items);
     const item = items.find(i => i.id === location.hash.slice(1)) || items[0];
     $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.id === item.id));
+    // sub admin ở mục chỉ xem: ẩn các nút thêm / sửa / xoá (server cũng chặn)
+    document.body.classList.toggle('ro-page', this.user.role === 'subadmin' && !(item.write || []).includes('subadmin'));
     this.toggleNav(false);
     const v = $('#view');
     v.innerHTML = '';

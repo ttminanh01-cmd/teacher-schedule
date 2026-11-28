@@ -70,10 +70,25 @@ def current_user(request: Request, authorization: str = Header(default=""), con=
     return u
 
 
-def admin_user(u=Depends(current_user)):
-    if u["role"] != "admin":
-        err("Bạn không có quyền quản trị", 403)
-    return u
+# Sub admin: XEM các mục Tổng quan, Xếp lịch, Lịch rảnh, QC CTV, Lỗi QC, Bảng lương, Nhân sự, Danh mục, Document;
+# chỉ được GHI ở QC CTV + Lỗi QC (và "Xem như CTV"). Chấm công, đổi ca, duyệt lịch, nhật ký hệ thống: chỉ admin.
+SUB_READ = ("/api/admin/dashboard", "/api/admin/users", "/api/admin/catalog", "/api/admin/availability", "/api/admin/schedules",
+            "/api/admin/week", "/api/admin/month", "/api/admin/salary", "/api/admin/qc", "/api/admin/pip",
+            "/api/admin/docs", "/api/admin/handbook")
+SUB_WRITE = ("/api/admin/qc", "/api/admin/pip", "/api/admin/view-as")
+STAFF = ("admin", "subadmin")
+
+
+def admin_user(request: Request, u=Depends(current_user)):
+    if u["role"] == "admin":
+        return u
+    if u["role"] == "subadmin":
+        path = request.url.path
+        ok = lambda pre: any(path == p or path.startswith(p + "/") for p in pre)
+        if (request.method in ("GET", "HEAD") and ok(SUB_READ)) or ok(SUB_WRITE):
+            return u
+        err("Tài khoản sub admin không có quyền với chức năng này", 403)
+    err("Bạn không có quyền quản trị", 403)
 
 
 SCHED_SQL = """
@@ -541,6 +556,8 @@ def save_user(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con
         err("Số CCCD phải gồm 12 chữ số (CMND cũ 9 số)")
     if not fields[0]:
         err("Vui lòng nhập họ tên")
+    if fields[1] not in ("ctv", "subadmin", "admin"):
+        err("Vai trò không hợp lệ")
     if body.get("id"):
         if int(body["id"]) == u["id"] and (fields[1] != "admin" or not fields[6]):
             err("Không thể tự khoá hoặc hạ quyền chính mình")
@@ -1592,7 +1609,7 @@ def admin_pip_review_delete(rid: int, u=Depends(admin_user), con=Depends(get_con
 
 def pip_review_access(con, u, rid: int):
     r = row(con.execute("SELECT * FROM pip_reviews WHERE id=?", (rid,)))
-    if not r or (u["role"] != "admin" and r["user_id"] != u["id"]):
+    if not r or (u["role"] not in STAFF and r["user_id"] != u["id"]):
         err("Không tìm thấy nhận xét", 404)
     return r
 
@@ -1621,7 +1638,7 @@ def pip_comment(rid: int, body: dict = Body(...), u=Depends(current_user), con=D
 @app.delete("/api/pip/comments/{cid}")
 def pip_comment_delete(cid: int, u=Depends(current_user), con=Depends(get_con)):
     c = row(con.execute("SELECT * FROM pip_comments WHERE id=?", (cid,)))
-    if not c or (u["role"] != "admin" and c["user_id"] != u["id"]):
+    if not c or (u["role"] not in STAFF and c["user_id"] != u["id"]):
         err("Không tìm thấy phản hồi", 404)
     con.execute("DELETE FROM pip_images WHERE comment_id=?", (cid,))
     con.execute("DELETE FROM pip_comments WHERE id=?", (cid,))
@@ -1631,7 +1648,7 @@ def pip_comment_delete(cid: int, u=Depends(current_user), con=Depends(get_con)):
 @app.get("/api/pip/images/{iid}")
 def pip_image(iid: int, u=Depends(current_user), con=Depends(get_con)):
     im = row(con.execute("SELECT i.mime, i.data, r.user_id FROM pip_images i JOIN pip_reviews r ON r.id=i.review_id WHERE i.id=?", (iid,)))
-    if not im or (u["role"] != "admin" and im["user_id"] != u["id"]):
+    if not im or (u["role"] not in STAFF and im["user_id"] != u["id"]):
         err("Không tìm thấy ảnh", 404)
     return Response(base64.b64decode(im["data"]), media_type=im["mime"], headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
