@@ -84,6 +84,13 @@ CREATE TABLE IF NOT EXISTS pip_images (
   id INTEGER PRIMARY KEY, review_id INTEGER NOT NULL REFERENCES pip_reviews(id) ON DELETE CASCADE,
   comment_id INTEGER, mime TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_pipi_review ON pip_images(review_id);
+CREATE TABLE IF NOT EXISTS qc_comments (
+  id INTEGER PRIMARY KEY, qc_id INTEGER NOT NULL REFERENCES qc_errors(id) ON DELETE CASCADE,
+  user_id INTEGER, author TEXT NOT NULL, role TEXT NOT NULL, body TEXT DEFAULT '', created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_qcc_qc ON qc_comments(qc_id);
+CREATE TABLE IF NOT EXISTS qc_images (
+  id INTEGER PRIMARY KEY, qc_id INTEGER NOT NULL, comment_id INTEGER NOT NULL, mime TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_qci_c ON qc_images(comment_id);
 CREATE TABLE IF NOT EXISTS milo_mails (
   id TEXT PRIMARY KEY, at INTEGER NOT NULL, addrs TEXT NOT NULL, sender TEXT DEFAULT '', subject TEXT DEFAULT '', body TEXT NOT NULL);
 """
@@ -134,6 +141,10 @@ def init_db():
 
 def migrate(con):
     """Thêm cột cho DB cũ. Ca nhập từ sheet (đã có bản ghi attendance) coi như đã duyệt."""
+    qcols = {r[1] for r in con.execute("PRAGMA table_info(qc_errors)")}
+    for c in ("last_ctv_at", "last_admin_at", "ctv_seen_at", "admin_seen_at"):  # phản hồi lỗi QC: dấu "mới" cho 2 phía
+        if c not in qcols:
+            con.execute(f"ALTER TABLE qc_errors ADD COLUMN {c} TEXT")
     if "viewer_id" not in {r[1] for r in con.execute("PRAGMA table_info(sessions)")}:
         con.execute("ALTER TABLE sessions ADD COLUMN viewer_id INTEGER")  # phiên "xem như CTV" do admin mở (chỉ xem)
     if "must_change_pw" not in {r[1] for r in con.execute("PRAGMA table_info(users)")}:

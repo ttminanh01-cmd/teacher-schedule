@@ -69,7 +69,8 @@ const _imgCache = new Map();
 function loadAuthImages(root) {
   $$('img[data-img]', root).forEach(img => {
     const id = img.dataset.img;
-    if (!_imgCache.has(id)) _imgCache.set(id, fetch(`/api/pip/images/${id}`, { headers: { Authorization: 'Bearer ' + (store.get(TOKEN_KEY) || '') } })
+    const url = id.startsWith('qc:') ? `/api/qc/images/${id.slice(3)}` : `/api/pip/images/${id}`;
+    if (!_imgCache.has(id)) _imgCache.set(id, fetch(url, { headers: { Authorization: 'Bearer ' + (store.get(TOKEN_KEY) || '') } })
       .then(r => { if (!r.ok) throw new Error(); return r.blob(); }).then(b => URL.createObjectURL(b)).catch(() => { _imgCache.delete(id); return ''; }));
     _imgCache.get(id).then(u => { if (u) img.src = u; });
   });
@@ -127,4 +128,51 @@ function bindPipThreads(root, onChange) {
     run(null, async () => { await api(`/pip/comments/${d.dataset.delC}`, { method: 'DELETE' }); onChange(); });
   });
   loadAuthImages(root);
+}
+
+/* ---------- phản hồi lỗi QC (CTV ↔ quản lý), dùng ở tab Lỗi QC của cả 2 trang ---------- */
+const qcReplyCell = r => r.replies || r.unread
+  ? `<button class="btn btn-sm ${r.unread ? 'btn-reply-new' : ''}" data-thread="${r.id}">${icon('message')} ${r.replies}${r.unread ? ' · mới' : ''}</button>`
+  : `<button class="btn btn-sm btn-ghost" data-thread="${r.id}">${icon('message')} ${App.config.role === 'admin' ? '—' : 'Phản hồi'}</button>`;
+
+function qcThreadModal(qid, onChange) {
+  const viewOnly = !!(App.user && App.user.view_as);
+  const m = modal({ title: 'Phản hồi lỗi QC', wide: true, body: `<div id="qct">${loading(2)}</div>` });
+  const load = async () => {
+    const box = $('#qct', m.el); if (!box) return;
+    const d = await api(`/qc/${qid}/thread`), q = d.qc, mine = q.user_id === App.user.id;
+    box.innerHTML = `<div class="qc-sum">
+        <div class="small muted">${fmtDate(q.date)} · ${esc(q.username)} · ${esc(q.name)}${q.category ? ` · <span class="badge">${esc(q.category)}</span>` : ''}</div>
+        <div class="pip-text" style="font-weight:500">${esc(q.error || '—')}</div>
+        ${q.note ? `<div class="small muted pip-text">${esc(q.note)}</div>` : ''}
+        <div class="small">${q.penalty ? esc(q.penalty) + ' · ' : ''}${q.amount ? `<span class="minus">−${money(q.amount)}</span>` : 'Nhắc nhở'}
+          ${/^https?:/.test(q.ticket || '') ? ` · <a href="${esc(q.ticket)}" target="_blank" rel="noopener">Mở ticket</a>` : ''}</div></div>
+      <div class="pip-thread" style="border-top:0;padding-top:0">
+        ${d.comments.length ? d.comments.map(c => `<div class="pip-comment ${c.role}">
+          <div class="small"><b>${esc(c.author)}</b> <span class="muted">${c.role === 'ctv' ? 'CTV phản hồi' : 'Quản lý trả lời'} · ${fmtDT(c.created_at)}</span>
+            ${!viewOnly && (App.config.role === 'admin' || c.user_id === App.user.id) ? `<button type="button" class="link-btn" data-del-qc="${c.id}">Xoá</button>` : ''}</div>
+          ${c.body ? `<div class="pip-text">${esc(c.body)}</div>` : ''}${pipImgs((c.images || []).map(i => 'qc:' + i))}</div>`).join('')
+          : `<div class="small muted">${mine || App.config.role !== 'admin' ? 'Chưa có phản hồi. Nếu thấy lỗi này chưa đúng, bạn có thể giải thích và gửi kèm ảnh bằng chứng (Ctrl+V).' : 'CTV chưa phản hồi lỗi này.'}</div>`}
+        ${viewOnly ? '' : `<form class="pip-reply" id="qct-f"><textarea class="input full" rows="3" placeholder="${App.config.role === 'admin' ? 'Trả lời CTV…' : 'Giải thích / ý kiến của bạn về lỗi này…'}"></textarea>
+          <div class="pip-reply-f"><div class="paste-box"></div><button class="btn btn-sm btn-primary">Gửi phản hồi</button></div></form>`}
+      </div>`;
+    loadAuthImages(box);
+    const f = $('#qct-f', box);
+    if (f) {
+      const ta = $('textarea', f), pb = imagePaste($('.paste-box', f), ta);
+      f.onsubmit = e => {
+        e.preventDefault();
+        run(e.submitter, async () => {
+          if (!ta.value.trim() && !pb.count()) throw new Error('Vui lòng nhập nội dung phản hồi');
+          await api(`/qc/${qid}/comments`, { method: 'POST', body: { body: ta.value, images: pb.images() } });
+          toast('Đã gửi phản hồi'); await load(); onChange && onChange();
+        });
+      };
+    }
+    $$('[data-del-qc]', box).forEach(b => b.onclick = async () => {
+      if (!(await confirmDialog('Xoá phản hồi này?', 'Không thể hoàn tác.', 'Xoá', true))) return;
+      run(null, async () => { await api(`/qc/comments/${b.dataset.delQc}`, { method: 'DELETE' }); await load(); onChange && onChange(); });
+    });
+  };
+  load().then(() => onChange && onChange(), e => { const b = $('#qct', m.el); if (b) b.innerHTML = emptyState(e.message); });
 }

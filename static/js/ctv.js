@@ -1161,7 +1161,8 @@ async function pageQC(v) {
     : `<div class="card">${emptyState('Bạn chưa có lỗi QC nào. Giữ vững phong độ nhé!')}</div>`);
   if (!all.length) return;
   $('#ym').value = ym;
-  const cols = [{ label: 'Tháng lương', render: r => `<span class="nowrap">${r.ym ? fmtYM(r.ym) : '—'}</span>` }, ...QC_COLUMNS];
+  const QCR = [...QC_COLUMNS, { label: 'Phản hồi', cls: 'nowrap', render: qcReplyCell }];
+  const cols = [{ label: 'Tháng lương', render: r => `<span class="nowrap">${r.ym ? fmtYM(r.ym) : '—'}</span>` }, ...QCR];
   const paint = () => {
     const rows = ym === 'all' ? all : all.filter(r => r.ym === ym);
     const fine = rows.reduce((a, r) => a + (r.amount || 0), 0), warn = rows.filter(r => !r.amount).length;
@@ -1169,9 +1170,17 @@ async function pageQC(v) {
       <div class="stat"><div class="label">Số lỗi${ym === 'all' ? '' : ' ' + fmtYM(ym).toLowerCase()}</div><div class="value ${rows.length ? 'accent' : ''}">${rows.length}</div></div>
       <div class="stat"><div class="label">Tiền phạt</div><div class="value">${money(fine)}</div></div>
       <div class="stat"><div class="label">Chỉ nhắc nhở</div><div class="value">${warn}</div></div>`;
-    dataTable($('#body'), rows, ym === 'all' ? cols : QC_COLUMNS, { pageSize: 20, empty: 'Không có lỗi nào trong tháng này' });
+    dataTable($('#body'), rows, ym === 'all' ? cols : QCR, { pageSize: 20, empty: 'Không có lỗi nào trong tháng này' });
   };
   $('#ym').onchange = e => { ym = e.target.value; paint(); };
+  $('#body').addEventListener('click', e => {
+    const th = e.target.closest('[data-thread]'); if (!th) return;
+    qcThreadModal(+th.dataset.thread, async () => {
+      const fresh = await api('/ctv/qc').catch(() => null);
+      if (fresh) { all.splice(0, all.length, ...fresh); paint(); }
+      refreshPipNav();
+    });
+  });
   $('#exp').onclick = () => {
     const rows = ym === 'all' ? all : all.filter(r => r.ym === ym);
     downloadCSV(`loi-qc-${ym}.csv`, ['Tháng lương', 'Ngày', 'Lỗi', 'Ghi chú', 'Hình thức', 'Phân loại', 'Ticket', 'Tiền phạt'],
@@ -1225,7 +1234,7 @@ async function refreshPipNav() {
   const r = await api('/ctv/pip/unread').catch(() => null);
   const a = $('#nav a[data-id="nhanxetqc"]');
   if (a && r) a.hidden = !r.has;
-  if (r) App.setCount('nhanxetqc', r.unread);
+  if (r) { App.setCount('nhanxetqc', r.unread); App.setCount('qc', r.qc_unread || 0); }
 }
 
 /* ---------- khởi động ---------- */

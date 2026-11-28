@@ -18,6 +18,7 @@ async function refreshSwapCount() {
   const [list, pip] = await Promise.all([api('/admin/swaps').catch(() => []), api('/admin/pip/unread').catch(() => ({}))]);
   App.setCount('swaps', list.filter(s => s.status === 'pending').length);
   App.setCount('qcctv', pip.unread || 0);
+  App.setCount('qc', pip.qc_unread || 0);
 }
 
 /* =========================================================
@@ -1028,6 +1029,7 @@ async function aQC(v) {
       { label: 'Hình thức', render: r => `${esc(r.penalty || '')}${r.category ? `<br><span class="badge">${esc(r.category)}</span>` : ''}` },
       { label: 'Ticket', render: r => /^https?:/.test(r.ticket || '') ? `<a href="${esc(r.ticket)}" target="_blank" rel="noopener">Mở</a>` : esc(r.ticket || '—') },
       { label: 'Tiền phạt', cls: 'right mono', render: r => r.amount ? `<span class="minus">−${money(r.amount)}</span>` : '<span class="muted">0</span>' },
+      { label: 'Phản hồi CTV', cls: 'nowrap', render: qcReplyCell },
       { label: '', cls: 'right', render: r => `<div class="actions"><button class="btn btn-sm btn-danger" data-del="${r.id}">Xoá</button><button class="btn btn-sm" data-edit="${r.id}">Sửa</button></div>` },
     ], { pageSize: 30, empty: 'Chưa có lỗi nào trong tháng này' });
   };
@@ -1077,6 +1079,7 @@ async function aQC(v) {
   $('#q').oninput = paint;
   $('#add').onclick = () => form(null);
   $('#body').addEventListener('click', async e => {
+    const th = e.target.closest('[data-thread]'); if (th) return qcThreadModal(+th.dataset.thread, () => { load(); refreshSwapCount(); });
     const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]');
     if (ed) form(rows.find(r => r.id === +ed.dataset.edit));
     if (del) {
@@ -1084,8 +1087,8 @@ async function aQC(v) {
       run(del, async () => { await api(`/admin/qc/${del.dataset.del}`, { method: 'DELETE' }); toast('Đã xoá'); load(); });
     }
   });
-  $('#exp').onclick = () => downloadCSV(`loi-qc-${ym}.csv`, ['Tháng', 'Ngày ghi phạt', 'CTV', 'Ticket', 'Lỗi', 'Note', 'Phạt', 'Tính tiền', 'Phân loại'],
-    rows.map(r => [r.ym, fmtDate(r.date), r.username, r.ticket, r.error, r.note, r.penalty, r.amount, r.category]));
+  $('#exp').onclick = () => downloadCSV(`loi-qc-${ym}.csv`, ['Tháng', 'Ngày ghi phạt', 'CTV', 'Ticket', 'Lỗi', 'Note', 'Phạt', 'Tính tiền', 'Phân loại', 'Số phản hồi'],
+    rows.map(r => [r.ym, fmtDate(r.date), r.username, r.ticket, r.error, r.note, r.penalty, r.amount, r.category, r.replies || 0]));
   load();
 }
 

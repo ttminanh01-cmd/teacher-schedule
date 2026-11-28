@@ -722,3 +722,7 @@ body.ro-page [data-edit-s] { pointer-events: none; }
 .content.content-embed { max-width: none; padding: 0; }
 .embed-ctv { display: block; width: 100%; height: 100vh; border: 0; }
 .embed .sidebar, .embed .topbar, .embed .view-as, .embed .switch-portal { display: none !important; }
+
+/* ---------- phản hồi lỗi QC ---------- */
+.qc-sum { background: var(--surface-2); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+.btn.btn-reply-new { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }

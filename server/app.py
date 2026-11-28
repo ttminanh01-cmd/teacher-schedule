@@ -496,7 +496,9 @@ def my_salary(ym: str, u=Depends(current_user), con=Depends(get_con)):
 
 @app.get("/api/ctv/qc")
 def my_qc(u=Depends(current_user), con=Depends(get_con)):
-    return rows(con.execute("SELECT * FROM qc_errors WHERE user_id=? ORDER BY date DESC, id DESC", (u["id"],)))
+    return rows(con.execute("SELECT q.*, (SELECT COUNT(*) FROM qc_comments c WHERE c.qc_id=q.id) AS replies, "
+                            "CASE WHEN q.last_admin_at IS NOT NULL AND (q.ctv_seen_at IS NULL OR q.last_admin_at > q.ctv_seen_at) THEN 1 ELSE 0 END AS unread "
+                            "FROM qc_errors q WHERE q.user_id=? ORDER BY q.date DESC, q.id DESC", (u["id"],)))
 
 
 @app.get("/api/ctv/history")
@@ -1370,7 +1372,10 @@ def publish_salary(body: dict = Body(...), u=Depends(admin_user), con=Depends(ge
 
 
 # ----- lỗi QC
-QC_SQL = "SELECT q.*, u.username, u.name FROM qc_errors q JOIN users u ON u.id=q.user_id"
+QC_SQL = ("SELECT q.*, u.username, u.name, (SELECT COUNT(*) FROM qc_comments c WHERE c.qc_id=q.id) AS replies, "
+          "CASE WHEN q.last_ctv_at IS NOT NULL AND (q.admin_seen_at IS NULL OR q.last_ctv_at > q.admin_seen_at) THEN 1 ELSE 0 END AS unread FROM qc_errors q JOIN users u ON u.id=q.user_id")
+QC_UNREAD_ADMIN = "q.last_ctv_at IS NOT NULL AND (q.admin_seen_at IS NULL OR q.last_ctv_at > q.admin_seen_at)"
+QC_UNREAD_CTV = "q.last_admin_at IS NOT NULL AND (q.ctv_seen_at IS NULL OR q.last_admin_at > q.ctv_seen_at)"
 
 
 @app.get("/api/admin/qc")
@@ -1499,7 +1504,8 @@ def admin_pip_list(u=Depends(admin_user), con=Depends(get_con)):
 
 @app.get("/api/admin/pip/unread")
 def admin_pip_unread(u=Depends(admin_user), con=Depends(get_con)):
-    return {"unread": con.execute(f"SELECT COUNT(*) FROM pip_reviews WHERE {PIP_UNREAD_ADMIN}").fetchone()[0]}
+    return {"unread": con.execute(f"SELECT COUNT(*) FROM pip_reviews WHERE {PIP_UNREAD_ADMIN}").fetchone()[0],
+            "qc_unread": con.execute(f"SELECT COUNT(*) FROM qc_errors q WHERE {QC_UNREAD_ADMIN}").fetchone()[0]}
 
 
 @app.post("/api/admin/pip")
@@ -1676,15 +1682,85 @@ def ctv_pip(u=Depends(current_user), con=Depends(get_con)):
 
 @app.get("/api/ctv/pip/unread")
 def ctv_pip_unread(u=Depends(current_user), con=Depends(get_con)):
+    qn = con.execute(f"SELECT COUNT(*) FROM qc_errors q WHERE q.user_id=? AND {QC_UNREAD_CTV}", (u["id"],)).fetchone()[0]
     if not con.execute("SELECT 1 FROM pip_plans WHERE user_id=? LIMIT 1", (u["id"],)).fetchone():
-        return {"has": False, "unread": 0}
+        return {"has": False, "unread": 0, "qc_unread": qn}
     n = con.execute("SELECT COUNT(*) FROM pip_reviews WHERE user_id=? AND last_admin_at IS NOT NULL AND (ctv_seen_at IS NULL OR last_admin_at > ctv_seen_at)",
                     (u["id"],)).fetchone()[0]
-    return {"has": True, "unread": n}
+    return {"has": True, "unread": n, "qc_unread": qn}
+
+
+# ----- phản hồi lỗi QC: CTV trả lời (kèm ảnh), quản lý trả lời lại
+def qc_access(con, u, qid: int):
+    q = row(con.execute("SELECT q.*, u.username, u.name FROM qc_errors q JOIN users u ON u.id=q.user_id WHERE q.id=?", (qid,)))
+    if not q or (u["role"] not in STAFF and q["user_id"] != u["id"]):
+        err("Không tìm thấy lỗi QC", 404)
+    return q
+
+
+@app.get("/api/qc/{qid}/thread")
+def qc_thread(qid: int, u=Depends(current_user), con=Depends(get_con)):
+    q = qc_access(con, u, qid)
+    coms = rows(con.execute("SELECT * FROM qc_comments WHERE qc_id=? ORDER BY created_at, id", (qid,)))
+    imgs = rows(con.execute("SELECT id, comment_id FROM qc_images WHERE qc_id=? ORDER BY id", (qid,)))
+    for c in coms:
+        c["images"] = [i["id"] for i in imgs if i["comment_id"] == c["id"]]
+    if not u["view_by"]:
+        col = "ctv_seen_at" if q["user_id"] == u["id"] else "admin_seen_at"
+        con.execute(f"UPDATE qc_errors SET {col}=? WHERE id=?", (now_str(), qid))
+    return {"qc": q, "comments": coms}
+
+
+@app.post("/api/qc/{qid}/comments")
+def qc_comment(qid: int, body: dict = Body(...), u=Depends(current_user), con=Depends(get_con)):
+    q = qc_access(con, u, qid)
+    text = (body.get("body") or "").strip()
+    images = [x for x in (body.get("images") or []) if isinstance(x, str)][:8]
+    if not text and not images:
+        err("Vui lòng nhập nội dung phản hồi")
+    side = "ctv" if q["user_id"] == u["id"] else "admin"
+    now = now_str()
+    cid = con.execute("INSERT INTO qc_comments(qc_id, user_id, author, role, body, created_at) VALUES (?,?,?,?,?,?)",
+                      (qid, u["id"], u["name"], side, text, now)).lastrowid
+    for x in images:
+        m = re.match(r"data:(image/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$", x)
+        if not m:
+            err("Ảnh không hợp lệ")
+        if len(m.group(2)) > PIP_MAX_IMG:
+            err("Ảnh quá lớn (tối đa ~650KB/ảnh)")
+        con.execute("INSERT INTO qc_images(qc_id, comment_id, mime, data, created_at) VALUES (?,?,?,?,?)", (qid, cid, m.group(1), m.group(2), now))
+    if side == "ctv":
+        con.execute("UPDATE qc_errors SET last_ctv_at=?, ctv_seen_at=? WHERE id=?", (now, now, qid))
+        notify.send_async(f"💬 <b>{notify.esc(u['name'])}</b> ({notify.esc(u['username'])}) phản hồi lỗi QC ngày {notify.esc(q['date'])}:\n"
+                          f"<i>{notify.esc((q['error'] or '')[:200])}</i>\n→ {notify.esc(text[:500])}{' [kèm ảnh]' if images else ''}")
+    else:
+        con.execute("UPDATE qc_errors SET last_admin_at=?, admin_seen_at=? WHERE id=?", (now, now, qid))
+    log(con, u, f"Phản hồi lỗi QC #{qid}")
+    return {"ok": True}
+
+
+@app.delete("/api/qc/comments/{cid}")
+def qc_comment_delete(cid: int, u=Depends(current_user), con=Depends(get_con)):
+    c = row(con.execute("SELECT * FROM qc_comments WHERE id=?", (cid,)))
+    if not c or (u["role"] not in STAFF and c["user_id"] != u["id"]):
+        err("Không tìm thấy phản hồi", 404)
+    con.execute("DELETE FROM qc_images WHERE comment_id=?", (cid,))
+    con.execute("DELETE FROM qc_comments WHERE id=?", (cid,))
+    return {"ok": True}
+
+
+@app.get("/api/qc/images/{iid}")
+def qc_image(iid: int, u=Depends(current_user), con=Depends(get_con)):
+    im = row(con.execute("SELECT i.mime, i.data, q.user_id FROM qc_images i JOIN qc_errors q ON q.id=i.qc_id WHERE i.id=?", (iid,)))
+    if not im or (u["role"] not in STAFF and im["user_id"] != u["id"]):
+        err("Không tìm thấy ảnh", 404)
+    return Response(base64.b64decode(im["data"]), media_type=im["mime"], headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 @app.delete("/api/admin/qc/{qid}")
 def delete_qc(qid: int, u=Depends(admin_user), con=Depends(get_con)):
+    con.execute("DELETE FROM qc_images WHERE qc_id=?", (qid,))
+    con.execute("DELETE FROM qc_comments WHERE qc_id=?", (qid,))
     con.execute("DELETE FROM qc_errors WHERE id=?", (qid,))
     log(con, u, f"Xoá lỗi QC #{qid}")
     return {"ok": True}
