@@ -584,7 +584,8 @@ def reset_password(uid: int, body: dict = Body(default={}), u=Depends(admin_user
     t = row(con.execute("SELECT username FROM users WHERE id=?", (uid,)))
     if not t:
         err("Không tìm thấy tài khoản", 404)
-    con.execute("UPDATE users SET password_hash=?, must_change_pw=1 WHERE id=?", (db.hash_pw(pw), uid))
+    force = 1 if body.get("force_change", True) else 0  # bỏ tick = không bắt đổi mật khẩu ở lần đăng nhập tới
+    con.execute("UPDATE users SET password_hash=?, must_change_pw=? WHERE id=?", (db.hash_pw(pw), force, uid))
     con.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
     log(con, u, f"Đặt lại mật khẩu cho {t['username']}")
     return {"ok": True, "password": pw}

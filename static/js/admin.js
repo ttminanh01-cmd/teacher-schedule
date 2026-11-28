@@ -1154,11 +1154,12 @@ async function aUsers(v) {
       const u = rows.find(x => x.id === +rs.dataset.reset);
       modal({
         title: `Đặt lại mật khẩu · ${esc(u.username)}`,
-        body: `<div class="field"><label>Mật khẩu mới</label><input class="input" id="np" placeholder="Mặc định: 123456"><span class="hint">CTV sẽ bị đăng xuất khỏi mọi thiết bị.</span></div>`,
+        body: `<div class="field"><label>Mật khẩu mới</label><input class="input" id="np" placeholder="Mặc định: 123456"><span class="hint">Tài khoản sẽ bị đăng xuất khỏi mọi thiết bị.</span></div>
+          <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="np-force" ${u.role === 'ctv' ? 'checked' : ''}> Bắt đổi mật khẩu ở lần đăng nhập tới</label>`,
         footer: `<button class="btn" data-close>Huỷ</button><button class="btn btn-primary" id="np-ok">Đặt lại</button>`,
         onOpen(el, close) {
           $('#np-ok', el).onclick = ev => run(ev.currentTarget, async () => {
-            const r = await api(`/admin/users/${u.id}/reset-password`, { method: 'POST', body: { password: $('#np', el).value } });
+            const r = await api(`/admin/users/${u.id}/reset-password`, { method: 'POST', body: { password: $('#np', el).value, force_change: $('#np-force', el).checked } });
             close(); toast(`Đã đặt lại mật khẩu: ${r.password}`, 'info');
           });
         },
