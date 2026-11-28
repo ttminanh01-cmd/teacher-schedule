@@ -111,7 +111,10 @@ function modal({ title, body, footer = '', wide = false, onOpen }) {
     <div class="modal-b">${body}</div>${footer ? `<div class="modal-f">${footer}</div>` : ''}</div>`;
   const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
   const onKey = e => { if (e.key === 'Escape') close(); };
-  ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('[data-close]')) close(); });
+  // chỉ đóng khi nhấn VÀ thả chuột đều ở nền ngoài hộp thoại — bôi đen chữ trong ô rồi thả ra ngoài / kéo thanh cuộn không làm mất hộp thoại
+  let downOnBg = false;
+  ov.addEventListener('mousedown', e => { downOnBg = e.target === ov && e.offsetX < ov.clientWidth; });
+  ov.addEventListener('click', e => { if ((e.target === ov && downOnBg) || e.target.closest('[data-close]')) close(); downOnBg = false; });
   document.addEventListener('keydown', onKey);
   document.body.appendChild(ov);
   const first = ov.querySelector('input, select, textarea');

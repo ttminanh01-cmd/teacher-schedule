@@ -583,6 +583,11 @@ async function pageHandbook(v) {
             <button type="button" class="btn btn-danger" id="hbe-del" style="margin-left:auto">Xoá dòng</button>` : ''}</div></form>`,
     });
     const f = $('#hbe-f', m.el);
+    const dirty = () => $$('textarea', f).some(ta => ta.value.trim() !== init[+ta.dataset.j].trim());
+    m.el.addEventListener('click', e => { if (e.target === m.el && dirty()) { e.stopImmediatePropagation(); toast('Bấm Lưu để lưu, hoặc nút ✕ để huỷ', 'info'); } }, true);
+    const guardEsc = e => { if (e.key === 'Escape' && dirty()) e.stopImmediatePropagation(); };
+    document.addEventListener('keydown', guardEsc, true);
+    new MutationObserver((_, o) => { if (!m.el.isConnected) { document.removeEventListener('keydown', guardEsc, true); o.disconnect(); } }).observe(document.body, { childList: true });
     const send = async (o, values) => {
       await api('/admin/handbook/edits', { method: 'POST', body: { gid, op: o, row: d.pos[ri], values } });
       m.close(); toast(o === 'delete' ? 'Đã xoá dòng' : 'Đã lưu · Google Sheet cập nhật trong khoảng 1 phút');
@@ -1309,7 +1314,7 @@ App.start({
       { id: 'swaps', label: 'Phiếu đổi ca', icon: 'swap', render: pageSwaps },
     ] },
     { group: 'Tra cứu', items: [
-      { id: 'handbook', label: 'Cẩm nang', icon: 'book', render: pageHandbook },
+      { id: 'handbook', label: 'Cẩm nang', icon: 'book', write: ['subadmin'], render: pageHandbook },   // sub admin sửa được Cẩm nang
       { id: 'crm', label: 'Thao tác ở CRM', icon: 'video', render: pageCRM },
       { id: 'ph-videos', label: 'Video hướng dẫn PH', icon: 'play', render: pagePH },
       { id: 'docs', label: 'Document', icon: 'file', render: pageDocs },
