@@ -717,3 +717,8 @@ body.ro-page .btn-primary, body.ro-page .btn-danger,
 body.ro-page :is([data-edit], [data-del], [data-rm], [data-reset], [data-unlock], [data-add], [data-act="del"], [data-act="edit"], [data-act="left"], [data-act="right"]),
 body.ro-page :is(#add, #auto, #copy, #sync, #tg, #pb, #p-adj, #doc-add, #es-del, #es-ok, #as-ok, #add-ok, #ed-ok, #np-ok, #ws-un, #ws-push, #ws-save, #ws-ok) { display: none !important; }
 body.ro-page [data-edit-s] { pointer-events: none; }
+
+/* ---------- sub admin: trang Document của CTV nhúng trong trang Quản trị ---------- */
+.content.content-embed { max-width: none; padding: 0; }
+.embed-ctv { display: block; width: 100%; height: 100vh; border: 0; }
+.embed .sidebar, .embed .topbar, .embed .view-as, .embed .switch-portal { display: none !important; }

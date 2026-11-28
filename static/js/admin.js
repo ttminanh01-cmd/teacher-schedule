@@ -1745,6 +1745,14 @@ async function aPIP(v) {
   showList();
 }
 
+/* sub admin: xem Document đúng như CTV thấy — nhúng trang Document của CTV (ẩn menu bên đó) */
+function aDocsAsCTV(v) {
+  store.set('ctv_token_ctv', store.get(TOKEN_KEY));   // dùng chung phiên như nút "Xem trang CTV"
+  v.innerHTML = `<iframe class="embed-ctv" src="/ctv?embed=1#docs" title="Document"></iframe>`;
+  v.classList.add('content-embed');
+  App.cleanup.push(() => v.classList.remove('content-embed'));
+}
+
 /* ---------- khởi động ---------- */
 App.start({
   role: 'admin', brand: 'Cổng CTV', subtitle: 'Quản trị', loginHint: 'Khu vực dành cho quản lý.',
@@ -1764,7 +1772,7 @@ App.start({
     { group: 'Hệ thống', items: [
       { id: 'users', roles: ['subadmin'], label: 'Nhân sự', icon: 'users', render: aUsers },
       { id: 'catalog', roles: ['subadmin'], label: 'Danh mục', icon: 'grid', render: aCatalog },
-      { id: 'docs', roles: ['subadmin'], label: 'Document', icon: 'book', render: aDocs },
+      { id: 'docs', roles: ['subadmin'], label: 'Document', icon: 'book', render: v => App.user.role === 'subadmin' ? aDocsAsCTV(v) : aDocs(v) },
       { id: 'notifications', label: 'Thông báo', icon: 'bell', render: aNotifications },
       { id: 'logs', label: 'Nhật ký hệ thống', icon: 'list', render: aLogs },
     ] },

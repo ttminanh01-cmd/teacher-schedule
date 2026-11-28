@@ -336,6 +336,7 @@ const App = {
 
   start(config) {
     this.config = config;
+    if (new URLSearchParams(location.search).get('embed')) document.documentElement.classList.add('embed');   // nhúng trong trang Quản trị
     // /ctv?view=<id>: admin "xem như CTV" — token riêng cho từng người được xem, không đụng phiên đăng nhập thật
     this.viewId = config.role === 'ctv' ? new URLSearchParams(location.search).get('view') : null;
     TOKEN_KEY = this.viewId ? 'ctv_view_' + this.viewId : 'ctv_token_' + config.role;
@@ -433,6 +434,7 @@ const App = {
     this.route();
     c.onEnter && c.onEnter();
     if (user.view_as) { document.title = `Xem như ${user.username}`; return; }
+    if (document.documentElement.classList.contains('embed')) return;
     this.startPresence();
     if (user.must_change_pw) changePasswordDialog(true);
   },
