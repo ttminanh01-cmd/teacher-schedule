@@ -998,7 +998,7 @@ const QC_CATEGORIES = ['Lỗi nhân sự', 'GVVN', 'GVNN', 'Nhắc nhở'];
 async function aQC(v) {
   const now = new Date();
   let ym = ymOf(now), rows = [], users = [];
-  v.innerHTML = pageHead('Lỗi QC', 'Ghi lỗi và tiền phạt của CTV. Tiền phạt được trừ vào lương của tháng tính lương tương ứng.',
+  v.innerHTML = pageHead('Lỗi QC', 'Ghi lỗi và tiền phạt của CTV / nhân sự. Tiền phạt được trừ vào lương của tháng tính lương tương ứng.',
     `<button class="btn" id="exp">${icon('download')} Xuất Excel</button><button class="btn btn-primary" id="add">${icon('plus')} Ghi lỗi</button>`) + `
     <div class="filters"><select class="input" id="ym">${monthOptions(ym, -12, 1)}</select>
       <div class="search">${icon('search')}<input class="input" id="q" placeholder="Tìm CTV, lỗi, ticket"></div></div>
@@ -1027,8 +1027,8 @@ async function aQC(v) {
   const form = r => modal({
     title: r ? 'Sửa lỗi QC' : 'Ghi lỗi QC', wide: true,
     body: `<form id="qf">
-      <div class="form-row"><div class="field"><label>CTV</label><select class="input" name="user_id" required><option value="">— Chọn CTV —</option>
-          ${users.filter(u => u.role === 'ctv').sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0)).map(u => `<option value="${u.id}" ${r && r.user_id === u.id ? 'selected' : ''}>${esc(u.username)} · ${esc(u.name)}${u.active ? '' : ' (đã nghỉ)'}</option>`).join('')}</select></div>
+      <div class="form-row"><div class="field"><label>Nhân sự</label><select class="input" name="user_id" required><option value="">— Chọn nhân sự —</option>
+          ${users.slice().sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0)).map(u => `<option value="${u.id}" ${r && r.user_id === u.id ? 'selected' : ''}>${esc(u.username)} · ${esc(u.name)}${u.role === 'admin' ? ' (quản trị)' : ''}${u.active ? '' : ' (không hoạt động)'}</option>`).join('')}</select></div>
         <div class="form-row"><div class="field"><label>Ngày ghi lỗi</label><input class="input" type="date" name="date" value="${(r && r.date) || todayStr()}" required></div>
           <div class="field"><label>Tính vào lương tháng</label><input class="input" type="month" name="ym" value="${(r && r.ym) || ym}" required></div></div></div>
       <div class="field"><label>Lỗi</label><textarea class="input" name="error" rows="3" required>${esc((r && r.error) || '')}</textarea></div>
@@ -1049,14 +1049,15 @@ async function aQC(v) {
         f.category.value = p.category;
         $$('#qf-presets button', el).forEach(x => x.classList.toggle('active', x === b));
       };
-      searchSelect(f.user_id, { placeholder: 'Gõ tên / username CTV để tìm…' });
+      searchSelect(f.user_id, { placeholder: 'Gõ tên / username để tìm, chưa có thì gõ để thêm…', allowNew: true });
       f.onsubmit = e => {
         e.preventDefault();
         run(e.submitter, async () => {
-          if (!f.user_id.value) throw new Error('Vui lòng chọn CTV trong danh sách gợi ý');
-          await api('/admin/qc', { method: 'POST', body: { id: r && r.id, user_id: +f.user_id.value, date: f.date.value, ym: f.ym.value,
+          if (!f.user_id.value) throw new Error('Vui lòng chọn nhân sự trong danh sách gợi ý (hoặc gõ tên rồi chọn “Thêm mới”)');
+          const isNew = f.user_id.value === '__new__';
+          await api('/admin/qc', { method: 'POST', body: { id: r && r.id, user_id: isNew ? null : +f.user_id.value, new_name: isNew ? f.user_id.dataset.newName : '', date: f.date.value, ym: f.ym.value,
             error: f.error.value, note: f.note.value, ticket: f.ticket.value, penalty: f.penalty.value, amount: +f.amount.value, category: f.category.value } });
-          close(); toast('Đã lưu lỗi QC'); load();
+          close(); toast(isNew ? 'Đã lưu lỗi QC và thêm nhân sự mới' : 'Đã lưu lỗi QC'); if (isNew) users = []; load();
         });
       };
     },

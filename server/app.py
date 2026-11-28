@@ -8,6 +8,7 @@ import os
 import secrets
 import threading
 import time
+import unicodedata
 from datetime import date, datetime, timedelta
 
 from fastapi.middleware.gzip import GZipMiddleware
@@ -1332,11 +1333,35 @@ def admin_qc(ym: str | None = None, u=Depends(admin_user), con=Depends(get_con))
     return rows(con.execute(QC_SQL + " ORDER BY q.date DESC, q.id DESC LIMIT 1000"))
 
 
+def qc_person(con, u, text: str) -> int:
+    """Người bị ghi lỗi QC chưa có trong Nhân sự: tạo hồ sơ ở trạng thái không hoạt động (không đăng nhập,
+    không được xếp ca), admin có thể mở lại / bổ sung thông tin ở mục Nhân sự. Gõ trùng username cũ thì dùng lại."""
+    ascii_ = unicodedata.normalize("NFD", text.replace("đ", "d").replace("Đ", "D"))
+    ascii_ = "".join(c for c in ascii_ if not unicodedata.combining(c))
+    base = re.sub(r"[^A-Za-z0-9._-]", "", ascii_) if " " not in text else re.sub(r"[^a-z0-9]", "", ascii_.lower())
+    if not base:
+        err("Tên nhân sự không hợp lệ")
+    old = con.execute("SELECT id FROM users WHERE LOWER(username)=LOWER(?)", (base,)).fetchone()
+    if old and " " not in text:
+        return old[0]
+    username, i = base, 1
+    while con.execute("SELECT 1 FROM users WHERE LOWER(username)=LOWER(?)", (username,)).fetchone():
+        i += 1
+        username = f"{base}{i}"
+    con.execute("INSERT INTO users(username, password_hash, name, role, active, created_at) VALUES (?,?,?,?,?,?)",
+                (username, db.hash_pw(secrets.token_hex(16)), text, "ctv", 0, now_str()))
+    log(con, u, f"Thêm nhân sự {username} (từ mục Lỗi QC)")
+    return con.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()[0]
+
+
 @app.post("/api/admin/qc")
 def save_qc(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
     uid, d = body.get("user_id"), (body.get("date") or "").strip()
+    new_name = re.sub(r"\s+", " ", str(body.get("new_name") or "")).strip()
+    if not uid and new_name and d:
+        uid = qc_person(con, u, new_name)
     if not uid or not d:
-        err("Vui lòng chọn CTV và ngày ghi lỗi")
+        err("Vui lòng chọn nhân sự và ngày ghi lỗi")
     ym = (body.get("ym") or d[:7]).strip()
     vals = (int(uid), ym, d, body.get("ticket", "").strip(), body.get("error", "").strip(), body.get("note", "").strip(),
             body.get("penalty", "").strip(), int(body.get("amount") or 0), body.get("category", "").strip())

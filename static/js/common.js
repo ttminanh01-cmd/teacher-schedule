@@ -255,10 +255,12 @@ const foldVi = s => String(s || '').normalize('NFC').normalize('NFD').replace(/[
 
 /* Biến <select> chọn nhân sự thành ô tìm kiếm: gõ vài ký tự → gợi ý những người có chứa ký tự đó
    (username hoặc họ tên, không phân biệt dấu). <select> gốc vẫn giữ giá trị nên code đọc .value không đổi. */
-function searchSelect(sel, { placeholder = 'Gõ tên hoặc username để tìm…', limit = 50 } = {}) {
+function searchSelect(sel, { placeholder = 'Gõ tên hoặc username để tìm…', limit = 50, allowNew = false } = {}) {
   if (!sel || sel.dataset.combo) return;
   sel.dataset.combo = 1;
   const opts = [...sel.options].filter(o => o.value);
+  // allowNew: gõ tên chưa có → thêm dòng “+ Thêm …”; chọn thì sel.value = '__new__', tên ở sel.dataset.newName
+  const NEW = { value: '__new__', textContent: '' };
   const wrap = document.createElement('div');
   wrap.className = 'combo';
   wrap.innerHTML = `<div class="search">${icon('search')}<input class="input full" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="${esc(placeholder)}">
@@ -281,21 +283,30 @@ function searchSelect(sel, { placeholder = 'Gõ tên hoặc username để tìm�
     const all = opts.filter(o => !q || foldVi(o.textContent).includes(q));
     // ưu tiên người có username / tên bắt đầu bằng chuỗi gõ
     if (q) all.sort((a, b) => (foldVi(b.textContent).split(/[\s.·]+/).some(w => w.startsWith(q))) - (foldVi(a.textContent).split(/[\s.·]+/).some(w => w.startsWith(q))));
-    shown = all.slice(0, limit); active = Math.min(active, Math.max(0, shown.length - 1));
+    shown = all.slice(0, limit);
+    const typed = inp.value.trim();
+    if (allowNew && typed && !opts.some(o => foldVi(o.textContent) === q || foldVi(o.textContent.split(' · ')[0]) === q)) shown.push({ ...NEW, textContent: typed, isNew: true });
+    active = Math.min(active, Math.max(0, shown.length - 1));
     list.innerHTML = shown.length
-      ? shown.map((o, i) => `<div class="combo-opt ${i === active ? 'active' : ''} ${o.value === sel.value ? 'sel' : ''}" role="option" data-i="${i}">${hl(o.textContent, q)}</div>`).join('')
+      ? shown.map((o, i) => `<div class="combo-opt ${i === active ? 'active' : ''} ${o.value === sel.value ? 'sel' : ''}" role="option" data-i="${i}">${o.isNew ? `${icon('plus')} Thêm mới “<b>${esc(o.textContent)}</b>” (chưa có trong Nhân sự)` : hl(o.textContent, q)}</div>`).join('')
         + (all.length > limit ? `<div class="combo-more">… còn ${all.length - limit} người, gõ thêm để lọc</div>` : '')
       : `<div class="combo-more">Không tìm thấy nhân sự chứa “${esc(inp.value.trim())}”</div>`;
     open(true);
   };
   const pick = o => {
+    if (o && o.isNew) {
+      let opt = sel.querySelector('option[value="__new__"]');
+      if (!opt) { opt = new Option('', '__new__'); sel.add(opt); }
+      opt.textContent = o.textContent; sel.dataset.newName = o.textContent;
+      o = opt;
+    } else delete sel.dataset.newName;
     sel.value = o ? o.value : '';
-    inp.value = o ? o.textContent : '';
+    inp.value = o ? (o.value === '__new__' ? `${o.textContent} (thêm mới)` : o.textContent) : '';
     clr.hidden = !o;
     open(false);
     sel.dispatchEvent(new Event('change', { bubbles: true }));
   };
-  const sync = () => { const o = cur(); inp.value = o ? o.textContent : ''; clr.hidden = !o; };
+  const sync = () => { const o = cur() || (sel.value === '__new__' ? sel.querySelector('option[value="__new__"]') : null); inp.value = o ? (o.value === '__new__' ? `${o.textContent} (thêm mới)` : o.textContent) : ''; clr.hidden = !o; };
   sync();
   inp.addEventListener('focus', () => { inp.select(); active = 0; paint(); });
   inp.addEventListener('input', () => { active = 0; if (sel.value) { sel.value = ''; sel.dispatchEvent(new Event('change', { bubbles: true })); } clr.hidden = !inp.value; paint(); });
@@ -308,7 +319,7 @@ function searchSelect(sel, { placeholder = 'Gõ tên hoặc username để tìm�
       if (!list.hidden && shown[active]) { e.preventDefault(); pick(shown[active]); }
     } else if (e.key === 'Escape' && !list.hidden) { e.preventDefault(); e.stopPropagation(); open(false); sync(); }
   });
-  inp.addEventListener('blur', () => setTimeout(() => { if (!wrap.contains(document.activeElement)) { open(false); if (!sel.value && shown.length === 1 && inp.value.trim()) pick(shown[0]); else sync(); } }, 150));
+  inp.addEventListener('blur', () => setTimeout(() => { if (!wrap.contains(document.activeElement)) { open(false); if (!sel.value && shown.length === 1 && !shown[0].isNew && inp.value.trim()) pick(shown[0]); else sync(); } }, 150));
   list.addEventListener('mousedown', e => e.preventDefault());   // giữ focus ở ô nhập
   list.addEventListener('click', e => { const d = e.target.closest('[data-i]'); if (d) pick(shown[+d.dataset.i]); });
   clr.addEventListener('mousedown', e => e.preventDefault());
