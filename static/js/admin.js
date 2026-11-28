@@ -1746,9 +1746,9 @@ async function aPIP(v) {
 }
 
 /* sub admin: xem Document đúng như CTV thấy — nhúng trang Document của CTV (ẩn menu bên đó) */
-function aDocsAsCTV(v) {
+function aDocsAsCTV(v, page = 'docs') {
   store.set('ctv_token_ctv', store.get(TOKEN_KEY));   // dùng chung phiên như nút "Xem trang CTV"
-  v.innerHTML = `<iframe class="embed-ctv" src="/ctv?embed=1#docs" title="Document"></iframe>`;
+  v.innerHTML = `<iframe class="embed-ctv" src="/ctv?embed=1#${page}" title="${page}"></iframe>`;
   v.classList.add('content-embed');
   App.cleanup.push(() => v.classList.remove('content-embed'));
 }
@@ -1772,7 +1772,9 @@ App.start({
     { group: 'Hệ thống', items: [
       { id: 'users', roles: ['subadmin'], label: 'Nhân sự', icon: 'users', render: aUsers },
       { id: 'catalog', roles: ['subadmin'], label: 'Danh mục', icon: 'grid', render: aCatalog },
-      { id: 'docs', roles: ['subadmin'], label: 'Document', icon: 'book', render: v => App.user.role === 'subadmin' ? aDocsAsCTV(v) : aDocs(v) },
+      { id: 'handbook', only: ['subadmin'], label: 'Cẩm nang', icon: 'book', render: v => aDocsAsCTV(v, 'handbook') },
+      { id: 'crm', only: ['subadmin'], label: 'Thao tác ở CRM', icon: 'video', render: v => aDocsAsCTV(v, 'crm') },
+      { id: 'docs', roles: ['subadmin'], label: 'Document', icon: 'file', render: v => App.user.role === 'subadmin' ? aDocsAsCTV(v) : aDocs(v) },
       { id: 'notifications', label: 'Thông báo', icon: 'bell', render: aNotifications },
       { id: 'logs', label: 'Nhật ký hệ thống', icon: 'list', render: aLogs },
     ] },

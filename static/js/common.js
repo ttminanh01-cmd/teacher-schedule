@@ -384,7 +384,8 @@ const App = {
     this.meta = await api('/meta');
     const c = this.config;
     // menu theo vai trò: ở trang Quản trị, sub admin chỉ thấy các mục có roles chứa 'subadmin'
-    const allowed = i => c.role !== 'admin' || user.role === 'admin' || (i.roles || []).includes(user.role);
+    const allowed = i => i.only ? i.only.includes(user.role)   // only: mục riêng cho vai trò đó (admin không thấy)
+      : c.role !== 'admin' || user.role === 'admin' || (i.roles || []).includes(user.role);
     this.nav = c.nav.map(g => ({ ...g, items: g.items.filter(allowed) })).filter(g => g.items.length);
     document.body.innerHTML = `<div class="shell">
       <aside class="sidebar" id="sidebar">
