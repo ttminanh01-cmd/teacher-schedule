@@ -4,6 +4,16 @@
 const posName = id => (App.meta.positions.find(p => p.id === id) || {}).name || '';
 const dowKey = dateStr => ((parseDate(dateStr).getDay() + 6) % 7) + 1; // 1 = T2 … 7 = CN
 
+/* mở trang CTV dưới tên 1 người (chỉ xem) trong tab mới */
+async function viewAsCTV(uid) {
+  const w = window.open('about:blank', '_blank');   // mở ngay khi bấm để trình duyệt không chặn popup
+  try {
+    const r = await api(`/admin/view-as/${uid}`, { method: 'POST' });
+    store.set('ctv_view_' + uid, r.token);
+    if (w) w.location = `/ctv?view=${uid}`; else location.href = `/ctv?view=${uid}`;
+  } catch (e) { if (w) w.close(); toast(e.message, 'error'); }
+}
+
 async function refreshSwapCount() {
   const [list, pip] = await Promise.all([api('/admin/swaps').catch(() => []), api('/admin/pip/unread').catch(() => ({}))]);
   App.setCount('swaps', list.filter(s => s.status === 'pending').length);
@@ -1098,7 +1108,7 @@ async function aUsers(v) {
       { label: 'CCCD', cls: 'mono nowrap', render: u => u.cccd ? esc(u.cccd) : '<span class="muted">—</span>' },
       { label: 'Email', render: u => `<span class="small">${esc(u.email || '—')}</span>` },
       { label: 'Mức lương', cls: 'right nowrap', render: u => u.hourly_rate ? `<b>${money(u.hourly_rate)}</b><span class="small muted"> /giờ</span>` : `<span class="small muted" title="Chưa đặt mức lương riêng — tính theo đơn giá vị trí">Theo vị trí</span>` },
-      { label: '', cls: 'right nowrap', render: u => `<div class="actions"><button class="btn btn-sm" data-edit="${u.id}">Sửa</button><button class="btn btn-sm" data-reset="${u.id}" title="Đặt lại mật khẩu">Đặt lại MK</button></div>` },
+      { label: '', cls: 'right nowrap', render: u => `<div class="actions"><button class="btn btn-sm" data-edit="${u.id}">Sửa</button><button class="btn btn-sm" data-reset="${u.id}" title="Đặt lại mật khẩu">Đặt lại MK</button>${u.active && u.role === 'ctv' ? `<button class="btn btn-sm" data-viewas="${u.id}" title="Mở trang CTV dưới tên người này (chỉ xem)">Xem như CTV</button>` : ''}</div>` },
     ], { pageSize: 30, empty: tab === 'left' ? 'Chưa có nhân sự nào nghỉ việc' : 'Không có nhân sự nào' });
   };
   const load = async () => { rows = await api('/admin/users'); paint(); };
@@ -1137,6 +1147,7 @@ async function aUsers(v) {
   $('#q').oninput = paint; $('#role').onchange = paint;
   $('#tab').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { tab = b.dataset.t; paint(); } };
   $('#body').addEventListener('click', e => {
+    const va = e.target.closest('[data-viewas]'); if (va) return viewAsCTV(+va.dataset.viewas);
     const ed = e.target.closest('[data-edit]'), rs = e.target.closest('[data-reset]');
     if (ed) form(rows.find(u => u.id === +ed.dataset.edit));
     if (rs) {
@@ -1676,7 +1687,7 @@ async function aPIP(v) {
     const reload = () => showDetail(id);
     v.innerHTML = `<button class="btn btn-ghost btn-sm" id="back" style="margin-bottom:8px">${icon('chevL')} Danh sách QC CTV</button>` +
       pageHead(`${esc(p.name)} <span class="muted" style="font-weight:500;font-size:16px">${esc(p.username)}</span>`, '',
-        `${pipStatusBadge(p.status)}<button class="btn" id="edit-plan">Sửa thông tin</button>
+        `${pipStatusBadge(p.status)}<button class="btn" id="view-as">${icon('external')} Xem như CTV</button><button class="btn" id="edit-plan">Sửa thông tin</button>
          ${p.status === 'active' ? '<button class="btn" id="close-plan">Kết thúc đợt QC</button>' : '<button class="btn" id="reopen">Mở lại</button>'}
          <button class="btn btn-danger" id="del-plan">Xoá</button>`) + `
       <div class="pip-grid"><div>
@@ -1707,6 +1718,7 @@ async function aPIP(v) {
       </div></div>`;
     $('#back').onclick = showList;
     $('#edit-plan').onclick = () => planForm(p, reload);
+    $('#view-as').onclick = () => viewAsCTV(p.user_id);
     $('#close-plan') && ($('#close-plan').onclick = () => closeForm(d, reload));
     $('#reopen') && ($('#reopen').onclick = () => run($('#reopen'), async () => { await api(`/admin/pip/${id}/close`, { method: 'POST', body: { status: 'active' } }); reload(); }));
     $('#del-plan').onclick = async () => {

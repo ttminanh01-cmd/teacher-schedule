@@ -27,7 +27,7 @@ def user_for(token: str) -> dict | None:
     con = db.connect()
     try:
         r = con.execute("SELECT u.id, u.name, u.username, u.role FROM sessions s JOIN users u ON u.id=s.user_id "
-                        "WHERE s.token=? AND s.expires>? AND u.active=1", (token, db.now_str())).fetchone()
+                        "WHERE s.token=? AND s.expires>? AND u.active=1 AND s.viewer_id IS NULL", (token, db.now_str())).fetchone()
     finally:
         con.close()
     u = {"id": r[0], "name": r[1], "username": r[2], "role": r[3]} if r else None

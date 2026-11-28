@@ -335,7 +335,9 @@ const App = {
 
   start(config) {
     this.config = config;
-    TOKEN_KEY = 'ctv_token_' + config.role;
+    // /ctv?view=<id>: admin "xem như CTV" — token riêng cho từng người được xem, không đụng phiên đăng nhập thật
+    this.viewId = config.role === 'ctv' ? new URLSearchParams(location.search).get('view') : null;
+    TOKEN_KEY = this.viewId ? 'ctv_view_' + this.viewId : 'ctv_token_' + config.role;
     let theme = store.get('ctv_theme');
     if (!theme) theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     document.documentElement.dataset.theme = theme;
@@ -349,6 +351,12 @@ const App = {
 
   showLogin() {
     const c = this.config;
+    if (this.viewId) {
+      document.body.innerHTML = `<div class="login"><div class="login-card card card-pad"><h1>Phiên xem đã hết hạn</h1>
+        <p>Quay lại trang Quản trị và bấm <b>Xem như CTV</b> lần nữa (mỗi phiên xem dùng được 2 giờ).</p>
+        <button class="btn btn-block" onclick="window.close()">Đóng tab</button></div></div>`;
+      return;
+    }
     document.body.innerHTML = `<div class="login"><form class="login-card card card-pad" id="login-form">
       <div class="brand"><div class="brand-mark">C</div><div>${c.brand}<small>${c.subtitle}</small></div></div>
       <h1>Đăng nhập</h1><p>${c.loginHint}</p>
@@ -392,6 +400,8 @@ const App = {
       </aside>
       <div class="main">
         <div class="topbar"><button class="btn btn-ghost btn-icon" id="open-nav" aria-label="Mở menu">${icon('menu')}</button>${c.brand}</div>
+        ${user.view_as ? `<div class="view-as">${icon('info')}<div>Đang xem trang của <b>${esc(user.name)}</b> (${esc(user.username)}) — <b>chỉ xem</b>, mọi thao tác gửi / sửa đều bị chặn.
+          CTV không thấy bạn đang xem, thông báo / nhận xét mới của họ vẫn giữ nguyên dấu "mới".</div><button class="btn btn-sm" onclick="window.close()">Đóng</button></div>` : ''}
         <main class="content" id="view"></main>
       </div></div>`;
 
@@ -418,6 +428,7 @@ const App = {
     setInterval(() => { if (document.visibilityState === 'visible') this.refreshNotifCount(); }, 120000);
     this.route();
     c.onEnter && c.onEnter();
+    if (user.view_as) { document.title = `Xem như ${user.username}`; return; }
     this.startPresence();
     if (user.must_change_pw) changePasswordDialog(true);
   },

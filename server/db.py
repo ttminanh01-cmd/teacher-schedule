@@ -134,6 +134,8 @@ def init_db():
 
 def migrate(con):
     """Thêm cột cho DB cũ. Ca nhập từ sheet (đã có bản ghi attendance) coi như đã duyệt."""
+    if "viewer_id" not in {r[1] for r in con.execute("PRAGMA table_info(sessions)")}:
+        con.execute("ALTER TABLE sessions ADD COLUMN viewer_id INTEGER")  # phiên "xem như CTV" do admin mở (chỉ xem)
     if "must_change_pw" not in {r[1] for r in con.execute("PRAGMA table_info(users)")}:
         con.execute("ALTER TABLE users ADD COLUMN must_change_pw INTEGER NOT NULL DEFAULT 0")
         # ai còn dùng mật khẩu mặc định thì bắt đổi ở lần đăng nhập tới

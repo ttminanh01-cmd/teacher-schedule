@@ -101,8 +101,8 @@ function pipReviewCard(r, { admin = false, me = 0 } = {}) {
         <div class="small"><b>${esc(c.author)}</b> <span class="muted">${c.role === 'ctv' ? 'CTV phản hồi' : 'Quản lý trả lời'} · ${fmtDT(c.created_at)}</span>
           ${admin || c.user_id === me ? `<button type="button" class="link-btn" data-del-c="${c.id}">Xoá</button>` : ''}</div>
         ${c.body ? `<div class="pip-text">${esc(c.body)}</div>` : ''}${pipImgs(c.images)}</div>`).join('')}
-      <form class="pip-reply" data-reply="${r.id}"><textarea class="input full" rows="2" placeholder="${admin ? 'Trả lời CTV…' : 'Có ý kiến khác hoặc thấy chưa đúng? Viết phản hồi cho quản lý…'}"></textarea>
-        <div class="pip-reply-f"><div class="paste-box"></div><button class="btn btn-sm btn-primary">Gửi phản hồi</button></div></form>
+      ${App.user && App.user.view_as ? '' : `<form class="pip-reply" data-reply="${r.id}"><textarea class="input full" rows="2" placeholder="${admin ? 'Trả lời CTV…' : 'Có ý kiến khác hoặc thấy chưa đúng? Viết phản hồi cho quản lý…'}"></textarea>
+        <div class="pip-reply-f"><div class="paste-box"></div><button class="btn btn-sm btn-primary">Gửi phản hồi</button></div></form>`}
     </div></div>`;
 }
 

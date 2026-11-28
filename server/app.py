@@ -57,13 +57,16 @@ def month_range(ym: str):
     return first.isoformat(), (nxt - timedelta(days=1)).isoformat()
 
 
-def current_user(authorization: str = Header(default=""), con=Depends(get_con)):
+def current_user(request: Request, authorization: str = Header(default=""), con=Depends(get_con)):
     token = authorization.removeprefix("Bearer ").strip()
     u = row(con.execute(
-        "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1",
+        "SELECT u.*, s.viewer_id AS view_by FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1",
         (token, now_str())))
     if not u:
         err("Phiên đăng nhập đã hết hạn", 401)
+    # phiên "xem như CTV" của admin: chỉ đọc, mọi thao tác ghi bị chặn (trừ thoát)
+    if u["view_by"] and request.method not in ("GET", "HEAD") and request.url.path != "/api/logout":
+        err("Đang ở chế độ xem như CTV: chỉ xem, không thao tác được", 403)
     return u
 
 
@@ -113,7 +116,8 @@ def logout(authorization: str = Header(default=""), u=Depends(current_user), con
     tok = authorization.removeprefix("Bearer ").strip()
     con.execute("DELETE FROM sessions WHERE token=?", (tok,))
     presence.forget(tok)
-    log(con, u, "Đăng xuất")
+    if not u["view_by"]:
+        log(con, u, "Đăng xuất")
     return {"ok": True}
 
 
@@ -133,8 +137,28 @@ def admin_online(u=Depends(admin_user)):
 
 
 @app.get("/api/me")
-def me(u=Depends(current_user)):
-    return public_user(u)
+def me(u=Depends(current_user), con=Depends(get_con)):
+    out = public_user(u)
+    if u["view_by"]:
+        v = con.execute("SELECT name FROM users WHERE id=?", (u["view_by"],)).fetchone()
+        out.update(view_as=v[0] if v else "Quản trị", must_change_pw=0)
+    return out
+
+
+@app.post("/api/admin/view-as/{uid}")
+def view_as(uid: int, u=Depends(admin_user), con=Depends(get_con)):
+    """Admin mở trang CTV dưới tên 1 CTV để xem đúng những gì họ thấy (chỉ xem, hết hạn sau 2 giờ)."""
+    t = row(con.execute("SELECT id, username, active FROM users WHERE id=?", (uid,)))
+    if not t:
+        err("Không tìm thấy nhân sự", 404)
+    if not t["active"]:
+        err("Tài khoản này đang không hoạt động nên không xem được")
+    con.execute("DELETE FROM sessions WHERE viewer_id IS NOT NULL AND expires<?", (now_str(),))
+    token = secrets.token_urlsafe(32)
+    exp = (datetime.now() + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
+    con.execute("INSERT INTO sessions(token, user_id, expires, viewer_id) VALUES (?,?,?,?)", (token, uid, exp, u["id"]))
+    log(con, u, f"Xem trang CTV dưới tên {t['username']} (chỉ xem)")
+    return {"token": token}
 
 
 @app.post("/api/me/password")
@@ -1623,7 +1647,7 @@ def ctv_pip(u=Depends(current_user), con=Depends(get_con)):
             r.pop(k, None)
     for p in plans:
         p["reviews"] = [r for r in revs if r["plan_id"] == p["id"]]
-    if any(r["unread"] for r in revs):
+    if any(r["unread"] for r in revs) and not u["view_by"]:  # admin "xem như CTV" không làm mất dấu "mới" của CTV
         con.execute("UPDATE pip_reviews SET ctv_seen_at=? WHERE user_id=?", (now_str(), u["id"]))
     return plans
 
