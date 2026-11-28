@@ -17,7 +17,7 @@ async function viewAsCTV(uid) {
 async function refreshSwapCount() {
   const [list, pip] = await Promise.all([api('/admin/swaps').catch(() => []), api('/admin/pip/unread').catch(() => ({}))]);
   App.setCount('swaps', list.filter(s => s.status === 'pending').length);
-  App.setCount('pip', pip.unread || 0);
+  App.setCount('qcctv', pip.unread || 0);
 }
 
 /* =========================================================
@@ -1591,7 +1591,7 @@ async function aPIP(v) {
       <div class="filters"><div class="seg" id="tabs"></div><div class="search">${icon('search')}<input class="input" id="q" placeholder="Tìm CTV"></div></div>
       <div class="card" id="body">${loading()}</div>`;
     [plans, users] = await Promise.all([api('/admin/pip'), users.length ? users : api('/admin/users')]);
-    App.setCount('pip', plans.reduce((a, p) => a + p.unread, 0));
+    App.setCount('qcctv', plans.reduce((a, p) => a + p.unread, 0));
     const paint = () => {
       const n = { active: plans.filter(p => p.status === 'active').length };
       n.closed = plans.length - n.active;
@@ -1715,7 +1715,7 @@ async function aPIP(v) {
           ${d.qc.length ? d.qc.map(q => `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><div class="small muted">${fmtDate(q.date)}${q.amount ? ` · <span class="minus">−${money(q.amount)}</span>` : ''}</div><div class="pip-text" style="margin:2px 0">${esc(q.error || '—')}</div></div>`).join('')
             : '<div class="small muted">Không có lỗi QC trong thời gian này.</div>'}</div>
         ${d.history.length ? `<div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Các đợt QC khác</h2>
-          ${d.history.map(h => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0"><a href="#pip" data-hist="${h.id}">${fmtDate(h.start_date)} → ${fmtDate(h.end_date)}</a>${pipStatusBadge(h.status)}</div>`).join('')}</div>` : ''}
+          ${d.history.map(h => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0"><a href="#qcctv" data-hist="${h.id}">${fmtDate(h.start_date)} → ${fmtDate(h.end_date)}</a>${pipStatusBadge(h.status)}</div>`).join('')}</div>` : ''}
       </div></div>`;
     $('#back').onclick = showList;
     $('#edit-plan').onclick = () => planForm(p, reload);
@@ -1755,7 +1755,7 @@ App.start({
       { id: 'availability', roles: ['subadmin'], label: 'Lịch rảnh CTV', icon: 'checkSquare', render: aAvailability },
       { id: 'timesheet', label: 'Chấm công', icon: 'clock', render: aTimesheet },
       { id: 'swaps', label: 'Duyệt đổi ca', icon: 'swap', render: aSwaps },
-      { id: 'pip', roles: ['subadmin'], write: ['subadmin'], label: 'QC CTV', icon: 'target', render: aPIP },
+      { id: 'qcctv', roles: ['subadmin'], write: ['subadmin'], label: 'QC CTV', icon: 'target', render: aPIP },
     ] },
     { group: 'Tài chính', items: [
       { id: 'qc', roles: ['subadmin'], write: ['subadmin'], label: 'Lỗi QC', icon: 'alert', render: aQC },

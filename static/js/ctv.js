@@ -1203,7 +1203,7 @@ async function pagePIP(v) {
   const desc = 'Nhận xét của quản lý sau các ca làm. Nếu thấy nhận xét chưa đúng, bạn có thể phản hồi ngay dưới nhận xét đó.';
   v.innerHTML = pageHead('Nhận xét QC', desc) + loading();
   const plans = await api('/ctv/pip');
-  App.setCount('pip', 0);
+  App.setCount('nhanxetqc', 0);
   if (!plans.length) { v.innerHTML = pageHead('Nhận xét QC', desc) + `<div class="card">${emptyState('Bạn chưa có nhận xét QC nào.')}</div>`; return; }
   v.innerHTML = pageHead('Nhận xét QC', desc) + plans.map(p => `
     <div class="card card-pad" style="margin-bottom:16px">
@@ -1223,9 +1223,9 @@ async function pagePIP(v) {
 
 async function refreshPipNav() {
   const r = await api('/ctv/pip/unread').catch(() => null);
-  const a = $('#nav a[data-id="pip"]');
+  const a = $('#nav a[data-id="nhanxetqc"]');
   if (a && r) a.hidden = !r.has;
-  if (r) App.setCount('pip', r.unread);
+  if (r) App.setCount('nhanxetqc', r.unread);
 }
 
 /* ---------- khởi động ---------- */
@@ -1250,7 +1250,7 @@ App.start({
     { group: 'Cá nhân', items: [
       { id: 'salary', label: 'Tra cứu lương', icon: 'wallet', render: pageSalary },
       { id: 'qc', label: 'Lỗi QC', icon: 'alert', render: pageQC },
-      { id: 'pip', label: 'Nhận xét QC', icon: 'target', render: pagePIP },
+      { id: 'nhanxetqc', label: 'Nhận xét QC', icon: 'target', render: pagePIP },
       { id: 'logs', label: 'Nhật ký hoạt động', icon: 'list', render: pageLogs },
     ] },
   ],

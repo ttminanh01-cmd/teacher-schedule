@@ -478,6 +478,7 @@ const App = {
     if (!this.user || !$('#view')) return;
     this.cleanup.forEach(fn => fn()); this.cleanup = [];
     const items = this.nav.flatMap(g => g.items);
+    if (location.hash === '#pip') history.replaceState(null, '', this.config.role === 'admin' ? '#qcctv' : '#nhanxetqc');   // link cũ
     const item = items.find(i => i.id === location.hash.slice(1)) || items[0];
     $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.id === item.id));
     // sub admin ở mục chỉ xem: ẩn các nút thêm / sửa / xoá (server cũng chặn)

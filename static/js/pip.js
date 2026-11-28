@@ -91,8 +91,11 @@ function pipReviewCard(r, { admin = false, me = 0 } = {}) {
   const shifts = (r.shifts_text || '').split('\n').filter(Boolean);
   return `<div class="pip-review ${r.unread ? 'unread' : ''}" data-rid="${r.id}">
     <div class="pip-review-h">
-      <div class="pip-shifts">${shifts.length ? shifts.map(s => `<span class="badge">${esc(s)}</span>`).join('') : '<span class="badge">Nhận xét chung</span>'}</div>
-      <div class="actions">${r.rating ? `<span class="badge ${PIP_RATING[r.rating] || ''}">${esc(r.rating)}</span>` : ''}${r.unread ? '<span class="badge accent">Mới</span>' : ''}
+      <div class="pip-shifts"><div class="pip-shifts-label">${shifts.length > 1 ? `${shifts.length} ca được nhận xét` : 'Ca được nhận xét'}</div>
+        ${shifts.length ? shifts.map(s => { const [d, ...rest] = s.split(' · ');
+          return `<span class="pip-shift">${icon('calendar')}<b>${esc(d)}</b>${rest.length ? `<span>${esc(rest.join(' · '))}</span>` : ''}</span>`; }).join('')
+          : `<span class="pip-shift general">${icon('message')}<b>Nhận xét chung</b></span>`}</div>
+      <div class="actions">${r.rating ? `<span class="badge pip-rating ${PIP_RATING[r.rating] || ''}">${esc(r.rating)}</span>` : ''}${r.unread ? '<span class="badge accent">Mới</span>' : ''}
         ${admin ? `<button class="btn btn-sm btn-ghost" data-edit-r="${r.id}">Sửa</button><button class="btn btn-sm btn-ghost" data-del-r="${r.id}">Xoá</button>` : ''}</div>
     </div>
     ${r.content ? `<div class="pip-text">${esc(r.content)}</div>` : ''}${pipImgs(r.images)}
