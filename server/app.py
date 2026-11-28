@@ -115,6 +115,8 @@ def login(body: dict = Body(...), con=Depends(get_con)):
     u = row(con.execute("SELECT * FROM users WHERE username=?", (name,)))
     if not u and name and "." not in name:  # CTV gõ "haott" thay vì "ctv.haott"
         u = row(con.execute("SELECT * FROM users WHERE username=?", ("ctv." + name,)))
+    if not u and name.lower().startswith("ctv.") and len(name) > 4:  # gõ "ctv.haott" nhưng tài khoản lưu "haott"
+        u = row(con.execute("SELECT * FROM users WHERE username=?", (name[4:],)))
     if not u or not db.check_pw(body.get("password", ""), u["password_hash"]):
         err("Sai tên đăng nhập hoặc mật khẩu", 401)
     if not u["active"]:
@@ -564,20 +566,33 @@ def save_user(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con
         err("Vui lòng nhập họ tên")
     if fields[1] not in ("ctv", "subadmin", "admin"):
         err("Vai trò không hợp lệ")
+    username = (body.get("username") or "").strip()
+    if not username:
+        err("Vui lòng nhập tên đăng nhập")
+    me = int(body.get("id") or 0)
+    prev = con.execute("SELECT username FROM users WHERE id=?", (me,)).fetchone() if me else None
+    if me and not prev:
+        err("Không tìm thấy tài khoản", 404)
+    changed = not prev or prev[0] != username   # chỉ kiểm tra khi tạo mới / đổi tên, tài khoản cũ giữ nguyên thì không chặn
+    if changed and not re.fullmatch(r"[A-Za-z0-9._@-]{2,60}", username):
+        err("Tên đăng nhập chỉ gồm chữ không dấu, số và . _ - @ (không có dấu cách)")
+    alt = username[4:] if username.lower().startswith("ctv.") else "ctv." + username   # "namcode" và "ctv.namcode" coi là cùng một tên khi đăng nhập
+    clash = con.execute("SELECT username FROM users WHERE (LOWER(username)=LOWER(?) OR LOWER(username)=LOWER(?)) AND id<>?",
+                        (username, alt, me)).fetchone()
+    if changed and clash:
+        err(f"Tên đăng nhập đã tồn tại (trùng với tài khoản {clash[0]})")
     if body.get("id"):
         if int(body["id"]) == u["id"] and (fields[1] != "admin" or not fields[6]):
             err("Không thể tự khoá hoặc hạ quyền chính mình")
-        con.execute("UPDATE users SET name=?, role=?, team_id=?, phone=?, email=?, code=?, active=?, hourly_rate=?, cccd=? WHERE id=?", (*fields, rate, cccd, body["id"]))
+        con.execute("UPDATE users SET username=?, name=?, role=?, team_id=?, phone=?, email=?, code=?, active=?, hourly_rate=?, cccd=? WHERE id=?",
+                    (username, *fields, rate, cccd, body["id"]))
+        if changed:
+            log(con, u, f"Đổi tên đăng nhập {prev[0]} → {username}")
         if not fields[6]:
             con.execute("DELETE FROM sessions WHERE user_id=?", (body["id"],))
         log(con, u, f"Cập nhật tài khoản {body.get('username')}")
     else:
-        username = body.get("username", "").strip()
         pw = body.get("password") or "123456"
-        if not username:
-            err("Vui lòng nhập tên đăng nhập")
-        if con.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
-            err("Tên đăng nhập đã tồn tại")
         con.execute("INSERT INTO users(username, password_hash, name, role, team_id, phone, email, code, active, created_at, hourly_rate, cccd) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                     (username, db.hash_pw(pw), *fields, now_str(), rate, cccd))
         log(con, u, f"Tạo tài khoản {username}")

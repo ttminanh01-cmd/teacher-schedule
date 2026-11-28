@@ -1118,7 +1118,8 @@ async function aUsers(v) {
   const form = u => modal({
     title: u ? `Sửa · ${esc(u.username)}` : 'Thêm tài khoản',
     body: `<form id="uf">
-      <div class="form-row"><div class="field"><label>Tên đăng nhập</label><input class="input" name="username" value="${esc(u?.username || '')}" ${u ? 'disabled' : 'required'}></div>
+      <div class="form-row"><div class="field"><label>Tên đăng nhập</label><input class="input" name="username" value="${esc(u?.username || '')}" required autocomplete="off" placeholder="VD: ctv.namcode hoặc namcode">
+          <span class="hint">Đăng nhập gõ <b>namcode</b> hay <b>ctv.namcode</b> đều được.</span></div>
         <div class="field"><label>Họ tên</label><input class="input" name="name" value="${esc(u?.name || '')}" required></div></div>
       <div class="form-row"><div class="field"><label>Vai trò</label><select class="input" name="role"><option value="ctv">CTV</option><option value="subadmin" ${u?.role === 'subadmin' ? 'selected' : ''}>Sub admin (xem, ghi QC)</option><option value="admin" ${u?.role === 'admin' ? 'selected' : ''}>Quản trị</option></select></div>
         <div class="field"><label>Team</label><select class="input" name="team_id"><option value="">—</option>${App.meta.teams.map(t => `<option value="${t.id}" ${u?.team_id === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div></div>
@@ -1137,7 +1138,7 @@ async function aUsers(v) {
         e.preventDefault(); const f = e.target;
         run(e.submitter, async () => {
           await api('/admin/users', { method: 'POST', body: {
-            id: u?.id, username: u ? u.username : f.username.value, name: f.name.value, role: f.role.value,
+            id: u?.id, username: f.username.value.trim(), name: f.name.value, role: f.role.value,
             team_id: f.team_id.value ? +f.team_id.value : null, phone: f.phone.value, code: f.code.value, email: f.email.value,
             active: u ? f.active.value === '1' : true, password: f.password?.value, hourly_rate: +f.hourly_rate.value || 0, cccd: f.cccd.value,
           } });
