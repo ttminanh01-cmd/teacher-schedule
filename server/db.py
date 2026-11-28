@@ -65,6 +65,25 @@ CREATE TABLE IF NOT EXISTS notification_reads (user_id INTEGER NOT NULL, notific
   PRIMARY KEY (user_id, notification_id));
 CREATE TABLE IF NOT EXISTS logs (
   id INTEGER PRIMARY KEY, user_id INTEGER, actor TEXT NOT NULL, action TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pip_plans (
+  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), status TEXT NOT NULL DEFAULT 'active',
+  reason TEXT DEFAULT '', goals TEXT DEFAULT '', start_date TEXT NOT NULL, end_date TEXT NOT NULL,
+  owner TEXT DEFAULT '', conclusion TEXT DEFAULT '', created_at TEXT NOT NULL, closed_at TEXT);
+CREATE INDEX IF NOT EXISTS ix_pip_user ON pip_plans(user_id);
+CREATE TABLE IF NOT EXISTS pip_reviews (
+  id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL REFERENCES pip_plans(id) ON DELETE CASCADE, user_id INTEGER NOT NULL,
+  schedule_ids TEXT DEFAULT '', shifts_text TEXT DEFAULT '', rating TEXT DEFAULT '', content TEXT DEFAULT '',
+  author TEXT DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  last_admin_at TEXT, last_ctv_at TEXT, ctv_seen_at TEXT, admin_seen_at TEXT);
+CREATE INDEX IF NOT EXISTS ix_pipr_plan ON pip_reviews(plan_id);
+CREATE TABLE IF NOT EXISTS pip_comments (
+  id INTEGER PRIMARY KEY, review_id INTEGER NOT NULL REFERENCES pip_reviews(id) ON DELETE CASCADE,
+  user_id INTEGER, author TEXT NOT NULL, role TEXT NOT NULL, body TEXT DEFAULT '', created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_pipc_review ON pip_comments(review_id);
+CREATE TABLE IF NOT EXISTS pip_images (
+  id INTEGER PRIMARY KEY, review_id INTEGER NOT NULL REFERENCES pip_reviews(id) ON DELETE CASCADE,
+  comment_id INTEGER, mime TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_pipi_review ON pip_images(review_id);
 CREATE TABLE IF NOT EXISTS milo_mails (
   id TEXT PRIMARY KEY, at INTEGER NOT NULL, addrs TEXT NOT NULL, sender TEXT DEFAULT '', subject TEXT DEFAULT '', body TEXT NOT NULL);
 """

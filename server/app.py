@@ -2,6 +2,7 @@
 
 Chạy:  python -m uvicorn server.app:app --reload --port 8000
 """
+import base64
 import json
 import re
 import os
@@ -13,7 +14,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import autoschedule, crm_videos, db, docs, handbook, ican, milo, milo_mail, notify, presence, sheet_sync, yt_videos
@@ -1374,6 +1375,266 @@ def save_qc(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con))
     name = con.execute("SELECT username FROM users WHERE id=?", (uid,)).fetchone()[0]
     log(con, u, f"{'Sửa' if body.get('id') else 'Ghi'} lỗi QC cho {name} ({vals[7]:,}đ)")
     return {"ok": True}
+
+
+# ----- theo dõi CTV (PIP): kế hoạch, nhận xét theo ca, CTV phản hồi, ảnh dán Ctrl+V
+PIP_RATINGS = ("Tốt", "Đạt", "Cần cải thiện", "Chưa đạt")
+PIP_STATUS = {"active": "Đang PIP", "passed": "Đạt", "extended": "Gia hạn", "failed": "Không đạt"}
+PIP_MAX_IMG = 900_000  # ký tự base64 / ảnh (trình duyệt đã thu nhỏ trước khi gửi)
+
+
+def pip_save_images(con, review_id: int, comment_id, images):
+    for x in [x for x in (images or []) if isinstance(x, str)][:8]:
+        m = re.match(r"data:(image/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$", x)
+        if not m:
+            err("Ảnh không hợp lệ")
+        if len(m.group(2)) > PIP_MAX_IMG:
+            err("Ảnh quá lớn (tối đa ~650KB/ảnh)")
+        con.execute("INSERT INTO pip_images(review_id, comment_id, mime, data, created_at) VALUES (?,?,?,?,?)",
+                    (review_id, comment_id, m.group(1), m.group(2), now_str()))
+
+
+def pip_shift_label(s) -> str:
+    dow = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"][date.fromisoformat(s["date"]).weekday()]
+    return f"{dow} {s['date'][8:10]}/{s['date'][5:7]} · {s['shift_name'] or s['shift_code']} {s['start']}–{s['end']}"
+
+
+def pip_reviews(con, plan_ids: list):
+    """Nhận xét (kèm phản hồi + id ảnh) của các kế hoạch, mới nhất trước."""
+    if not plan_ids:
+        return []
+    revs = rows(con.execute(f"SELECT * FROM pip_reviews WHERE plan_id IN ({','.join('?' * len(plan_ids))}) ORDER BY created_at DESC, id DESC", plan_ids))
+    if not revs:
+        return []
+    ids = [r["id"] for r in revs]
+    rq = ",".join("?" * len(ids))
+    coms = rows(con.execute(f"SELECT * FROM pip_comments WHERE review_id IN ({rq}) ORDER BY created_at, id", ids))
+    imgs = rows(con.execute(f"SELECT id, review_id, comment_id FROM pip_images WHERE review_id IN ({rq}) ORDER BY id", ids))
+    for c in coms:
+        c["images"] = [i["id"] for i in imgs if i["comment_id"] == c["id"]]
+    for r in revs:
+        r["schedule_ids"] = [int(x) for x in (r["schedule_ids"] or "").split(",") if x]
+        r["images"] = [i["id"] for i in imgs if i["review_id"] == r["id"] and not i["comment_id"]]
+        r["comments"] = [c for c in coms if c["review_id"] == r["id"]]
+    return revs
+
+
+def pip_plan_or_404(con, pid: int):
+    p = row(con.execute("SELECT p.*, u.username, u.name FROM pip_plans p JOIN users u ON u.id=p.user_id WHERE p.id=?", (pid,)))
+    if not p:
+        err("Không tìm thấy kế hoạch theo dõi", 404)
+    return p
+
+
+PIP_UNREAD_ADMIN = "last_ctv_at IS NOT NULL AND (admin_seen_at IS NULL OR last_ctv_at > admin_seen_at)"
+
+
+@app.get("/api/admin/pip")
+def admin_pip_list(u=Depends(admin_user), con=Depends(get_con)):
+    plans = rows(con.execute("SELECT p.*, u.username, u.name, u.active FROM pip_plans p JOIN users u ON u.id=p.user_id "
+                             "ORDER BY CASE WHEN p.status='active' THEN 0 ELSE 1 END, p.end_date DESC, p.id DESC"))
+    if not plans:
+        return []
+    today = date.today().isoformat()
+    revs = rows(con.execute(f"SELECT plan_id, schedule_ids, created_at, CASE WHEN {PIP_UNREAD_ADMIN} THEN 1 ELSE 0 END AS unread FROM pip_reviews"))
+    lo = min(p["start_date"] for p in plans)
+    sched = rows(con.execute("SELECT id, user_id, date FROM schedules WHERE date BETWEEN ? AND ?", (lo, today)))
+    for p in plans:
+        mine = [r for r in revs if r["plan_id"] == p["id"]]
+        done = {int(x) for r in mine for x in (r["schedule_ids"] or "").split(",") if x}
+        ss = [s for s in sched if s["user_id"] == p["user_id"] and p["start_date"] <= s["date"] <= min(p["end_date"], today)]
+        p["reviews"] = len(mine)
+        p["last_review"] = max((r["created_at"] for r in mine), default=None)
+        p["unread"] = sum(r["unread"] for r in mine)
+        p["shifts"] = len(ss)
+        p["pending"] = sum(1 for s in ss if s["id"] not in done)
+    return plans
+
+
+@app.get("/api/admin/pip/unread")
+def admin_pip_unread(u=Depends(admin_user), con=Depends(get_con)):
+    return {"unread": con.execute(f"SELECT COUNT(*) FROM pip_reviews WHERE {PIP_UNREAD_ADMIN}").fetchone()[0]}
+
+
+@app.post("/api/admin/pip")
+def admin_pip_save(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    sd, ed = (body.get("start_date") or "").strip(), (body.get("end_date") or "").strip()
+    if not sd or not ed or ed < sd:
+        err("Vui lòng chọn thời gian theo dõi hợp lệ")
+    vals = ((body.get("reason") or "").strip(), (body.get("goals") or "").strip(), sd, ed, (body.get("owner") or u["name"]).strip())
+    if body.get("id"):
+        p = pip_plan_or_404(con, int(body["id"]))
+        con.execute("UPDATE pip_plans SET reason=?, goals=?, start_date=?, end_date=?, owner=? WHERE id=?", (*vals, p["id"]))
+        log(con, u, f"Sửa kế hoạch theo dõi của {p['username']}")
+        return {"ok": True, "id": p["id"]}
+    uid = body.get("user_id")
+    target = row(con.execute("SELECT id, username FROM users WHERE id=?", (uid,))) if uid else None
+    if not target:
+        err("Vui lòng chọn CTV")
+    if con.execute("SELECT 1 FROM pip_plans WHERE user_id=? AND status='active'", (uid,)).fetchone():
+        err(f"{target['username']} đang có kế hoạch theo dõi chưa kết thúc")
+    pid = con.execute("INSERT INTO pip_plans(user_id, status, reason, goals, start_date, end_date, owner, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                      (uid, "active", *vals, now_str())).lastrowid
+    log(con, u, f"Đưa {target['username']} vào danh sách theo dõi (PIP) {sd} → {ed}")
+    return {"ok": True, "id": pid}
+
+
+@app.post("/api/admin/pip/{pid}/close")
+def admin_pip_close(pid: int, body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    p = pip_plan_or_404(con, pid)
+    st = body.get("status")
+    if st not in PIP_STATUS:
+        err("Kết quả không hợp lệ")
+    if st == "active":
+        con.execute("UPDATE pip_plans SET status='active', closed_at=NULL WHERE id=?", (pid,))
+    else:
+        con.execute("UPDATE pip_plans SET status=?, conclusion=?, closed_at=? WHERE id=?", (st, (body.get("conclusion") or "").strip(), now_str(), pid))
+    log(con, u, f"Kế hoạch theo dõi của {p['username']}: {PIP_STATUS[st]}")
+    return {"ok": True}
+
+
+def pip_delete_reviews(con, where: str, args):
+    for (rid,) in con.execute(f"SELECT id FROM pip_reviews WHERE {where}", args).fetchall():
+        con.execute("DELETE FROM pip_images WHERE review_id=?", (rid,))
+        con.execute("DELETE FROM pip_comments WHERE review_id=?", (rid,))
+        con.execute("DELETE FROM pip_reviews WHERE id=?", (rid,))
+
+
+@app.delete("/api/admin/pip/{pid}")
+def admin_pip_delete(pid: int, u=Depends(admin_user), con=Depends(get_con)):
+    p = pip_plan_or_404(con, pid)
+    pip_delete_reviews(con, "plan_id=?", (pid,))
+    con.execute("DELETE FROM pip_plans WHERE id=?", (pid,))
+    log(con, u, f"Xoá kế hoạch theo dõi của {p['username']}")
+    return {"ok": True}
+
+
+@app.get("/api/admin/pip/{pid}")
+def admin_pip_detail(pid: int, u=Depends(admin_user), con=Depends(get_con)):
+    p = pip_plan_or_404(con, pid)
+    shifts = rows(con.execute(SCHED_SQL + " WHERE s.user_id=? AND s.date BETWEEN ? AND ? ORDER BY s.date DESC, s.start DESC",
+                              (p["user_id"], p["start_date"], p["end_date"])))
+    revs = pip_reviews(con, [pid])
+    done = {sid for r in revs for sid in r["schedule_ids"]}
+    for s in shifts:
+        s["reviewed"] = s["id"] in done
+        s["label"] = pip_shift_label(s)
+    qc = rows(con.execute("SELECT * FROM qc_errors WHERE user_id=? AND date BETWEEN ? AND ? ORDER BY date DESC",
+                          (p["user_id"], p["start_date"], p["end_date"])))
+    if any(r["last_ctv_at"] and (not r["admin_seen_at"] or r["last_ctv_at"] > r["admin_seen_at"]) for r in revs):
+        con.execute("UPDATE pip_reviews SET admin_seen_at=? WHERE plan_id=?", (now_str(), pid))
+    history = rows(con.execute("SELECT id, status, start_date, end_date FROM pip_plans WHERE user_id=? AND id<>? ORDER BY start_date DESC",
+                               (p["user_id"], pid)))
+    return {"plan": p, "shifts": shifts, "reviews": revs, "qc": qc, "history": history}
+
+
+@app.post("/api/admin/pip/{pid}/reviews")
+def admin_pip_review(pid: int, body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    p = pip_plan_or_404(con, pid)
+    content, rating = (body.get("content") or "").strip(), body.get("rating") or ""
+    if rating and rating not in PIP_RATINGS:
+        err("Đánh giá không hợp lệ")
+    if not content and not body.get("images") and not body.get("keep_images"):
+        err("Vui lòng nhập nhận xét")
+    sids = [int(x) for x in (body.get("schedule_ids") or [])]
+    shifts = rows(con.execute(SCHED_SQL + f" WHERE s.id IN ({','.join('?' * len(sids))}) AND s.user_id=? ORDER BY s.date, s.start",
+                              (*sids, p["user_id"]))) if sids else []
+    sid_txt, label = ",".join(str(s["id"]) for s in shifts), "\n".join(pip_shift_label(s) for s in shifts)
+    now = now_str()
+    if body.get("id"):
+        rid = int(body["id"])
+        if not con.execute("SELECT 1 FROM pip_reviews WHERE id=? AND plan_id=?", (rid, pid)).fetchone():
+            err("Không tìm thấy nhận xét", 404)
+        con.execute("UPDATE pip_reviews SET schedule_ids=?, shifts_text=?, rating=?, content=?, updated_at=?, last_admin_at=? WHERE id=?",
+                    (sid_txt, label, rating, content, now, now, rid))
+        keep = {int(x) for x in (body.get("keep_images") or [])}
+        for (iid,) in con.execute("SELECT id FROM pip_images WHERE review_id=? AND comment_id IS NULL", (rid,)).fetchall():
+            if iid not in keep:
+                con.execute("DELETE FROM pip_images WHERE id=?", (iid,))
+    else:
+        rid = con.execute("INSERT INTO pip_reviews(plan_id, user_id, schedule_ids, shifts_text, rating, content, author, created_at, updated_at, last_admin_at, admin_seen_at) "
+                          "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (pid, p["user_id"], sid_txt, label, rating, content, u["name"], now, now, now, now)).lastrowid
+    pip_save_images(con, rid, None, body.get("images"))
+    log(con, u, f"{'Sửa' if body.get('id') else 'Viết'} nhận xét theo dõi cho {p['username']} ({len(shifts)} ca)")
+    return {"ok": True, "id": rid}
+
+
+@app.delete("/api/admin/pip/reviews/{rid}")
+def admin_pip_review_delete(rid: int, u=Depends(admin_user), con=Depends(get_con)):
+    pip_delete_reviews(con, "id=?", (rid,))
+    log(con, u, f"Xoá nhận xét theo dõi #{rid}")
+    return {"ok": True}
+
+
+def pip_review_access(con, u, rid: int):
+    r = row(con.execute("SELECT * FROM pip_reviews WHERE id=?", (rid,)))
+    if not r or (u["role"] != "admin" and r["user_id"] != u["id"]):
+        err("Không tìm thấy nhận xét", 404)
+    return r
+
+
+@app.post("/api/pip/reviews/{rid}/comments")
+def pip_comment(rid: int, body: dict = Body(...), u=Depends(current_user), con=Depends(get_con)):
+    r = pip_review_access(con, u, rid)
+    text = (body.get("body") or "").strip()
+    if not text and not body.get("images"):
+        err("Vui lòng nhập nội dung phản hồi")
+    side = "ctv" if r["user_id"] == u["id"] else "admin"
+    now = now_str()
+    cid = con.execute("INSERT INTO pip_comments(review_id, user_id, author, role, body, created_at) VALUES (?,?,?,?,?,?)",
+                      (rid, u["id"], u["name"], side, text, now)).lastrowid
+    pip_save_images(con, rid, cid, body.get("images"))
+    if side == "ctv":
+        con.execute("UPDATE pip_reviews SET last_ctv_at=?, ctv_seen_at=? WHERE id=?", (now, now, rid))
+        notify.send_async(f"💬 <b>{notify.esc(u['name'])}</b> ({notify.esc(u['username'])}) phản hồi nhận xét theo dõi CTV:\n"
+                          f"{notify.esc(text[:500])}{' [kèm ảnh]' if body.get('images') else ''}")
+    else:
+        con.execute("UPDATE pip_reviews SET last_admin_at=?, admin_seen_at=? WHERE id=?", (now, now, rid))
+    log(con, u, f"Phản hồi nhận xét theo dõi #{rid}")
+    return {"ok": True}
+
+
+@app.delete("/api/pip/comments/{cid}")
+def pip_comment_delete(cid: int, u=Depends(current_user), con=Depends(get_con)):
+    c = row(con.execute("SELECT * FROM pip_comments WHERE id=?", (cid,)))
+    if not c or (u["role"] != "admin" and c["user_id"] != u["id"]):
+        err("Không tìm thấy phản hồi", 404)
+    con.execute("DELETE FROM pip_images WHERE comment_id=?", (cid,))
+    con.execute("DELETE FROM pip_comments WHERE id=?", (cid,))
+    return {"ok": True}
+
+
+@app.get("/api/pip/images/{iid}")
+def pip_image(iid: int, u=Depends(current_user), con=Depends(get_con)):
+    im = row(con.execute("SELECT i.mime, i.data, r.user_id FROM pip_images i JOIN pip_reviews r ON r.id=i.review_id WHERE i.id=?", (iid,)))
+    if not im or (u["role"] != "admin" and im["user_id"] != u["id"]):
+        err("Không tìm thấy ảnh", 404)
+    return Response(base64.b64decode(im["data"]), media_type=im["mime"], headers={"Cache-Control": "private, max-age=31536000, immutable"})
+
+
+@app.get("/api/ctv/pip")
+def ctv_pip(u=Depends(current_user), con=Depends(get_con)):
+    plans = rows(con.execute("SELECT id, status, reason, goals, start_date, end_date, owner, conclusion, closed_at FROM pip_plans "
+                             "WHERE user_id=? ORDER BY start_date DESC, id DESC", (u["id"],)))
+    revs = pip_reviews(con, [p["id"] for p in plans])
+    for r in revs:
+        r["unread"] = bool(r["last_admin_at"] and (not r["ctv_seen_at"] or r["last_admin_at"] > r["ctv_seen_at"]))
+        for k in ("admin_seen_at", "last_ctv_at", "last_admin_at", "ctv_seen_at"):
+            r.pop(k, None)
+    for p in plans:
+        p["reviews"] = [r for r in revs if r["plan_id"] == p["id"]]
+    if any(r["unread"] for r in revs):
+        con.execute("UPDATE pip_reviews SET ctv_seen_at=? WHERE user_id=?", (now_str(), u["id"]))
+    return plans
+
+
+@app.get("/api/ctv/pip/unread")
+def ctv_pip_unread(u=Depends(current_user), con=Depends(get_con)):
+    if not con.execute("SELECT 1 FROM pip_plans WHERE user_id=? LIMIT 1", (u["id"],)).fetchone():
+        return {"has": False, "unread": 0}
+    n = con.execute("SELECT COUNT(*) FROM pip_reviews WHERE user_id=? AND last_admin_at IS NOT NULL AND (ctv_seen_at IS NULL OR last_admin_at > ctv_seen_at)",
+                    (u["id"],)).fetchone()[0]
+    return {"has": True, "unread": n}
 
 
 @app.delete("/api/admin/qc/{qid}")

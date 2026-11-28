@@ -5,8 +5,9 @@ const posName = id => (App.meta.positions.find(p => p.id === id) || {}).name || 
 const dowKey = dateStr => ((parseDate(dateStr).getDay() + 6) % 7) + 1; // 1 = T2 … 7 = CN
 
 async function refreshSwapCount() {
-  const list = await api('/admin/swaps').catch(() => []);
+  const [list, pip] = await Promise.all([api('/admin/swaps').catch(() => []), api('/admin/pip/unread').catch(() => ({}))]);
   App.setCount('swaps', list.filter(s => s.status === 'pending').length);
+  App.setCount('pip', pip.unread || 0);
 }
 
 /* =========================================================
@@ -1532,6 +1533,205 @@ async function aLogs(v) {
   $('#q').oninput = paint; paint();
 }
 
+/* =========================================================
+   Theo dõi CTV (PIP)
+   ========================================================= */
+async function aPIP(v) {
+  let tab = 'active', plans = [], users = [];
+  const daysLeft = p => Math.round((parseDate(p.end_date) - parseDate(todayStr())) / 864e5);
+  const pct = p => { const all = (parseDate(p.end_date) - parseDate(p.start_date)) / 864e5 + 1, gone = (parseDate(todayStr()) - parseDate(p.start_date)) / 864e5 + 1;
+    return Math.max(0, Math.min(100, Math.round(gone / all * 100))); };
+
+  /* ----- form kế hoạch (thêm / sửa) */
+  const planForm = (p, after) => modal({
+    title: p ? `Sửa kế hoạch theo dõi · ${esc(p.username)}` : 'Đưa CTV vào danh sách theo dõi (PIP)', wide: true,
+    body: `<form id="pf">
+      ${p ? '' : `<div class="field"><label>CTV</label><select class="input" name="user_id" required><option value="">— Chọn CTV —</option>
+        ${users.filter(u => u.active && u.role === 'ctv').map(u => `<option value="${u.id}">${esc(u.username)} · ${esc(u.name)}</option>`).join('')}</select></div>`}
+      <div class="form-row"><div class="field"><label>Từ ngày</label><input class="input" type="date" name="start_date" value="${p ? p.start_date : todayStr()}" required></div>
+        <div class="field"><label>Đến ngày</label><input class="input" type="date" name="end_date" value="${p ? p.end_date : ymd(addDays(new Date(), 13))}" required>
+          <div class="seg" id="pf-len" style="margin-top:6px"><button type="button" data-d="7">1 tuần</button><button type="button" data-d="14">2 tuần</button><button type="button" data-d="30">1 tháng</button></div></div></div>
+      <div class="field"><label>Lý do đưa vào theo dõi</label><textarea class="input" name="reason" rows="3" placeholder="VD: 3 lỗi QC trong tuần, chậm phản hồi khách…">${esc(p ? p.reason : '')}</textarea></div>
+      <div class="field"><label>Mục tiêu cần đạt <span class="muted small">(mỗi dòng 1 mục tiêu)</span></label><textarea class="input" name="goals" rows="4" placeholder="Không có lỗi QC nặng trong 2 tuần&#10;Phản hồi khách trong 5 phút&#10;Đúng giờ vào ca">${esc(p ? p.goals : '')}</textarea></div>
+      <div class="field"><label>Người phụ trách</label><input class="input" name="owner" value="${esc(p ? p.owner : App.user.name)}"></div>
+      <p class="small muted">CTV sẽ thấy mục <b>Theo dõi &amp; nhận xét</b> trên trang của mình: xem kế hoạch, các nhận xét theo ca và gửi phản hồi.</p>
+      <button class="btn btn-primary btn-block">${p ? 'Lưu' : 'Bắt đầu theo dõi'}</button></form>`,
+    onOpen(el, close) {
+      const f = $('#pf', el);
+      if (!p) searchSelect(f.user_id, { placeholder: 'Gõ tên / username CTV…' });
+      $('#pf-len', el).onclick = e => { const b = e.target.closest('[data-d]'); if (b) f.end_date.value = ymd(addDays(parseDate(f.start_date.value || todayStr()), +b.dataset.d - 1)); };
+      f.onsubmit = e => {
+        e.preventDefault();
+        run(e.submitter, async () => {
+          if (!p && !f.user_id.value) throw new Error('Vui lòng chọn CTV trong danh sách gợi ý');
+          const r = await api('/admin/pip', { method: 'POST', body: { id: p && p.id, user_id: p ? undefined : +f.user_id.value,
+            start_date: f.start_date.value, end_date: f.end_date.value, reason: f.reason.value, goals: f.goals.value, owner: f.owner.value } });
+          close(); toast(p ? 'Đã lưu kế hoạch' : 'Đã đưa vào danh sách theo dõi'); after(r.id);
+        });
+      };
+    },
+  });
+
+  /* ----- danh sách */
+  const showList = async () => {
+    v.innerHTML = pageHead('Theo dõi CTV', 'CTV trong kế hoạch cải thiện (PIP): admin nhận xét sau mỗi ca hoặc vài ca, CTV xem được và phản hồi lại nếu thấy chưa đúng.',
+      `<button class="btn btn-primary" id="add">${icon('plus')} Đưa CTV vào PIP</button>`) + `
+      <div class="filters"><div class="seg" id="tabs"></div><div class="search">${icon('search')}<input class="input" id="q" placeholder="Tìm CTV"></div></div>
+      <div class="card" id="body">${loading()}</div>`;
+    [plans, users] = await Promise.all([api('/admin/pip'), users.length ? users : api('/admin/users')]);
+    App.setCount('pip', plans.reduce((a, p) => a + p.unread, 0));
+    const paint = () => {
+      const n = { active: plans.filter(p => p.status === 'active').length };
+      n.closed = plans.length - n.active;
+      $('#tabs').innerHTML = [['active', 'Đang theo dõi'], ['closed', 'Đã kết thúc'], ['all', 'Tất cả']]
+        .map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'active' : ''}">${l} <span class="n">${k === 'all' ? plans.length : n[k]}</span></button>`).join('');
+      const q = foldVi($('#q').value.trim());
+      const list = plans.filter(p => (tab === 'all' || (tab === 'active') === (p.status === 'active')) && (!q || foldVi(`${p.username} ${p.name}`).includes(q)));
+      dataTable($('#body'), list, [
+        { label: 'CTV', render: p => `<b>${esc(p.username)}</b><br><span class="small muted">${esc(p.name)}</span>` },
+        { label: 'Trạng thái', render: p => pipStatusBadge(p.status) },
+        { label: 'Thời gian', render: p => `<span class="nowrap">${fmtDM(p.start_date)} → ${fmtDM(p.end_date)}</span>${p.status === 'active'
+            ? `<div class="small ${daysLeft(p) < 0 ? 'minus' : 'muted'}">${daysLeft(p) < 0 ? `quá hạn ${-daysLeft(p)} ngày` : `còn ${daysLeft(p)} ngày`}</div><div class="pip-progress"><i style="width:${pct(p)}%"></i></div>` : ''}` },
+        { label: 'Ca đã làm', render: p => `${p.shifts} ca${p.pending ? `<br><span class="badge amber">${p.pending} ca chưa nhận xét</span>` : ''}` },
+        { label: 'Nhận xét', render: p => `${p.reviews}${p.last_review ? `<div class="small muted">gần nhất ${fmtDate(p.last_review.slice(0, 10))}</div>` : ''}` },
+        { label: 'Phản hồi CTV', render: p => p.unread ? `<span class="badge red">${p.unread} mới</span>` : '<span class="muted">—</span>' },
+        { label: '', cls: 'right', render: p => `<button class="btn btn-sm" data-open="${p.id}">Mở</button>` },
+      ], { pageSize: 30, empty: tab === 'active' ? 'Chưa có CTV nào đang theo dõi' : 'Không có dữ liệu' });
+    };
+    $('#tabs').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { tab = b.dataset.t; paint(); } };
+    $('#q').oninput = paint;
+    $('#add').onclick = () => planForm(null, id => showDetail(id));
+    $('#body').addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) showDetail(+b.dataset.open); });
+    paint();
+  };
+
+  /* ----- form nhận xét: chọn 1 / nhiều ca, đánh giá, nội dung + ảnh */
+  const reviewForm = (d, r, preselect, after) => {
+    const today = todayStr();
+    const own = new Set(r ? r.schedule_ids : []);
+    const shifts = d.shifts.filter(s => s.date <= today || own.has(s.id));
+    const sel = new Set(r ? r.schedule_ids : preselect);
+    modal({
+      title: `${r ? 'Sửa nhận xét' : 'Nhận xét'} · ${esc(d.plan.username)}`, wide: true,
+      body: `<form id="rf">
+        <div class="field"><label>Ca được nhận xét <span class="muted small">(chọn 1 hoặc nhiều ca; bỏ trống = nhận xét chung)</span></label>
+          ${shifts.length ? `<div class="pip-shift-list">${shifts.map(s => `<label><input type="checkbox" name="sid" value="${s.id}" ${sel.has(s.id) ? 'checked' : ''}>
+            <span>${esc(s.label)}</span>${s.reviewed && !own.has(s.id) ? '<span class="badge green">đã nhận xét</span>' : ''}</label>`).join('')}</div>`
+            : '<div class="small muted">CTV chưa có ca nào trong thời gian theo dõi.</div>'}</div>
+        <div class="field"><label>Đánh giá</label><div class="seg" id="rf-rate">${Object.keys(PIP_RATING).map(k => `<button type="button" data-r="${k}" class="${r && r.rating === k ? 'active' : ''}">${k}</button>`).join('')}</div></div>
+        <div class="field"><label>Nhận xét</label><textarea class="input" name="content" rows="6" placeholder="Điểm làm tốt, điểm cần cải thiện, ví dụ cụ thể… (dán ảnh chụp màn hình bằng Ctrl+V)">${esc(r ? r.content : '')}</textarea>
+          <div id="rf-img"></div></div>
+        <button class="btn btn-primary btn-block">${r ? 'Lưu' : 'Gửi nhận xét'}</button></form>`,
+      onOpen(el, close) {
+        const f = $('#rf', el);
+        let rating = r ? r.rating : '';
+        const pb = imagePaste($('#rf-img', el), f.content, r ? r.images : []);
+        $('#rf-rate', el).onclick = e => {
+          const b = e.target.closest('[data-r]'); if (!b) return;
+          rating = rating === b.dataset.r ? '' : b.dataset.r;
+          $$('#rf-rate button', el).forEach(x => x.classList.toggle('active', x.dataset.r === rating));
+        };
+        f.onsubmit = e => {
+          e.preventDefault();
+          run(e.submitter, async () => {
+            if (!f.content.value.trim() && !pb.count()) throw new Error('Vui lòng nhập nhận xét');
+            await api(`/admin/pip/${d.plan.id}/reviews`, { method: 'POST', body: { id: r && r.id, rating, content: f.content.value,
+              schedule_ids: $$('input[name=sid]:checked', el).map(x => +x.value), images: pb.images(), keep_images: pb.keep() } });
+            close(); toast(r ? 'Đã lưu nhận xét' : 'Đã gửi nhận xét — CTV sẽ thấy trên trang của mình'); after();
+          });
+        };
+      },
+    });
+  };
+
+  /* ----- kết thúc PIP */
+  const closeForm = (d, after) => modal({
+    title: `Kết thúc theo dõi · ${esc(d.plan.username)}`,
+    body: `<form id="cf"><div class="field"><label>Kết quả</label><div class="seg" id="cf-st">
+        <button type="button" data-s="passed">Đạt</button><button type="button" data-s="extended">Gia hạn</button><button type="button" data-s="failed">Không đạt</button></div></div>
+      <div class="field"><label>Kết luận</label><textarea class="input" name="conclusion" rows="4" placeholder="Nhận xét tổng kết — CTV sẽ xem được">${esc(d.plan.conclusion || '')}</textarea></div>
+      <p class="small muted">Chọn <b>Gia hạn</b> rồi tạo kế hoạch mới nếu muốn theo dõi tiếp.</p>
+      <button class="btn btn-primary btn-block">Lưu kết quả</button></form>`,
+    onOpen(el, close) {
+      const f = $('#cf', el); let st = '';
+      $('#cf-st', el).onclick = e => { const b = e.target.closest('[data-s]'); if (!b) return; st = b.dataset.s; $$('#cf-st button', el).forEach(x => x.classList.toggle('active', x === b)); };
+      f.onsubmit = e => {
+        e.preventDefault();
+        run(e.submitter, async () => {
+          if (!st) throw new Error('Vui lòng chọn kết quả');
+          await api(`/admin/pip/${d.plan.id}/close`, { method: 'POST', body: { status: st, conclusion: f.conclusion.value } });
+          close(); toast('Đã lưu kết quả'); after();
+        });
+      };
+    },
+  });
+
+  /* ----- chi tiết 1 kế hoạch */
+  const showDetail = async id => {
+    v.innerHTML = loading();
+    window.scrollTo(0, 0);
+    const d = await api(`/admin/pip/${id}`), p = d.plan, today = todayStr();
+    refreshSwapCount();
+    const pending = d.shifts.filter(s => !s.reviewed && s.date <= today);
+    const reload = () => showDetail(id);
+    v.innerHTML = `<button class="btn btn-ghost btn-sm" id="back" style="margin-bottom:8px">${icon('chevL')} Danh sách theo dõi</button>` +
+      pageHead(`${esc(p.name)} <span class="muted" style="font-weight:500;font-size:16px">${esc(p.username)}</span>`, '',
+        `${pipStatusBadge(p.status)}<button class="btn" id="edit-plan">Sửa kế hoạch</button>
+         ${p.status === 'active' ? '<button class="btn" id="close-plan">Kết thúc PIP</button>' : '<button class="btn" id="reopen">Mở lại</button>'}
+         <button class="btn btn-danger" id="del-plan">Xoá</button>`) + `
+      <div class="pip-grid"><div>
+        <div class="card card-pad" style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <h2 style="font-size:15px">Ca chưa nhận xét <span class="badge ${pending.length ? 'amber' : 'green'}">${pending.length}</span></h2>
+            <div class="actions"><button class="btn btn-sm" id="rev-general">Nhận xét chung</button><button class="btn btn-sm btn-primary" id="rev-sel" ${pending.length ? '' : 'disabled'}>${icon('plus')} Nhận xét ca đã chọn</button></div></div>
+          ${pending.length ? `<div class="pip-shift-list" id="pend">${pending.map(s => `<label><input type="checkbox" value="${s.id}"><span>${esc(s.label)}</span></label>`).join('')}</div>
+            <div class="small muted" style="margin-top:6px">Tick 1 ca hoặc gộp 3–4 ca rồi nhận xét một lần.</div>`
+            : `<div class="small muted">${d.shifts.length ? 'Đã nhận xét hết các ca đã làm.' : 'CTV chưa có ca nào trong thời gian theo dõi.'}</div>`}
+        </div>
+        <h2 style="font-size:15px;margin:4px 0 10px">Nhận xét &amp; phản hồi (${d.reviews.length})</h2>
+        <div id="reviews">${d.reviews.length ? d.reviews.map(r => pipReviewCard({ ...r, unread: !!(r.last_ctv_at && (!r.admin_seen_at || r.last_ctv_at > r.admin_seen_at)) }, { admin: true, me: App.user.id })).join('')
+          : `<div class="card">${emptyState('Chưa có nhận xét nào')}</div>`}</div>
+      </div>
+      <div class="pip-side">
+        <div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Kế hoạch</h2><dl class="pip-dl">
+          <dt>Thời gian</dt><dd>${fmtDate(p.start_date)} → ${fmtDate(p.end_date)}${p.status === 'active' ? `<div class="pip-progress"><i style="width:${pct(p)}%"></i></div>` : ''}</dd>
+          <dt>Phụ trách</dt><dd>${esc(p.owner || '—')}</dd>
+          <dt>Lý do</dt><dd>${esc(p.reason || '—')}</dd>
+          <dt>Mục tiêu</dt><dd style="white-space:normal">${pipGoals(p.goals)}</dd>
+          ${p.status !== 'active' ? `<dt>Kết luận</dt><dd>${esc(p.conclusion || '—')}</dd>` : ''}</dl></div>
+        <div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Lỗi QC trong kỳ <span class="badge ${d.qc.length ? 'red' : ''}">${d.qc.length}</span></h2>
+          ${d.qc.length ? d.qc.map(q => `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><div class="small muted">${fmtDate(q.date)}${q.amount ? ` · <span class="minus">−${money(q.amount)}</span>` : ''}</div><div class="pip-text" style="margin:2px 0">${esc(q.error || '—')}</div></div>`).join('')
+            : '<div class="small muted">Không có lỗi QC trong thời gian này.</div>'}</div>
+        ${d.history.length ? `<div class="card card-pad"><h2 style="font-size:15px;margin-bottom:10px">Các lần theo dõi khác</h2>
+          ${d.history.map(h => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0"><a href="#pip" data-hist="${h.id}">${fmtDate(h.start_date)} → ${fmtDate(h.end_date)}</a>${pipStatusBadge(h.status)}</div>`).join('')}</div>` : ''}
+      </div></div>`;
+    $('#back').onclick = showList;
+    $('#edit-plan').onclick = () => planForm(p, reload);
+    $('#close-plan') && ($('#close-plan').onclick = () => closeForm(d, reload));
+    $('#reopen') && ($('#reopen').onclick = () => run($('#reopen'), async () => { await api(`/admin/pip/${id}/close`, { method: 'POST', body: { status: 'active' } }); reload(); }));
+    $('#del-plan').onclick = async () => {
+      if (!(await confirmDialog('Xoá kế hoạch theo dõi?', 'Toàn bộ nhận xét, phản hồi và ảnh của kế hoạch này sẽ bị xoá.', 'Xoá', true))) return;
+      run(null, async () => { await api(`/admin/pip/${id}`, { method: 'DELETE' }); toast('Đã xoá'); showList(); });
+    };
+    $('#rev-sel').onclick = () => {
+      const ids = $$('#pend input:checked').map(x => +x.value);
+      if (!ids.length) return toast('Tick chọn ít nhất 1 ca', 'error');
+      reviewForm(d, null, ids, reload);
+    };
+    $('#rev-general').onclick = () => reviewForm(d, null, [], reload);
+    $$('[data-hist]').forEach(a => a.onclick = e => { e.preventDefault(); showDetail(+a.dataset.hist); });
+    const rv = $('#reviews');
+    $$('[data-edit-r]', rv).forEach(b => b.onclick = () => reviewForm(d, d.reviews.find(r => r.id === +b.dataset.editR), [], reload));
+    $$('[data-del-r]', rv).forEach(b => b.onclick = async () => {
+      if (!(await confirmDialog('Xoá nhận xét này?', 'Phản hồi của CTV và ảnh kèm theo cũng bị xoá.', 'Xoá', true))) return;
+      run(null, async () => { await api(`/admin/pip/reviews/${b.dataset.delR}`, { method: 'DELETE' }); reload(); });
+    });
+    bindPipThreads(rv, reload);
+  };
+
+  showList();
+}
+
 /* ---------- khởi động ---------- */
 App.start({
   role: 'admin', brand: 'Cổng CTV', subtitle: 'Quản trị', loginHint: 'Khu vực dành cho quản lý.',
@@ -1542,6 +1742,7 @@ App.start({
       { id: 'availability', label: 'Lịch rảnh CTV', icon: 'checkSquare', render: aAvailability },
       { id: 'timesheet', label: 'Chấm công', icon: 'clock', render: aTimesheet },
       { id: 'swaps', label: 'Duyệt đổi ca', icon: 'swap', render: aSwaps },
+      { id: 'pip', label: 'Theo dõi CTV', icon: 'target', render: aPIP },
     ] },
     { group: 'Tài chính', items: [
       { id: 'qc', label: 'Lỗi QC', icon: 'alert', render: aQC },
