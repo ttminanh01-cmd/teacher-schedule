@@ -538,8 +538,12 @@ def admin_dashboard(day: str | None = None, u=Depends(admin_user), con=Depends(g
 # ----- nhân sự
 @app.get("/api/admin/users")
 def list_users(u=Depends(admin_user), con=Depends(get_con)):
-    return rows(con.execute("""SELECT u.id, u.username, u.name, u.role, u.team_id, u.phone, u.email, u.code, u.active, u.created_at, u.hourly_rate, u.cccd, t.name AS team
+    out = rows(con.execute("""SELECT u.id, u.username, u.name, u.role, u.team_id, u.phone, u.email, u.code, u.active, u.created_at, u.hourly_rate, u.cccd, t.name AS team
         FROM users u LEFT JOIN teams t ON t.id=u.team_id ORDER BY u.role, u.username"""))
+    if u["role"] == "subadmin":  # sub admin không xem mức lương ở Nhân sự
+        for x in out:
+            x.pop("hourly_rate", None)
+    return out
 
 
 @app.post("/api/admin/users")

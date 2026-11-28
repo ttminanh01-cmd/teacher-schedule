@@ -1107,7 +1107,7 @@ async function aUsers(v) {
       { label: 'Mã CTV · Team', cls: 'nowrap', render: u => `${esc(u.code || '—')}<br><span class="small muted">${esc(u.team || '')}</span>` },
       { label: 'CCCD', cls: 'mono nowrap', render: u => u.cccd ? esc(u.cccd) : '<span class="muted">—</span>' },
       { label: 'Email', render: u => `<span class="small">${esc(u.email || '—')}</span>` },
-      { label: 'Mức lương', cls: 'right nowrap', render: u => u.hourly_rate ? `<b>${money(u.hourly_rate)}</b><span class="small muted"> /giờ</span>` : `<span class="small muted" title="Chưa đặt mức lương riêng — tính theo đơn giá vị trí">Theo vị trí</span>` },
+      ...(App.user.role === 'subadmin' ? [] : [{ label: 'Mức lương', cls: 'right nowrap', render: u => u.hourly_rate ? `<b>${money(u.hourly_rate)}</b><span class="small muted"> /giờ</span>` : `<span class="small muted" title="Chưa đặt mức lương riêng — tính theo đơn giá vị trí">Theo vị trí</span>` }]),
       { label: '', cls: 'right nowrap', render: u => `<div class="actions"><button class="btn btn-sm" data-edit="${u.id}">Sửa</button><button class="btn btn-sm" data-reset="${u.id}" title="Đặt lại mật khẩu">Đặt lại MK</button>${u.active && u.role === 'ctv' ? `<button class="btn btn-sm" data-viewas="${u.id}" title="Mở trang CTV dưới tên người này (chỉ xem)">Xem như CTV</button>` : ''}</div>` },
     ], { pageSize: 30, empty: tab === 'left' ? 'Chưa có nhân sự nào nghỉ việc' : 'Không có nhân sự nào' });
   };
