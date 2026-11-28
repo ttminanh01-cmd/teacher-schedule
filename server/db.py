@@ -84,6 +84,10 @@ CREATE TABLE IF NOT EXISTS pip_images (
   id INTEGER PRIMARY KEY, review_id INTEGER NOT NULL REFERENCES pip_reviews(id) ON DELETE CASCADE,
   comment_id INTEGER, mime TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_pipi_review ON pip_images(review_id);
+CREATE TABLE IF NOT EXISTS hb_edits (
+  id INTEGER PRIMARY KEY, sheet TEXT NOT NULL, gid TEXT NOT NULL, op TEXT NOT NULL, rown INTEGER NOT NULL,
+  old TEXT, vals TEXT, status TEXT NOT NULL DEFAULT 'pending', msg TEXT, user_name TEXT, created_at TEXT NOT NULL, done_at TEXT);
+CREATE INDEX IF NOT EXISTS ix_hbe_status ON hb_edits(status);
 CREATE TABLE IF NOT EXISTS qc_comments (
   id INTEGER PRIMARY KEY, qc_id INTEGER NOT NULL REFERENCES qc_errors(id) ON DELETE CASCADE,
   user_id INTEGER, author TEXT NOT NULL, role TEXT NOT NULL, body TEXT DEFAULT '', created_at TEXT NOT NULL);

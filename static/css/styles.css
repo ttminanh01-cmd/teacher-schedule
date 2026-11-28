@@ -726,3 +726,12 @@ body.ro-page [data-edit-s] { pointer-events: none; }
 /* ---------- phản hồi lỗi QC ---------- */
 .qc-sum { background: var(--surface-2); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
 .btn.btn-reply-new { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+
+/* ---------- sửa Cẩm nang trên web ---------- */
+.hb-bar-r { display: flex; align-items: center; gap: 10px; }
+.hb-table .hb-ed { width: 1%; padding: 6px 4px; text-align: center; }
+.hb-table .hb-ed .btn { padding: 0 6px; color: var(--muted); }
+.hb-table .hb-ed .btn:hover { color: var(--accent); }
+.hb-pending { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 8px 12px; margin-bottom: 8px; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent); }
+.hb-pending.warn { background: rgba(217, 119, 6, .12); color: #b45309; }
+.hb-pending .ico, .hb-pending svg { flex: none; }

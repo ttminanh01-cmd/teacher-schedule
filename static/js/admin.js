@@ -1245,7 +1245,7 @@ async function aHandbook(v) {
   const desc = 'Trang Cẩm nang của CTV đọc trực tiếp từ Google Sheet và tự cập nhật mỗi 5 phút.';
   v.innerHTML = loading();
   const d = await api('/admin/handbook');
-  v.innerHTML = docHead(desc, `<a class="btn btn-sm" href="/ctv#handbook" target="_blank" rel="noopener">${icon('external')} Xem như CTV</a>`) + `
+  v.innerHTML = docHead(desc, `<button type="button" class="btn btn-sm" id="hb-open">${icon('edit')} Xem / sửa nội dung</button>`) + `
     <form class="card card-pad" id="hb-form">
       <div class="field"><label for="hb-sheet">Link Google Sheet</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="input" style="flex:1;min-width:260px" id="hb-sheet" value="${esc(d.sheet_url)}">
@@ -1254,6 +1254,7 @@ async function aHandbook(v) {
       ${d.error ? `<p style="margin-bottom:14px"><span class="badge red">${esc(d.error)}</span></p>` : ''}
       <details style="margin-bottom:16px" ${d.push.data_at ? '' : 'open'}><summary style="cursor:pointer"><b>Sheet chỉ chia sẻ trong công ty? Cài Apps Script để tự gửi sang portal</b> ${d.push.data_at ? '<span class="badge green">Đã cài</span>' : '<span class="muted small">(cài 1 lần)</span>'}</summary>
         ${d.push.data_at ? `<p class="small" style="margin:8px 0">Dữ liệu sheet nhận lúc <b>${hm(d.push.data_at)} ${fmtDate(d.push.data_at.slice(0, 10))}</b>${d.push.seen_at ? ` · Apps Script gửi kiểm tra gần nhất lúc ${hm(d.push.seen_at)} ${fmtDate(d.push.seen_at.slice(0, 10))}` : ''}. Sửa sheet là portal cập nhật gần như ngay (chậm nhất ~1 phút). Bản cài trước ngày 25/11 kiểm tra 10 phút/lần — sao chép lại code, dán đè, chạy lại setup để nhanh hơn.</p>` : ''}
+        ${d.push.data_at && !d.push.edit_seen ? '<p style="margin:8px 0"><span class="badge amber">Để sửa Cẩm nang trên web và tự ghi vào sheet: sao chép lại code bên dưới, dán đè, chạy lại setup (tài khoản chạy script cần quyền <b>chỉnh sửa</b> sheet)</span></p>' : ''}
         ${d.push.other_sheet ? '<p style="margin:8px 0"><span class="badge amber">Apps Script đang gửi một sheet khác link ở trên — sao chép lại code bên dưới, dán đè rồi chạy lại setup</span></p>' : ''}
         <ol class="small" style="margin:8px 0 8px 18px;line-height:1.7">
           <li>Đăng nhập Google bằng tài khoản <b>công ty xem được sheet Cẩm nang</b> → mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Dự án mới</a>.</li>
@@ -1278,6 +1279,7 @@ async function aHandbook(v) {
     run(e.submitter, async () => { await api('/admin/handbook', { method: 'PUT', body: { sheet: $('#hb-sheet').value, modes } }); toast('Đã lưu'); aHandbook(v); });
   };
   $('#hb-copy').onclick = () => navigator.clipboard.writeText(d.gas_script).then(() => toast('Đã sao chép code'));
+  $('#hb-open').onclick = () => { store.set('ctv_token_ctv', store.get(TOKEN_KEY)); window.open('/ctv#handbook', '_blank', 'noopener'); };
 }
 
 /* Thao tác ở CRM: dán link Drive (thư mục hoặc từng video) → CTV xem video ngay trên web */

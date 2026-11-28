@@ -58,7 +58,7 @@ def _get(url: str) -> str:
 # Script chạy bằng tài khoản công ty của admin: trigger khi sửa sheet + mỗi 1 phút, chỉ gửi khi có thay đổi,
 # không đổi thì 10 phút gửi "ping" nhẹ 1 lần. Bản nhận được lưu DB (settings.hb_snapshot) + giữ trong bộ nhớ, nên Neon chỉ bị
 # đánh thức khi sheet thực sự đổi (và 1 lần lúc khởi động).
-_snap: dict = {"loaded": False, "data": None, "token": "", "seen": None}
+_snap: dict = {"loaded": False, "data": None, "token": "", "seen": None, "edit_seen": None}
 
 
 def _load_snapshot():
@@ -113,15 +113,120 @@ def receive(con, body: dict) -> dict:
             "tabs": [{"gid": str(t["gid"]), "name": str(t["name"]), "rows": t.get("rows") or [],
                       "links": t.get("links") or []} for t in tabs]}
     db.set_setting(con, "hb_snapshot", json.dumps(data, ensure_ascii=False))
+    if _pending["n"] != 0:
+        for e in pending_edits(con, data["sheet"]):
+            apply_edit(data, e)
     _snap["data"] = data
     clear_cache()
     return {"ok": True, "changed": True, "tabs": len(data["tabs"])}
 
 
+# ----- sửa Cẩm nang trên web → hàng chờ hb_edits → Apps Script (mỗi 1 phút) lấy về ghi vào sheet rồi gửi sheet mới sang.
+# Web hiện thay đổi ngay nhờ áp luôn lên bản lưu trong bộ nhớ; bản sheet gửi sang sau đó cũng được áp lại các thay đổi còn chờ.
+_pending = {"n": None}   # số thay đổi đang chờ (None = chưa biết) — để Apps Script hỏi mỗi phút mà không phải đánh thức database
+
+
+def _same(a, b) -> bool:
+    n = max(len(a), len(b))
+    return all(str(a[i] if i < len(a) else "").strip() == str(b[i] if i < len(b) else "").strip() for i in range(n))
+
+
+def _locate(rows, row, old):
+    if 0 <= row < len(rows) and _same(rows[row], old):
+        return row
+    hits = [i for i, r in enumerate(rows) if _same(r, old)]
+    return min(hits, key=lambda i: abs(i - row)) if hits else -1
+
+
+def apply_edit(data: dict, e: dict) -> bool:
+    """Áp 1 thay đổi lên bản sheet (dạng Apps Script gửi). e: {gid, op, row, old: [...], vals: {cột: chữ}}."""
+    tab = next((t for t in data.get("tabs", []) if t["gid"] == str(e["gid"])), None)
+    if not tab:
+        return False
+    rows, links = tab["rows"], tab.setdefault("links", [])
+    idx = _locate(rows, e["row"], e.get("old") or [])
+    if idx < 0:
+        return False
+    vals = {int(k): v for k, v in (e.get("vals") or {}).items()}
+    if e["op"] == "update":
+        r = rows[idx] = list(rows[idx])
+        for c, v in vals.items():
+            r.extend([""] * (c + 1 - len(r)))
+            r[c] = v
+    elif e["op"] == "insert":
+        width = max((len(r) for r in rows), default=0)
+        r = [""] * max(width, max(vals, default=-1) + 1)
+        for c, v in vals.items():
+            r[c] = v
+        rows.insert(idx + 1, r)
+        tab["links"] = [[a + 1 if a > idx else a, b, x] for a, b, x in links]
+    elif e["op"] == "delete":
+        del rows[idx]
+        tab["links"] = [[a - 1 if a > idx else a, b, x] for a, b, x in links if a != idx]
+    return True
+
+
+def edit_from_row(r) -> dict:
+    return {"id": r["id"], "gid": r["gid"], "op": r["op"], "row": r["rown"],
+            "old": json.loads(r["old"] or "[]"), "vals": json.loads(r["vals"] or "{}")}
+
+
+def pending_edits(con, sheet_id: str) -> list:
+    rs = con.execute("SELECT * FROM hb_edits WHERE status='pending' AND sheet=? ORDER BY id", (sheet_id,)).fetchall()
+    _pending["n"] = len(rs)
+    return [edit_from_row(r) for r in rs]
+
+
+def queue_edit(con, sheet_id: str, e: dict, user_name: str, now: str) -> int:
+    d = snapshot(sheet_id)
+    eid = con.execute("INSERT INTO hb_edits(sheet, gid, op, rown, old, vals, user_name, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                      (sheet_id, str(e["gid"]), e["op"], int(e["row"]), json.dumps(e.get("old") or [], ensure_ascii=False),
+                       json.dumps(e.get("vals") or {}, ensure_ascii=False), user_name, now)).lastrowid
+    if d:
+        apply_edit(d, e)
+    _pending["n"] = (_pending["n"] or 0) + 1
+    clear_cache()
+    return eid
+
+
+def pull_edits(body: dict) -> list:
+    """Apps Script hỏi mỗi phút: có thay đổi nào cần ghi vào sheet không. Không có thì trả lời ngay, không chạm database."""
+    from . import db
+    tok = push_token()
+    if not tok or body.get("token") != tok:
+        raise HandbookError("Sai mã bảo mật")
+    _snap["edit_seen"] = time.time()
+    if _pending["n"] == 0:
+        return []
+    con = db.connect()
+    try:
+        return pending_edits(con, str(body.get("sheet") or ""))
+    finally:
+        con.close()
+
+
+def ack_edits(body: dict, now: str) -> dict:
+    from . import db
+    tok = push_token()
+    if not tok or body.get("token") != tok:
+        raise HandbookError("Sai mã bảo mật")
+    con = db.connect()
+    try:
+        for r in body.get("results") or []:
+            ok = bool(r.get("ok"))
+            con.execute("UPDATE hb_edits SET status=?, msg=?, done_at=? WHERE id=? AND status='pending'",
+                        ("done" if ok else "error", None if ok else str(r.get("msg") or "Lỗi")[:300], now, int(r.get("id") or 0)))
+        con.commit()
+        _pending["n"] = con.execute("SELECT COUNT(*) FROM hb_edits WHERE status='pending'").fetchone()[0]
+    finally:
+        con.close()
+    return {"ok": True}
+
+
 def push_status() -> dict:
     d = snapshot()
     return {"data_at": d["at"] if d else None, "data_sheet": d["sheet"] if d else None,
-            "seen_at": _snap["seen"]}
+            "seen_at": _snap["seen"], "edit_seen": _snap["edit_seen"]}
 
 
 def apps_script(token: str, sheet_id: str, portal: str) -> str:
@@ -152,7 +257,9 @@ function sync() {{
   if (!lock.tryLock(1000)) return;  // đang gửi dở thì bỏ qua, lần sau sẽ bắt kịp
   try {{
     const p = PropertiesService.getScriptProperties(), now = Date.now();
-    const sheets = SpreadsheetApp.openById(SHEET_ID).getSheets();
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    try {{ applyEdits(ss, p); }} catch (err) {{ Logger.log('Ghi thay đổi từ web lỗi: ' + err.message); }}
+    const sheets = ss.getSheets();
     const tabs = sheets.map(sh => ({{ gid: String(sh.getSheetId()), name: sh.getName(), rows: sh.getDataRange().getDisplayValues(), links: [] }}));
     // so nội dung chữ mỗi lần; 30 phút/lần so cả link gắn trong chữ (đọc link chậm hơn)
     const fullCheck = now - Number(p.getProperty('full') || 0) > 30 * 60 * 1000;
@@ -185,6 +292,60 @@ function sync() {{
   }} finally {{
     lock.releaseLock();
   }}
+}}
+
+// ----- thay đổi sửa trên web (Cẩm nang) → ghi vào sheet
+function applyEdits(ss, p) {{
+  const call = (path, body) => UrlFetchApp.fetch(PORTAL.replace('/push', '/edits/' + path),
+    {{ method: 'post', contentType: 'application/json', payload: JSON.stringify(Object.assign({{ token: TOKEN, sheet: SHEET_ID }}, body)), muteHttpExceptions: true }});
+  const res = call('pull', {{}});
+  if (res.getResponseCode() !== 200) return;
+  const list = JSON.parse(res.getContentText()).edits || [];
+  if (!list.length) return;
+  const done = JSON.parse(p.getProperty('edits_done') || '{{}}');   // đã ghi nhưng chưa báo được → không ghi lại lần 2
+  const out = list.map(e => {{
+    if (!done[e.id]) {{
+      try {{ done[e.id] = applyEdit(ss, e); }} catch (err) {{ done[e.id] = {{ id: e.id, ok: false, msg: String(err.message || err) }}; }}
+      p.setProperty('edits_done', JSON.stringify(done));
+    }}
+    return done[e.id];
+  }});
+  if (call('ack', {{ results: out }}).getResponseCode() === 200) p.deleteProperty('edits_done');
+  Logger.log('Đã ghi ' + out.filter(r => r.ok).length + '/' + out.length + ' thay đổi từ web vào sheet');
+}}
+
+function sameRow(a, b) {{
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) if (String(a[i] == null ? '' : a[i]).trim() !== String(b[i] == null ? '' : b[i]).trim()) return false;
+  return true;
+}}
+
+function applyEdit(ss, e) {{
+  const sh = ss.getSheets().find(s => String(s.getSheetId()) === String(e.gid));
+  if (!sh) return {{ id: e.id, ok: false, msg: 'Không thấy tab trong sheet' }};
+  const data = sh.getDataRange().getDisplayValues();
+  let idx = e.row < data.length && sameRow(data[e.row], e.old) ? e.row : -1;
+  if (idx < 0) {{   // sheet đã bị thêm/xoá dòng: tìm dòng có đúng nội dung cũ
+    const hits = []; data.forEach((r, i) => {{ if (sameRow(r, e.old)) hits.push(i); }});
+    if (hits.length) idx = hits.sort((a, b) => Math.abs(a - e.row) - Math.abs(b - e.row))[0];
+  }}
+  if (idx < 0) return {{ id: e.id, ok: false, msg: 'Dòng này đã bị sửa trực tiếp trong sheet nên không ghi đè' }};
+  if (e.op === 'delete') {{ sh.deleteRow(idx + 1); return {{ id: e.id, ok: true }}; }}
+  let target = idx + 1;
+  if (e.op === 'insert') {{ sh.insertRowAfter(idx + 1); target = idx + 2; }}
+  Object.keys(e.vals).forEach(c => writeCell(sh.getRange(target, Number(c) + 1), String(e.vals[c])));
+  return {{ id: e.id, ok: true }};
+}}
+
+// ghi dạng chữ (không bị hiểu thành công thức / số), giữ lại link gắn trong chữ nếu chữ đó vẫn còn
+function writeCell(rg, text) {{
+  if (!text) {{ rg.clearContent(); return; }}
+  const rt = rg.getRichTextValue();
+  const links = rt ? rt.getRuns().filter(x => x.getLinkUrl()).map(x => [x.getText().trim(), x.getLinkUrl()]) : [];
+  if (!links.length && rt && rt.getLinkUrl()) links.push([rt.getText().trim(), rt.getLinkUrl()]);
+  const b = SpreadsheetApp.newRichTextValue().setText(text);
+  links.forEach(([label, url]) => {{ const k = label ? text.indexOf(label) : -1; if (k >= 0) b.setLinkUrl(k, k + label.length, url); }});
+  rg.setRichTextValue(b.build());
 }}
 
 function md5(s) {{
@@ -317,15 +478,22 @@ def fetch_rows(sheet_id: str, gid: str, links: bool = False) -> list[list[str]]:
     return rows
 
 
-def get_tab(sheet_id: str, gid: str, refresh: bool = False):
+def get_tab_full(sheet_id: str, gid: str, refresh: bool = False):
+    """Như get_tab nhưng kèm vị trí gốc trong sheet: pos[i] = số dòng (0 = dòng 1), cols[j] = số cột (0 = cột A)."""
     def load():
-        rows = [[c.strip() for c in r] for r in fetch_rows(sheet_id, gid, links=True)]
-        rows = [r for r in rows if any(r)]
+        allr = [[c.strip() for c in r] for r in fetch_rows(sheet_id, gid, links=True)]
+        pos = [i for i, r in enumerate(allr) if any(r)]
+        rows = [allr[i] for i in pos]
         width = max((max((i + 1 for i, c in enumerate(r) if c), default=0) for r in rows), default=0)
         # bỏ các cột trống hoàn toàn
         keep = [i for i in range(width) if any(i < len(r) and r[i] for r in rows)]
-        return [[r[i] if i < len(r) else "" for i in keep] for r in rows]
+        return {"rows": [[r[i] if i < len(r) else "" for i in keep] for r in rows], "pos": pos, "cols": keep}
     return _cached(f"tab:{sheet_id}:{gid}", load, refresh)
+
+
+def get_tab(sheet_id: str, gid: str, refresh: bool = False):
+    full, ts, warn = get_tab_full(sheet_id, gid, refresh)
+    return full["rows"], ts, warn
 
 
 def get_blocks(sheet_id: str, gid: str, refresh: bool = False):

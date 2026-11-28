@@ -490,7 +490,7 @@ function splitSheet(rows) {
 }
 
 /* Bảng giống file sheet: cột nội dung dài tự rộng hơn, giữ xuống dòng như trong sheet */
-function sheetTableHtml(header, body, q = '') {
+function sheetTableHtml(header, body, q = '', editable = false) {
   const n = header.length;
   const avg = i => { const v = body.map(r => r[i] || '').filter(Boolean); return v.length ? v.reduce((a, s) => a + Math.min(s.length, 600), 0) / v.length : 0; };
   const widths = header.map((_, i) => { const a = avg(i); return a > 150 ? 'w-xl' : a > 60 ? 'w-lg' : a > 20 ? 'w-md' : 'w-sm'; });
@@ -500,19 +500,19 @@ function sheetTableHtml(header, body, q = '') {
     return c.replace(LINK_RE, '$1').length > 80 ? html + `<button class="btn btn-sm btn-ghost hb-copy" data-copy>${icon('copy')} Sao chép</button>` : html;
   };
   return `<div class="table-wrap hb-wrap"><table class="table hb-table">
-    ${header.some(Boolean) ? `<thead><tr>${header.map((c, i) => `<th class="${widths[i]}">${esc(c)}</th>`).join('')}</tr></thead>` : ''}
-    <tbody>${body.map(r => `<tr>${Array.from({ length: n }, (_, i) => `<td class="${widths[i]}">${cell(r[i] || '')}</td>`).join('')}</tr>`).join('')}</tbody>
+    ${header.some(Boolean) ? `<thead><tr>${editable ? '<th class="hb-ed"></th>' : ''}${header.map((c, i) => `<th class="${widths[i]}">${esc(c)}</th>`).join('')}</tr></thead>` : ''}
+    <tbody>${body.map((r, bi) => `<tr>${editable ? `<td class="hb-ed"><button class="btn btn-sm btn-ghost" data-hbedit="${bi}" title="Sửa dòng này" aria-label="Sửa dòng">${icon('edit')}</button></td>` : ''}${Array.from({ length: n }, (_, i) => `<td class="${widths[i]}">${cell(r[i] || '')}</td>`).join('')}</tr>`).join('')}</tbody>
   </table></div>`;
 }
 
 async function pageHandbook(v) {
-  const head = actions => pageHead('Cẩm nang', 'Quy trình, quy định, script và thông tin tra cứu — tự cập nhật theo Google Sheet.', actions);
+  const head = actions => pageHead('Cẩm nang', 'Quy trình, quy định, script và thông tin tra cứu — tự cập nhật theo Google Sheet.' + (STAFF_ROLES.includes(App.user.role) && !App.user.view_as ? ' Quản trị / sub admin bấm ✎ ở đầu dòng để sửa.' : ''), actions);
   v.innerHTML = head('') + loading();
   const idx = await api('/handbook');
   const tabName = g => (idx.tabs.find(t => t.gid === g) || {}).name || '';
   let gid = store.get('hb_tab');
   if (!idx.tabs.some(t => t.gid === gid)) gid = idx.tabs[0] && idx.tabs[0].gid;
-  let parsed = null, limit = 200, q = '', searchSeq = 0;
+  let parsed = null, limit = 200, q = '', searchSeq = 0, cur = null, off = 0;
 
   v.innerHTML = head(`<button class="btn" id="hb-toggle">${icon('menu')} <span>Ẩn danh sách mục</span></button>
       <button class="btn" id="hb-refresh">${icon('refresh')} Làm mới</button><a class="btn" href="${esc(idx.sheet_url)}" target="_blank" rel="noopener">Mở Google Sheet</a>`) + `
@@ -522,7 +522,9 @@ async function pageHandbook(v) {
       <nav class="card hb-nav" id="hb-nav" aria-label="Các mục cẩm nang">${idx.tabs.map(t => `<button data-gid="${t.gid}">${esc(t.name)}</button>`).join('')}</nav>
       <select class="input hb-select" id="hb-select" aria-label="Chọn mục">${idx.tabs.map(t => `<option value="${t.gid}">${esc(t.name)}</option>`).join('')}</select>
       <div class="hb-main">
-        <div class="hb-bar"><h2 id="hb-heading"></h2><span class="small muted" id="hb-time"></span></div>
+        <div class="hb-bar"><h2 id="hb-heading"></h2><span class="hb-bar-r"><span class="small muted" id="hb-time"></span>
+          <button class="btn btn-sm" id="hb-add" hidden>${icon('plus')} Thêm dòng</button></span></div>
+        <div id="hb-note"></div>
         <div class="card" id="hb-body"></div>
       </div>
     </div>`;
@@ -535,21 +537,75 @@ async function pageHandbook(v) {
     const t = titles.filter(Boolean).map(x => `<div class="hb-title">${esc(x)}</div>`).join('');
     if (!header) { $('#hb-body').innerHTML = t ? `<div class="card-pad">${t}</div>` : emptyState('Mục này chưa có nội dung'); return; }
     if (!body.length) { $('#hb-body').innerHTML = emptyState('Mục này chưa có nội dung'); return; }
-    $('#hb-body').innerHTML = (t ? `<div class="hb-titles">${t}</div>` : '') + sheetTableHtml(header, body.slice(0, limit)) +
+    $('#hb-body').innerHTML = (t ? `<div class="hb-titles">${t}</div>` : '') + sheetTableHtml(header, body.slice(0, limit), '', !!(cur && cur.editable)) +
       (body.length > limit ? `<div class="hb-more"><span class="muted small">Đang hiện ${limit}/${body.length} dòng</span><button class="btn" data-more>Xem thêm</button></div>` : '');
   };
   const loadTab = async (refresh = false) => {
     $$('#hb-nav button').forEach(b => b.classList.toggle('active', b.dataset.gid === gid));
     $('#hb-select').value = gid; store.set('hb_tab', gid);
     $('#hb-heading').textContent = tabName(gid);
+    $('#hb-add').hidden = true; $('#hb-note').innerHTML = ''; cur = null;
     $('#hb-body').innerHTML = '<div class="skel"></div><div class="skel w60"></div><div class="skel"></div>';
     try {
       const d = await api(`/handbook/tab/${gid}`, { query: { refresh: refresh ? 1 : '' } });
-      parsed = splitSheet(d.rows); limit = 200;
+      cur = d; parsed = splitSheet(d.rows); limit = 200; off = d.rows.length - parsed.body.length;
       $('#hb-time').textContent = `Cập nhật lúc ${d.fetched_at.slice(11, 16)}` + (d.warning ? ' · đang dùng bản lưu tạm' : '');
+      $('#hb-add').hidden = !d.editable;
+      $('#hb-note').innerHTML = d.editable ? editNote(d) : '';
       paintTab();
     } catch (e) { $('#hb-body').innerHTML = emptyState(e.message); }
   };
+
+  /* ----- quản trị / sub admin sửa trực tiếp: lưu vào hàng chờ, Apps Script ghi vào Google Sheet trong ~1 phút ----- */
+  const editNote = d => [
+    d.pending ? `<div class="hb-pending">${icon('clock')} ${d.pending} thay đổi đang chờ ghi vào Google Sheet (khoảng 1 phút)</div>` : '',
+    d.script_old ? `<div class="hb-pending warn">${icon('alert')} Apps Script đang chạy là bản cũ nên chưa ghi được vào sheet. Quản trị vào <b>Document → Cẩm nang</b>, sao chép lại code Apps Script, dán đè và chạy lại <b>setup</b>.</div>` : '',
+    ...(d.errors || []).map(x => `<div class="hb-pending warn">${icon('alert')} Không ghi được vào sheet (${esc(x.user_name || '')} · ${fmtDT(x.created_at)}): ${esc(x.msg || '')}</div>`),
+  ].join('');
+  const colLetter = c => { let s = ''; c += 1; while (c) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = (c - m - 1) / 26; } return s; };
+  const plain = c => (c || '').replace(LINK_RE, '$1');
+  const editRow = (ri, op) => {      // ri: chỉ số trong cur.rows; op: update (sửa ri) | insert (thêm dưới ri)
+    const d = cur, src = op === 'update' ? d.rows[ri] : [];
+    const width = Math.max(parsed.header ? parsed.header.length : 0, ...d.rows.map(r => r.length));
+    const label = j => (parsed.header && parsed.header[j]) || `Cột ${colLetter(d.cols[j] != null ? d.cols[j] : j)}`;
+    const init = Array.from({ length: width }, (_, j) => plain(src[j]));
+    const where = op === 'insert' && ri >= off ? `Chèn bên dưới dòng: <b>${esc((d.rows[ri].find(Boolean) || '').replace(LINK_RE, '$1').slice(0, 80))}</b>` : '';
+    const m = modal({
+      title: `${op === 'update' ? 'Sửa dòng' : 'Thêm dòng'} · ${esc(tabName(gid))}`, wide: true,
+      body: `<form id="hbe-f">${where ? `<p class="small muted" style="margin-bottom:10px">${where}</p>` : ''}
+        ${init.map((v, j) => `<div class="field"><label>${esc(label(j))}</label>
+          <textarea class="input full" data-j="${j}" rows="${Math.min(12, Math.max(2, Math.ceil(v.length / 70) + (v.match(/\n/g) || []).length))}">${esc(v)}</textarea>
+          ${op === 'update' && (src[j] || '').includes('⟦') ? '<span class="hint">Ô này có link: giữ nguyên chữ được gắn link thì link vẫn còn.</span>' : ''}</div>`).join('')}
+        <p class="small muted" style="margin:4px 0 12px">Lưu xong Cẩm nang đổi ngay, Google Sheet tự cập nhật trong khoảng 1 phút.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary">${op === 'update' ? 'Lưu thay đổi' : 'Thêm dòng'}</button>
+          ${op === 'update' ? `<button type="button" class="btn" id="hbe-below">${icon('plus')} Thêm dòng bên dưới</button>
+            <button type="button" class="btn btn-danger" id="hbe-del" style="margin-left:auto">Xoá dòng</button>` : ''}</div></form>`,
+    });
+    const f = $('#hbe-f', m.el);
+    const send = async (o, values) => {
+      await api('/admin/handbook/edits', { method: 'POST', body: { gid, op: o, row: d.pos[ri], values } });
+      m.close(); toast(o === 'delete' ? 'Đã xoá dòng' : 'Đã lưu · Google Sheet cập nhật trong khoảng 1 phút');
+      loadTab();
+    };
+    f.onsubmit = e => {
+      e.preventDefault();
+      const values = {};
+      $$('textarea', f).forEach(ta => { const j = +ta.dataset.j; if (op === 'insert' ? ta.value.trim() : ta.value.trim() !== init[j].trim()) values[d.cols[j]] = ta.value; });
+      run(e.submitter, async () => {
+        if (!Object.keys(values).length) { if (op === 'update') { m.close(); return; } throw new Error('Vui lòng nhập nội dung cho dòng mới'); }
+        await send(op, values);
+      });
+    };
+    const below = $('#hbe-below', m.el);
+    if (below) below.onclick = () => { m.close(); editRow(ri, 'insert'); };
+    const del = $('#hbe-del', m.el);
+    if (del) del.onclick = async () => {
+      if (!(await confirmDialog('Xoá dòng này?', 'Dòng sẽ bị xoá cả trong Google Sheet.', 'Xoá', true))) return;
+      run(del, () => send('delete', {}));
+    };
+  };
+  $('#hb-add').onclick = () => { if (!cur) return; if (!cur.rows.length) return toast('Mục trống: thêm nội dung trực tiếp trong Google Sheet', 'info'); editRow(cur.rows.length - 1, 'insert'); };
 
   /* ----- tìm trên tất cả mục: trình bày theo vai trò của từng mục -----
      show    → hiện sẵn (Script, Template, Kho ticket)
@@ -759,6 +815,8 @@ async function pageHandbook(v) {
     if (c) { e.preventDefault(); navigator.clipboard.writeText(c.previousElementSibling.innerText).then(() => toast('Đã sao chép'), () => toast('Trình duyệt chặn sao chép', 'error')); }
     if (o) openTab(o.dataset.open);
     if (m) { limit += 200; paintTab(); }
+    const ed = e.target.closest('[data-hbedit]');
+    if (ed && cur && cur.editable) editRow(off + +ed.dataset.hbedit, 'update');
     if (j) { const el = $(`#sec-${j.dataset.jump}`); if (el) { if (el.tagName === 'DETAILS') el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
     if (sm) { const st = state[sm.dataset.showmore]; st.shown = st.main.length; $(`[data-sec="${sm.dataset.showmore}"]`).innerHTML = showTable(sm.dataset.showmore); }
     if (sr) { const st = state[sr.dataset.showrest]; st.main = st.main.concat(st.rest); st.rest = []; st.shown = st.main.length; $(`[data-sec="${sr.dataset.showrest}"]`).innerHTML = showTable(sr.dataset.showrest); }

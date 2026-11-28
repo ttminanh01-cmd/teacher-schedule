@@ -75,7 +75,7 @@ def current_user(request: Request, authorization: str = Header(default=""), con=
 SUB_READ = ("/api/admin/dashboard", "/api/admin/users", "/api/admin/catalog", "/api/admin/availability", "/api/admin/schedules",
             "/api/admin/week", "/api/admin/month", "/api/admin/salary", "/api/admin/qc", "/api/admin/pip",
             "/api/admin/docs", "/api/admin/handbook")
-SUB_WRITE = ("/api/admin/qc", "/api/admin/pip", "/api/admin/view-as")
+SUB_WRITE = ("/api/admin/qc", "/api/admin/pip", "/api/admin/view-as", "/api/admin/handbook/edits")
 STAFF = ("admin", "subadmin")
 
 
@@ -1841,8 +1841,72 @@ def handbook_tab(gid: str, refresh: bool = False, u=Depends(current_user), con=D
     sid, hidden = handbook_settings(con)
     if gid in hidden or not gid.isdigit():
         err("Không tìm thấy mục này", 404)
-    rows, ts, warn = hb_call(handbook.get_tab, sid, gid, refresh)
-    return {"gid": gid, "rows": rows, "fetched_at": fmt_ts(ts), "warning": warn}
+    full, ts, warn = hb_call(handbook.get_tab_full, sid, gid, refresh)
+    out = {"gid": gid, "rows": full["rows"], "fetched_at": fmt_ts(ts), "warning": warn}
+    if u["role"] in STAFF and not u["view_by"]:   # quản trị / sub admin: sửa được (ghi ngược về sheet qua Apps Script)
+        out.update(pos=full["pos"], cols=full["cols"], editable=bool(handbook.snapshot(sid)),
+                   pending=con.execute("SELECT COUNT(*) FROM hb_edits WHERE status='pending' AND sheet=? AND gid=?", (sid, gid)).fetchone()[0],
+                   errors=rows(con.execute("SELECT id, op, msg, user_name, created_at FROM hb_edits WHERE status='error' AND sheet=? AND gid=? "
+                                           "AND created_at>=? ORDER BY id DESC LIMIT 5",
+                                           (sid, gid, (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")))))
+        st = handbook.push_status()
+        out["script_old"] = bool(out["pending"]) and not st["edit_seen"] and bool(st["seen_at"])
+    return out
+
+
+@app.post("/api/admin/handbook/edits")
+def handbook_edit(body: dict = Body(...), u=Depends(admin_user), con=Depends(get_con)):
+    """Sửa / thêm / xoá 1 dòng Cẩm nang trên web. row = số dòng gốc trong sheet (0 = dòng 1); thêm = chèn dưới dòng row."""
+    sid, _ = handbook_settings(con)
+    snap = handbook.snapshot(sid)
+    if not snap:
+        err("Cần cài Apps Script (Document → Cẩm nang) thì mới sửa trên web được")
+    gid, op = str(body.get("gid") or ""), body.get("op")
+    tab = next((t for t in snap["tabs"] if t["gid"] == gid), None)
+    if not tab:
+        err("Không tìm thấy mục này", 404)
+    if op not in ("update", "insert", "delete"):
+        err("Thao tác không hợp lệ")
+    try:
+        row = int(body.get("row"))
+        vals = {str(int(k)): str(v if v is not None else "").replace("\r\n", "\n").strip()[:20000] for k, v in (body.get("values") or {}).items()}
+    except (TypeError, ValueError):
+        err("Dữ liệu không hợp lệ")
+    if any(not 0 <= int(k) < 200 for k in vals):
+        err("Dữ liệu không hợp lệ")
+    if not 0 <= row < len(tab["rows"]):
+        err("Dòng này không còn trong sheet, bấm Làm mới rồi thử lại")
+    old = [str(c) for c in tab["rows"][row]]
+    if op == "update":
+        vals = {k: v for k, v in vals.items() if v != (old[int(k)].strip() if int(k) < len(old) else "")}
+        if not vals:
+            return {"ok": True, "unchanged": True}
+    if op == "insert" and not any(vals.values()):
+        err("Vui lòng nhập nội dung cho dòng mới")
+    if op == "delete":
+        vals = {}
+    handbook.queue_edit(con, sid, {"gid": gid, "op": op, "row": row, "old": old, "vals": vals}, u["name"], now_str())
+    what = {"update": "Sửa", "insert": "Thêm", "delete": "Xoá"}[op]
+    first = next((c for c in (old if op != "insert" else vals.values()) if str(c).strip()), "")
+    log(con, u, f"Cẩm nang · {tab['name']}: {what} dòng {row + 1 + (op == 'insert')} ({str(first)[:60]})")
+    return {"ok": True}
+
+
+@app.post("/api/handbook/edits/pull")
+def handbook_edits_pull(body: dict = Body(...)):
+    """Apps Script lấy các thay đổi sửa trên web để ghi vào sheet."""
+    try:
+        return {"edits": handbook.pull_edits(body)}
+    except handbook.HandbookError as e:
+        err(str(e), 403)
+
+
+@app.post("/api/handbook/edits/ack")
+def handbook_edits_ack(body: dict = Body(...)):
+    try:
+        return handbook.ack_edits(body, now_str())
+    except handbook.HandbookError as e:
+        err(str(e), 403)
 
 
 # ----- tra cứu học viên theo SĐT / email
@@ -2032,6 +2096,7 @@ def admin_handbook(request: Request, u=Depends(admin_user), con=Depends(get_con)
             "gas_script": handbook.apps_script(tok, sid, portal),
             "push": {"data_at": fmt_ts(st["data_at"]) if st["data_at"] else None,
                      "seen_at": fmt_ts(st["seen_at"]) if st["seen_at"] else None,
+                     "edit_seen": bool(st["edit_seen"]),
                      "other_sheet": bool(st["data_sheet"] and st["data_sheet"] != sid)},
             "fetched_at": fmt_ts(ts) if ts else None,
             "tabs": [{**t, "mode": "hidden" if t["gid"] in hidden else tab_mode(con, t)} for t in handbook.sort_tabs(tabs)]}
